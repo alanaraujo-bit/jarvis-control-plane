@@ -129,7 +129,10 @@ function Get-JarvisWindowInfo {
 
   $root = (Resolve-Path -LiteralPath $ExeRoot).Path
 
-  $all = @(Get-Process -Name jarvis -ErrorAction SilentlyContinue)
+  # Both names: release builds are jarvis-desktop.exe, and cargo still emits
+  # jarvis.exe when running the crate directly. The path filter below is what
+  # actually guarantees we target our own build.
+  $all = @(Get-Process -Name jarvis, jarvis-desktop -ErrorAction SilentlyContinue)
   $candidates = @($all | Where-Object {
     $_.Path -and $_.Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)
   })

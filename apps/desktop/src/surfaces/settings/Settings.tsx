@@ -2,6 +2,7 @@ import { LOCALES, LOCALE_NAMES } from "@jarvis/i18n";
 import { useI18n, useT } from "../../app/i18n";
 import { useTheme, type ThemePreference } from "../../app/theme";
 import { EnvironmentPanel } from "../environment/EnvironmentPanel";
+import { Updates } from "./Updates";
 import "./Settings.css";
 
 const THEME_OPTIONS = [
@@ -75,6 +76,10 @@ export function Settings() {
 
         <section className="settings__section">
           <EnvironmentPanel />
+        </section>
+
+        <section className="settings__section">
+          <Updates />
         </section>
       </div>
     </div>

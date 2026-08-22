@@ -101,6 +101,21 @@ export const ptBR: Record<MessageKey, string> = {
   "view.terminal": "Terminal",
   "view.conversation": "Conversa",
 
+
+  "update.title": "Atualizações",
+  "update.current": "Você está na versão {version}.",
+  "update.check": "Verificar atualizações",
+  "update.checking": "Verificando…",
+  "update.upToDate": "O J.A.R.V.I.S. está atualizado.",
+  "update.available": "A versão {version} está disponível.",
+  "update.downloading": "Baixando… {percent}%",
+  "update.ready": "A versão {version} está pronta para instalar.",
+  "update.install": "Reiniciar e atualizar",
+  "update.failed": "Não foi possível verificar atualizações.",
+  "update.unsigned":
+    "Esta build não tem assinatura digital, então o Windows pode exibir um aviso na instalação. Veja BLOCKERS.md.",
+  "update.notes": "O que mudou",
+
   "common.cancel": "Cancelar",
   "common.confirm": "Confirmar",
   "common.retry": "Tentar novamente",

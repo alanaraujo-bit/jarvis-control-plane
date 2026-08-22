@@ -11,3 +11,6 @@ apps/desktop/src-tauri/target/
 .vite/
 shots/
 brand/icon.png
+
+# Updater signing key. The private half must never leave this machine (§60).
+.keys/

@@ -108,6 +108,22 @@ export const en = {
   "view.terminal": "Terminal",
   "view.conversation": "Conversation",
 
+
+  // ---- Updates (§62) -------------------------------------------------------
+  "update.title": "Updates",
+  "update.current": "You are on version {version}.",
+  "update.check": "Check for updates",
+  "update.checking": "Checking…",
+  "update.upToDate": "J.A.R.V.I.S. is up to date.",
+  "update.available": "Version {version} is available.",
+  "update.downloading": "Downloading… {percent}%",
+  "update.ready": "Version {version} is ready to install.",
+  "update.install": "Restart and update",
+  "update.failed": "Could not check for updates.",
+  "update.unsigned":
+    "This build is not code-signed, so Windows may warn on install. See BLOCKERS.md.",
+  "update.notes": "What changed",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

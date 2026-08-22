@@ -69,16 +69,24 @@ inspection (§76).
 
 ## M8 — Preview / Browser (§46/§47)
 ## M9 — Onboarding (§13), Settings (§64)
-## M10 — Installer (§12) + Updater (§62)
+## M10 — Installer (§12) + Updater (§62)  ✅
+- [x] NSIS installer with product identity, OS-language auto-detection
+- [x] Per-user install — no administrator prompt
+- [x] Updater with minisign verification; signed artifacts produced
+- [x] Single-instance enforcement — one owner for the database and logs
+- [x] Silent install/upgrade path (what the updater uses)
+- [x] Uninstall removes the program and **preserves user data**
+**Verified on this machine:** installed, launched, upgraded, uninstalled and
+reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ## M11 — Mobile PWA (§55–§58) + Cloud relay (§59)
 ## M12 — Voice (§54)
 
 ---
 
 ## Current milestone
-**M10 — Installer and updater**, so the product is genuinely installable (§92).
+**M5 — Missions (§29)**, the central concept, built on the session core.
 
 ## Next steps
-1. NSIS installer with product identity; verify a real install/uninstall
-2. Updater plumbing + minisign keypair (signing cert is blocked, see BLOCKERS)
-3. Missions (§29) — the central concept, on top of the session core
+1. Mission model, states, tasks and acceptance criteria
+2. Evidence + Verification, so "done" means verified rather than claimed (§30)
+3. Mission Control as the real home surface (§18)

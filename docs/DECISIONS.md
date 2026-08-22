@@ -87,3 +87,23 @@ wrong. xterm measures glyph width by rendering into a canvas from that string,
 where `var(...)` does not resolve; it falls back to a proportional font and
 every terminal line renders with visibly uneven letter spacing. Caught by
 looking at a screenshot of the real terminal, not by any test.
+
+## D9 — The main binary is named `jarvis-desktop`, not `jarvis`
+**Date:** 2026-08-22
+**Why:** Found by running the real installer on a real machine, not by reading
+config. Tauri derives the executable name from the crate, giving `jarvis.exe` —
+and this machine already had an unrelated application installed with that exact
+binary name.
+
+NSIS detects a running instance **by executable name**, so our installer
+displayed "J.A.R.V.I.S is open! Click OK to close it" while pointing at
+somebody else's program. Accepting would have terminated an application that has
+nothing to do with us.
+
+It failed safe when declined, but the collision is the bug. A distinctive binary
+name removes the ambiguity at the source.
+
+**Also affected:** `tools/JarvisWindow.ps1`, which locates the dev window for
+screenshots and UI automation. It already filtered by executable *path* for this
+same reason — two earlier attempts, matching by window title and then by process
+name, each mis-targeted a real unrelated window on this machine.

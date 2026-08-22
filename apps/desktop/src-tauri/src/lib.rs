@@ -47,8 +47,23 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        // Single instance, registered first so it runs before anything else.
+        //
+        // The local database and the session logs have one owner. A second
+        // window writing the same SQLite file and the same append-only logs
+        // risks the users history, and data integrity outranks convenience
+        // (§91). Launching again focuses the window that already exists.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "J.A.R.V.I.S.",
+  "productName": "J.A.R.V.I.S",
   "version": "0.1.0",
   "identifier": "dev.jarvis.desktop",
   "build": {
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "J.A.R.V.I.S.",
+        "title": "J.A.R.V.I.S",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
@@ -55,8 +55,26 @@
           "English",
           "PortugueseBR"
         ],
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "installerIcon": "icons/icon.ico"
+      }
+    },
+    "createUpdaterArtifacts": true,
+    "publisher": "Alan Araujo",
+    "homepage": "https://github.com/alanaraujo-bit/jarvis-control-plane"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFM0NEMjI2N0Y1OEM3NDIKUldSQ3gxaC9KdEk4WG56UmlLemtWZjZ6UXRFZVpxZnNoeEIrYnVhOWYrZGcyaVBvVUVCajVpTUEK",
+      "endpoints": [
+        "https://github.com/alanaraujo-bit/jarvis-control-plane/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
-  }
+  },
+  "mainBinaryName": "jarvis-desktop"
 }

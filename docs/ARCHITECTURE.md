@@ -103,3 +103,37 @@ packages/
 
 Each provider adapter declares a `ProviderCapabilities` struct. UI renders from
 it. Adding a provider must never require touching a component.
+
+## Distribution (§12, §62)
+
+The product is delivered as a Windows NSIS installer built by Tauri, carrying
+its own identity: generated header and sidebar artwork drawn from the same
+signed-distance geometry as the application icon, and an English/Portuguese
+language selector matching the app's own locales.
+
+Install mode is **per-user**, so first run needs no administrator prompt.
+
+### Updating
+
+`tauri-plugin-updater` checks a `latest.json` endpoint, downloads in the
+background, and verifies the download against a **minisign public key compiled
+into the binary** before installing anything. An update that fails verification
+is refused rather than applied.
+
+Two separate signing concerns, often confused:
+
+| | Purpose | State |
+|---|---|---|
+| **minisign keypair** | Proves an update came from us | Generated locally, working |
+| **Authenticode certificate** | Stops Windows warning about an unknown publisher | Blocked — needs a purchase (B1) |
+
+The private minisign key lives in `.keys/` and is gitignored. Losing it means no
+installed copy can ever be updated again.
+
+### Data safety across updates
+
+User data lives in `%APPDATA%\dev.jarvis.desktop` — the SQLite database and the
+per-session logs — entirely outside the installation directory. An update
+replaces program files and cannot touch projects, sessions or history. Schema
+changes are forward-only and additive, and a database written by a newer build
+is refused rather than opened (§62).

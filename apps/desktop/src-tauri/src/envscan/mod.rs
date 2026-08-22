@@ -192,6 +192,42 @@ fn detect_auth(id: &str) -> Option<bool> {
     }
 }
 
+/// Pick the entry the operating system would actually execute.
+///
+/// `where` lists every match, and for npm-installed tools that includes a
+/// extensionless shell script *before* the Windows launcher:
+///
+/// ```text
+/// C:\Users\me\AppData\Roaming\npm\pnpm       <- cannot be spawned directly
+/// C:\Users\me\AppData\Roaming\npm\pnpm.cmd   <- what actually runs
+/// ```
+///
+/// Taking the first line reported pnpm as broken on a machine where it works
+/// perfectly. Candidates are ranked by `PATHEXT` instead, which is the same
+/// order the shell itself resolves.
+fn preferred_executable(candidates: &[String]) -> Option<String> {
+    if !cfg!(windows) {
+        return candidates.first().cloned();
+    }
+
+    let pathext = std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into())
+        .to_uppercase();
+    let order: Vec<String> = pathext.split(';').map(|e| e.trim().to_string()).collect();
+
+    let rank = |path: &String| -> usize {
+        let upper = path.to_uppercase();
+        order
+            .iter()
+            .position(|ext| !ext.is_empty() && upper.ends_with(ext))
+            // No recognised extension sorts last: it is the least likely to be
+            // directly executable.
+            .unwrap_or(order.len())
+    };
+
+    candidates.iter().min_by_key(|c| rank(c)).cloned()
+}
+
 fn which(bin: &str) -> Option<String> {
     let locator = if cfg!(windows) { "where" } else { "which" };
     let mut cmd = Command::new(locator);
@@ -203,10 +239,14 @@ fn which(bin: &str) -> Option<String> {
     if !out.status.success() {
         return None;
     }
-    String::from_utf8_lossy(&out.stdout)
+
+    let candidates: Vec<String> = String::from_utf8_lossy(&out.stdout)
         .lines()
-        .find(|l| !l.trim().is_empty())
         .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    preferred_executable(&candidates)
 }
 
 fn run_probe(probe: &Probe) -> ToolReport {
@@ -231,8 +271,30 @@ fn run_probe(probe: &Probe) -> ToolReport {
         return report;
     }
 
-    let mut cmd = Command::new(probe.bin);
-    cmd.args(probe.args);
+    // Spawn the resolved path, not the bare name, and route batch wrappers
+    // through the shell.
+    //
+    // Two Windows facts conspire here. `CreateProcess` does not apply PATHEXT,
+    // so `Command::new("pnpm")` cannot find `pnpm.cmd`; and a `.cmd`/`.bat` is
+    // a script, not an executable, so it can only be run by the command
+    // interpreter. Without both, a perfectly working pnpm was reported as
+    // "program not found" in the environment scan.
+    let resolved = path.as_deref().unwrap_or(probe.bin);
+    let is_batch = resolved
+        .rsplit('.')
+        .next()
+        .map(|ext| ext.eq_ignore_ascii_case("cmd") || ext.eq_ignore_ascii_case("bat"))
+        .unwrap_or(false);
+
+    let mut cmd = if cfg!(windows) && is_batch {
+        let mut c = Command::new(std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into()));
+        c.arg("/c").arg(resolved).args(probe.args);
+        c
+    } else {
+        let mut c = Command::new(resolved);
+        c.args(probe.args);
+        c
+    };
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -355,6 +417,71 @@ mod tests {
     fn rejects_output_without_a_version() {
         assert_eq!(parse_version(""), None);
         assert_eq!(parse_version("command not found"), None);
+    }
+
+    /// Reproduces the real failure: pnpm was reported broken on a machine where
+    /// it works, because `where` lists the extensionless npm shim first.
+    #[test]
+    #[cfg(windows)]
+    fn prefers_the_launcher_over_an_extensionless_shim() {
+        let candidates = vec![
+            r"C:\Users\me\AppData\Roaming\npm\pnpm".to_string(),
+            r"C:\Users\me\AppData\Roaming\npm\pnpm.cmd".to_string(),
+        ];
+        assert_eq!(
+            preferred_executable(&candidates).as_deref(),
+            Some(r"C:\Users\me\AppData\Roaming\npm\pnpm.cmd")
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn prefers_exe_over_cmd_when_both_exist() {
+        // PATHEXT lists .EXE before .CMD, and the shell resolves in that order.
+        let candidates = vec![
+            r"C:\tools\thing.cmd".to_string(),
+            r"C:\tools\thing.exe".to_string(),
+        ];
+        assert_eq!(
+            preferred_executable(&candidates).as_deref(),
+            Some(r"C:\tools\thing.exe")
+        );
+    }
+
+    /// The whole point of the scan is to report what is actually usable, so
+    /// this drives the real probe against the real tools on this machine.
+    #[test]
+    fn scans_this_machine_and_reports_installed_tools_as_ready() {
+        let report = scan();
+        assert!(!report.tools.is_empty());
+
+        // Git is required and is present here; if the scan cannot see it, the
+        // scan is broken rather than the machine.
+        let git = report.tools.iter().find(|t| t.id == "git").expect("git probe");
+        assert_eq!(git.state, ToolState::Ready, "git detail: {:?}", git.detail);
+        assert!(git.version.is_some());
+
+        // Any tool we found on PATH must also be launchable. A tool that
+        // resolves but cannot be run is the pnpm `.cmd` bug.
+        for tool in &report.tools {
+            if tool.path.is_some() {
+                assert_ne!(
+                    tool.state,
+                    ToolState::Degraded,
+                    "{} resolved to {:?} but could not be launched: {:?}",
+                    tool.name,
+                    tool.path,
+                    tool.detail
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_single_candidate_is_returned_unchanged() {
+        let one = vec![r"C:\Program Files\Git\cmd\git.exe".to_string()];
+        assert_eq!(preferred_executable(&one), Some(one[0].clone()));
+        assert_eq!(preferred_executable(&[]), None);
     }
 
     #[test]
