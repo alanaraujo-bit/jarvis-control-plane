@@ -269,32 +269,99 @@ impl SessionLogReader {
     /// overflow its scrollback anyway, so old output is dropped from the front.
     /// Frames are never split: a truncated escape sequence would corrupt the
     /// terminal state.
+    ///
+    /// Runs in two passes and never holds more than `max_bytes` of payload.
+    /// The first pass records frame locations only; the second reads back just
+    /// the tail that survives. Buffering every frame and trimming afterwards
+    /// would allocate the whole session — hundreds of megabytes for a long run
+    /// — to return a couple of hundred kilobytes.
     pub fn replay_pty(&self, max_bytes: usize) -> Result<Vec<u8>> {
         let mut file = self.stream.try_clone()?;
-        let mut chunks: Vec<Vec<u8>> = Vec::new();
-        let mut total = 0usize;
-        let mut offset = HEADER_LEN;
 
+        // Pass 1: locate PTY frames without copying their payloads.
+        let mut frames: Vec<(u64, usize)> = Vec::new();
+        let mut offset = HEADER_LEN;
         while offset < self.end {
-            let Some((event, next)) = read_frame_at(&mut file, offset, self.end)? else {
+            let Some((header, next)) = read_frame_header_at(&mut file, offset, self.end)? else {
                 break;
             };
-            offset = next;
-            if event.kind == EventKind::PtyOutput {
-                total += event.payload.len();
-                chunks.push(event.payload);
+            if header.kind == EventKind::PtyOutput {
+                frames.push((offset + FRAME_HEADER_LEN as u64, header.payload_len));
             }
+            offset = next;
         }
 
-        // Drop whole frames from the front until the tail fits.
-        let mut start = 0usize;
-        while total > max_bytes && start < chunks.len() {
-            total -= chunks[start].len();
-            start += 1;
+        // Walk backwards to find where the retained tail begins.
+        let mut kept = 0usize;
+        let mut start = frames.len();
+        while start > 0 {
+            let len = frames[start - 1].1;
+            if kept + len > max_bytes {
+                break;
+            }
+            kept += len;
+            start -= 1;
         }
 
-        Ok(chunks[start..].concat())
+        // Pass 2: read back only the frames being kept.
+        let mut out = Vec::with_capacity(kept);
+        for &(payload_offset, len) in &frames[start..] {
+            file.seek(SeekFrom::Start(payload_offset))?;
+            let mut buf = vec![0u8; len];
+            file.read_exact(&mut buf)?;
+            out.extend_from_slice(&buf);
+        }
+        Ok(out)
     }
+}
+
+/// A frame's header, without its payload.
+struct FrameHeader {
+    kind: EventKind,
+    payload_len: usize,
+}
+
+/// Read only a frame's header and report where the next frame starts.
+///
+/// Lets a scan traverse a large log without allocating any payloads.
+fn read_frame_header_at(
+    file: &mut File,
+    offset: u64,
+    end: u64,
+) -> Result<Option<(FrameHeader, u64)>> {
+    if end.saturating_sub(offset) < FRAME_HEADER_LEN as u64 {
+        return Ok(None);
+    }
+    file.seek(SeekFrom::Start(offset))?;
+
+    let mut header = [0u8; FRAME_HEADER_LEN];
+    if file.read_exact(&mut header).is_err() {
+        return Ok(None);
+    }
+
+    let payload_len = u32::from_le_bytes(header[0..4].try_into().unwrap());
+    if payload_len > MAX_PAYLOAD_LEN {
+        return Err(LogError::ImplausibleLength(payload_len));
+    }
+
+    let next = offset + FRAME_HEADER_LEN as u64 + payload_len as u64;
+    if next > end {
+        return Ok(None);
+    }
+
+    // An unrecognised kind still has a valid length, so the scan can step over
+    // it. That keeps a log written by a newer build readable.
+    let Some(kind) = EventKind::from_u8(header[20]) else {
+        return read_frame_header_at(file, next, end);
+    };
+
+    Ok(Some((
+        FrameHeader {
+            kind,
+            payload_len: payload_len as usize,
+        },
+        next,
+    )))
 }
 
 /// Read one frame. Returns `None` for a partial frame at end-of-file, which is
@@ -466,6 +533,39 @@ mod tests {
         assert_eq!(reader.replay_pty(usize::MAX).unwrap(), b"111122223333");
         // Whole frames are dropped from the front, never split mid-frame.
         assert_eq!(reader.replay_pty(9).unwrap(), b"22223333");
+    }
+
+    #[test]
+    fn replay_reads_only_the_tail_of_a_large_log() {
+        let dir = temp();
+        let mut log = SessionLog::open(dir.path()).unwrap();
+
+        // 4 MB of terminal output across 1024 frames, asking for 64 KB back.
+        // The two-pass reader must never materialise the whole stream.
+        let chunk = vec![b'x'; 4096];
+        for _ in 0..1024 {
+            log.append(EventKind::PtyOutput, &chunk).unwrap();
+        }
+
+        let reader = SessionLogReader::open(dir.path()).unwrap();
+        let replayed = reader.replay_pty(64 * 1024).unwrap();
+
+        // Whole frames only, so the result is the largest multiple of the frame
+        // size that fits — never a partial frame.
+        assert_eq!(replayed.len(), 64 * 1024);
+        assert!(replayed.iter().all(|&b| b == b'x'));
+    }
+
+    #[test]
+    fn replay_returns_nothing_when_no_frame_fits() {
+        let dir = temp();
+        let mut log = SessionLog::open(dir.path()).unwrap();
+        log.append(EventKind::PtyOutput, &vec![b'y'; 100]).unwrap();
+
+        let reader = SessionLogReader::open(dir.path()).unwrap();
+        // A frame is never split, so a budget smaller than one frame yields
+        // empty output rather than a truncated escape sequence.
+        assert!(reader.replay_pty(10).unwrap().is_empty());
     }
 
     #[test]

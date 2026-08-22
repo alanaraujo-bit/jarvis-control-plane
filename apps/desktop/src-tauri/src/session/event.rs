@@ -119,6 +119,13 @@ pub enum Lifecycle {
     Started { command: String, cwd: String },
     #[serde(rename_all = "camelCase")]
     StateChanged { state: SessionState },
+    /// Terminal geometry at start and on every change.
+    ///
+    /// Replay needs this: output that used absolute cursor positioning renders
+    /// as garbage if it is replayed into a terminal of a different size. Logged
+    /// as a frame so the size is known at every point in the stream.
+    #[serde(rename_all = "camelCase")]
+    Resized { cols: u16, rows: u16 },
     #[serde(rename_all = "camelCase")]
     Exited { code: Option<i32> },
 }

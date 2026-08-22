@@ -8,6 +8,7 @@ mod db;
 mod envscan;
 mod git;
 mod project;
+mod pty;
 mod session;
 mod window;
 
@@ -16,10 +17,13 @@ use std::path::PathBuf;
 use tauri::Manager;
 
 use db::Database;
+use session::SessionManager;
 
 /// Shared application state, resolved once during setup.
 pub struct AppState {
     pub db: Database,
+    /// Every live session in the application.
+    pub sessions: SessionManager,
     /// Root for session logs and other bulk local data.
     pub data_dir: PathBuf,
 }
@@ -51,7 +55,11 @@ pub fn run() {
             let db = Database::open(data_dir.join("jarvis.db"))?;
             tracing::info!(path = ?data_dir, "local data directory ready");
 
-            app.manage(AppState { db, data_dir });
+            app.manage(AppState {
+                db,
+                data_dir,
+                sessions: SessionManager::default(),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -64,6 +72,14 @@ pub fn run() {
             project::list_projects,
             project::open_project,
             project::archive_project,
+            session::commands::session_start,
+            session::commands::session_attach,
+            session::commands::session_detach,
+            session::commands::session_write,
+            session::commands::session_resize,
+            session::commands::session_close,
+            session::commands::session_replay,
+            session::commands::session_list,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");
