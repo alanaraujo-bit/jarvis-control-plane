@@ -6,6 +6,9 @@ import { TitleBar } from "./shell/TitleBar";
 import { StatusBar } from "./shell/StatusBar";
 import { CommandPalette, type Command } from "./shell/CommandPalette";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
+import { Projects } from "./surfaces/projects/Projects";
+import { ProjectWorkspace } from "./surfaces/project/ProjectWorkspace";
+import type { Project } from "./surfaces/projects/useProjects";
 import { Settings } from "./surfaces/settings/Settings";
 import { useEnvironmentStore } from "./surfaces/environment/useEnvironment";
 import { useI18n, useT } from "./app/i18n";
@@ -19,7 +22,7 @@ import "./App.css";
  * destination it cannot deliver (§81). Milestones add entries here as they
  * land; nothing has to be restructured when they do.
  */
-const IMPLEMENTED: SurfaceId[] = ["mission-control", "settings"];
+const IMPLEMENTED: SurfaceId[] = ["mission-control", "projects", "settings"];
 
 export function App() {
   const t = useT();
@@ -29,6 +32,14 @@ export function App() {
 
   const [surface, setSurface] = useState<SurfaceId>("mission-control");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // An open project takes over the surface area. The rail stays put, so the
+  // user never loses their bearings when they go deeper (§85).
+  const [openProject, setOpenProject] = useState<Project | null>(null);
+
+  const goTo = useCallback((id: SurfaceId) => {
+    setOpenProject(null);
+    setSurface(id);
+  }, []);
 
   // Reveal the window only once the first frame has painted, so launching
   // never shows an empty white rectangle (§11).
@@ -67,7 +78,7 @@ export function App() {
       title: t(item.label),
       group: "Go to",
       icon: item.icon,
-      run: () => setSurface(item.id),
+      run: () => goTo(item.id),
     }));
 
     const appearance: Command[] = [
@@ -117,27 +128,31 @@ export function App() {
         icon: RefreshCw,
         keywords: "environment scan doctor ambiente verificar",
         run: () => {
-          setSurface("settings");
+          goTo("settings");
           void rescanEnvironment(true);
         },
       },
     ];
 
     return [...navigation, ...appearance, ...actions];
-  }, [t, locale, preference, setLocale, setPreference, rescanEnvironment]);
+  }, [t, locale, preference, setLocale, setPreference, rescanEnvironment, goTo]);
 
   return (
     <div className="app">
       <TitleBar onOpenPalette={togglePalette} />
 
       <div className="app__body">
-        <Rail active={surface} available={IMPLEMENTED} onNavigate={setSurface} />
+        <Rail active={surface} available={IMPLEMENTED} onNavigate={goTo} />
 
-        <main className="app__surface" key={surface}>
-          {surface === "settings" ? (
+        <main className="app__surface" key={openProject ? openProject.id : surface}>
+          {openProject ? (
+            <ProjectWorkspace project={openProject} onBack={() => setOpenProject(null)} />
+          ) : surface === "settings" ? (
             <Settings />
+          ) : surface === "projects" ? (
+            <Projects onOpen={setOpenProject} />
           ) : (
-            <MissionControl onOpenProject={() => setSurface("mission-control")} />
+            <MissionControl onOpenProject={() => goTo("projects")} />
           )}
         </main>
       </div>

@@ -68,6 +68,24 @@ export const ptBR: Record<MessageKey, string> = {
   "settings.theme.system": "Sistema",
   "settings.language": "Idioma",
 
+
+  "projects.openFolder": "Abrir pasta",
+  "projects.empty.title": "Nenhum projeto ainda",
+  "projects.empty.body":
+    "Abra uma pasta deste computador para começar. Nada é enviado para lugar nenhum — o J.A.R.V.I.S. trabalha nos seus arquivos onde eles já estão.",
+  "projects.missing": "Pasta não encontrada",
+  "projects.back": "Todos os projetos",
+
+  "terminal.title": "Terminal",
+  "terminal.new": "Novo terminal",
+  "terminal.shell": "Shell",
+  "terminal.claudeCode": "Claude Code",
+  "terminal.codex": "Codex",
+  "terminal.close": "Fechar aba",
+  "terminal.empty.title": "Nenhum terminal em execução",
+  "terminal.empty.body": "Inicie um shell ou execute um agente neste projeto.",
+  "terminal.notInstalled": "{name} não está instalado",
+
   "common.cancel": "Cancelar",
   "common.confirm": "Confirmar",
   "common.retry": "Tentar novamente",

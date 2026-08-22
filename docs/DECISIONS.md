@@ -60,3 +60,30 @@ to whether someone happens to be looking.
 
 **Verified:** an isolated reproduction confirmed both halves — no reply stalls the
 stream; replying `ESC [ 1 ; 1 R` releases it immediately.
+
+## D7 — Sessions are spawned with the parent agent's environment scrubbed
+**Date:** 2026-08-22
+**Why:** Found by running the product, not by reasoning about it. When
+J.A.R.V.I.S. is itself launched from inside an agent session, that agent's
+environment markers (`CLAUDE_CODE_CHILD_SESSION`, `CLAUDECODE`, `CLAUDE_PID`, …)
+are in our process environment and are inherited by everything we spawn.
+
+A nested Claude Code sees the child-session marker, concludes it is a
+sub-session, and **turns transcript saving off**. That would silently remove the
+structured stream Conversation View (§24) and usage reporting (§28) depend on —
+the terminal would look perfectly fine while the entire structured half of the
+product quietly stopped working.
+
+**Decision:** `pty::spawn` removes these markers for every session kind. A
+session launched by J.A.R.V.I.S. is a new top-level session, and a plain shell
+should not believe it is running inside an agent either.
+
+**Tested:** a real child process is spawned and asked to echo the marker back.
+
+## D8 — xterm's font family must be a literal stack
+**Date:** 2026-08-22
+**Why:** `fontFamily: "var(--font-mono), …"` looks reasonable and is silently
+wrong. xterm measures glyph width by rendering into a canvas from that string,
+where `var(...)` does not resolve; it falls back to a proportional font and
+every terminal line renders with visibly uneven letter spacing. Caught by
+looking at a screenshot of the real terminal, not by any test.

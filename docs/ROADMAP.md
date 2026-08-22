@@ -8,23 +8,30 @@ inspection (§76).
 
 ---
 
-## M0 — Foundation
-- [~] Monorepo (pnpm workspaces), Tauri v2 shell, real window on screen
-- [ ] Design token system (dark + light, both first-class §8)
-- [ ] App chrome: custom titlebar, window controls, DPI, reduce-motion
-- [ ] i18n foundation wired from the first string (§65)
-**Done when:** app launches, both themes render, screenshot captured & reviewed.
+## M0 — Foundation  ✅
+- [x] Monorepo (pnpm workspaces), Tauri v2 shell, real window on screen
+- [x] Design token system (dark + light, both first-class §8)
+- [x] App chrome: custom titlebar, caption buttons, reduce-motion
+- [x] i18n foundation wired from the first string (§65)
+- [x] Command palette with subsequence ranking (§50)
+**Verified:** launched and screenshotted in both themes.
 
-## M1 — Session Core (the load-bearing milestone §23)
-- [ ] Append-only session event log (frame codec + index)
-- [ ] SQLite schema + migrations
-- [ ] Session projections: terminal replay + conversation projection
-**Done when:** a session log survives restart and both projections agree.
+## M1 — Session Core (the load-bearing milestone §23)  ✅
+- [x] Append-only session event log (frame codec + sparse index)
+- [x] Crash recovery from a torn trailing frame
+- [x] Bounded two-pass replay (never buffers a whole session)
+- [x] SQLite WAL + forward-only migrations
+- [x] Projects over real folders, Git detection via the git binary
+**Verified:** 28 tests, including a real git repository.
 
-## M2 — Terminal (hero surface §21)
-- [ ] PTY host (portable-pty), resize, lifecycle
-- [ ] xterm.js integration, scrollback, search, tabs, panes, layouts
-- [ ] Session restore, agent state badges (Working/Waiting/Idle/…)
+## M2 — Terminal (hero surface §21)  ~
+- [x] PTY host (portable-pty), resize, lifecycle
+- [x] Windows job objects — no orphaned agent processes
+- [x] Single-writer session runtime; unattended sessions run with no view (§32)
+- [x] Raw-byte IPC channel, coalesced at 16ms
+- [x] xterm.js integration, scrollback, per-theme palettes, tabs
+- [ ] Split panes and layout presets (§20)
+- [ ] Search within scrollback
 - [ ] Image paste as first-class attachment (§22)
 
 ## M3 — Providers (§26)
@@ -64,9 +71,9 @@ inspection (§76).
 ---
 
 ## Current milestone
-**M0 — Foundation.**
+**M2 — Terminal**, then M3 providers.
 
 ## Next steps
-1. pnpm workspace + Tauri scaffold, window on screen
-2. Design tokens, both themes
-3. Screenshot + visual review pass
+1. Visual review of the terminal in a real project, both themes
+2. Provider adapter trait + capability model (§26)
+3. Claude Code transcript tail -> same session log -> Conversation View

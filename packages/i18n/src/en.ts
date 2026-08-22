@@ -72,6 +72,26 @@ export const en = {
   "settings.theme.system": "System",
   "settings.language": "Language",
 
+
+  // ---- Projects (§16) ------------------------------------------------------
+  "projects.openFolder": "Open folder",
+  "projects.empty.title": "No projects yet",
+  "projects.empty.body":
+    "Open a folder on this machine to get started. Nothing is uploaded — J.A.R.V.I.S. works against your files where they already are.",
+  "projects.missing": "Folder missing",
+  "projects.back": "All projects",
+
+  // ---- Terminal (§21) ------------------------------------------------------
+  "terminal.title": "Terminal",
+  "terminal.new": "New terminal",
+  "terminal.shell": "Shell",
+  "terminal.claudeCode": "Claude Code",
+  "terminal.codex": "Codex",
+  "terminal.close": "Close tab",
+  "terminal.empty.title": "No terminal running",
+  "terminal.empty.body": "Start a shell, or launch an agent in this project.",
+  "terminal.notInstalled": "{name} is not installed",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

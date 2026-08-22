@@ -43,6 +43,39 @@ pub struct PtyOptions {
     pub env: Vec<(String, String)>,
 }
 
+/// Environment prefixes scrubbed from every session.
+///
+/// If J.A.R.V.I.S. is itself launched from inside an agent session, that
+/// agent's session markers are in our environment and would be inherited by
+/// every process we spawn. A nested Claude Code then sees
+/// `CLAUDE_CODE_CHILD_SESSION`, decides it is a child of an existing session,
+/// and **turns transcript saving off** — which silently removes the structured
+/// stream that Conversation View (§24) and usage reporting (§28) are built on.
+///
+/// Observed in practice, not theorised: the first agent session started this
+/// way printed "Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION
+/// marker".
+///
+/// A session launched by J.A.R.V.I.S. is a new top-level session, so these are
+/// removed for every session kind — a plain shell should not believe it is
+/// running inside an agent either.
+const SCRUBBED_ENV_PREFIXES: &[&str] = &["CLAUDE_CODE_", "CLAUDECODE", "CLAUDE_AGENT_", "CODEX_"];
+
+/// Exact variables to scrub that do not share a prefix with the above.
+const SCRUBBED_ENV_KEYS: &[&str] = &["CLAUDE_PID", "CLAUDE_EFFORT"];
+
+fn scrubbed_env_keys() -> Vec<String> {
+    std::env::vars()
+        .map(|(key, _)| key)
+        .filter(|key| {
+            SCRUBBED_ENV_PREFIXES
+                .iter()
+                .any(|prefix| key.starts_with(prefix))
+                || SCRUBBED_ENV_KEYS.contains(&key.as_str())
+        })
+        .collect()
+}
+
 /// What the reader thread reports.
 pub enum PtyEvent {
     /// Bytes read from the terminal. Never decoded here: a UTF-8 sequence can
@@ -130,6 +163,11 @@ pub fn spawn(options: PtyOptions) -> Result<(PtyHandle, Receiver<PtyEvent>)> {
     let mut command = CommandBuilder::new(&options.program);
     command.args(&options.args);
     command.cwd(&options.cwd);
+
+    // Drop any agent-session markers we inherited before applying our own.
+    for key in scrubbed_env_keys() {
+        command.env_remove(&key);
+    }
     for (key, value) in &options.env {
         command.env(key, value);
     }
@@ -328,6 +366,47 @@ mod tests {
 
         handle.resize(120, 40).expect("resize should succeed");
         let _ = handle.kill();
+    }
+
+    /// A spawned session must not inherit the parent agent's session markers.
+    ///
+    /// Asserted against a real environment variable set for this process, and
+    /// checked by reading the child's own view of its environment.
+    #[test]
+    fn agent_session_markers_are_not_inherited() {
+        // SAFETY: single-threaded setup at the top of this test, before any
+        // child process reads the environment.
+        unsafe {
+            std::env::set_var("CLAUDE_CODE_CHILD_SESSION", "1");
+            std::env::set_var("CLAUDE_PID", "424242");
+        }
+        assert!(
+            scrubbed_env_keys().contains(&"CLAUDE_CODE_CHILD_SESSION".to_string()),
+            "the prefix rule must catch CLAUDE_CODE_* markers"
+        );
+        assert!(
+            scrubbed_env_keys().contains(&"CLAUDE_PID".to_string()),
+            "exact-match keys must be caught too"
+        );
+
+        let command = if cfg!(windows) {
+            "echo marker=[%CLAUDE_CODE_CHILD_SESSION%]"
+        } else {
+            "echo marker=[$CLAUDE_CODE_CHILD_SESSION]"
+        };
+        let (handle, rx) = spawn(shell_options(command)).expect("spawn pty");
+        let text = drain_until(&handle, &rx, "marker=", Duration::from_secs(20));
+        let _ = handle.kill();
+
+        unsafe {
+            std::env::remove_var("CLAUDE_CODE_CHILD_SESSION");
+            std::env::remove_var("CLAUDE_PID");
+        }
+
+        assert!(
+            !text.contains("marker=[1]"),
+            "the child inherited the parent agent's session marker: {text:?}"
+        );
     }
 
     #[test]
