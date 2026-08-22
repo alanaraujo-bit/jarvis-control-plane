@@ -1,0 +1,202 @@
+.conv {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg-surface);
+}
+
+.conv__inner {
+  /* A reading measure. Development prose is still prose. */
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-8) var(--space-11);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ---- Turns ---------------------------------------------------------------
+   No bubbles (§24). A turn is identified by a quiet label and, for the human,
+   a single hairline rule — enough to scan by, far less noise than a chat UI. */
+/* Every row carries the same left inset and a transparent rule, so turns,
+   tool calls and errors all align on one axis. Only the colour changes for a
+   human turn — the marker must not shift the text it marks. */
+.conv__turn,
+.conv__tool,
+.conv__thinking,
+.conv__error {
+  padding-left: var(--space-6);
+  border-left: 2px solid transparent;
+}
+
+.conv__turn { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.conv__turn[data-role="user"] {
+  border-left-color: var(--accent-border);
+}
+
+.conv__meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.conv__who {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.conv__turn[data-role="user"] .conv__who { color: var(--accent); }
+
+.conv__time {
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  font-variant-numeric: tabular-nums;
+}
+
+.conv__text {
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+/* ---- Usage --------------------------------------------------------------- */
+.conv__usage {
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+  letter-spacing: var(--tracking-wide);
+}
+
+/* ---- Tool calls ----------------------------------------------------------
+   Dense, monospace, one line. A run of tool calls should read like a log of
+   actions taken, not like a series of cards. */
+.conv__tool {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* The chip is an inner element so the row keeps the shared left rule while the
+   background hugs only the content. */
+.conv__tool-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+}
+
+.conv__tool-name {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.conv__tool-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv__tool-result {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: var(--radius-full);
+  color: var(--state-danger);
+  background: var(--state-danger-bg);
+}
+
+.conv__tool-result[data-ok] {
+  color: var(--state-success);
+  background: var(--state-success-bg);
+}
+
+/* ---- Thinking ------------------------------------------------------------
+   Collapsed by default: it is available, not imposed. */
+.conv__thinking { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+
+.conv__thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.conv__thinking-toggle:hover { color: var(--text-tertiary); }
+
+.conv__chevron {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.conv__chevron[data-open] { transform: rotate(90deg); }
+
+.conv__thinking-body {
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Errors -------------------------------------------------------------- */
+.conv__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  /* Longhands only: a `padding` shorthand here would silently override the
+     shared left inset that keeps every row on one axis. */
+  padding-block: var(--space-4);
+  padding-right: var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--state-danger-bg);
+  color: var(--state-danger);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* ---- Empty --------------------------------------------------------------- */
+.conv--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.conv__empty-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.conv__empty-body {
+  max-width: 46ch;
+  margin-top: var(--space-3);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}

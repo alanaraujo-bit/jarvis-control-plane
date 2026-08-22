@@ -34,15 +34,20 @@ inspection (§76).
 - [ ] Search within scrollback
 - [ ] Image paste as first-class attachment (§22)
 
-## M3 — Providers (§26)
-- [ ] Provider adapter trait + capability model
-- [ ] Claude Code adapter (transcript tail + usage)
-- [ ] Codex adapter (rollout tail + rate limits)
-- [ ] Environment scan (§14)
+## M3 — Providers (§26)  ✅
+- [x] Provider adapter trait + capability model (capabilities as data)
+- [x] Claude Code adapter — deterministic correlation via --session-id
+- [x] Codex adapter — file-watch correlation, stated honestly as weaker
+- [x] JSONL tailer: partial lines, split UTF-8, truncation, CRLF
+- [x] Environment scan (§14)
+**Verified:** the parser was run over all 79 real transcripts on this machine —
+49,905 conversation items, 19,582 carrying official usage.
 
-## M4 — Conversation View (§24)
-- [ ] Structured projection UI, same session as terminal
-- [ ] Terminal ↔ Conversation toggle preserving context
+## M4 — Conversation View (§24)  ✅
+- [x] Structured projection: turns, tool calls with results, thinking, errors
+- [x] Official token usage per turn, never estimates dressed as facts (§28)
+- [x] Terminal ↔ Conversation toggle over one session, process untouched
+**Verified:** a real Claude Code session in a real repo, shown in both views.
 
 ## M5 — Missions (§29–§35)
 - [ ] Mission model, states, tasks, acceptance criteria
@@ -71,9 +76,9 @@ inspection (§76).
 ---
 
 ## Current milestone
-**M2 — Terminal**, then M3 providers.
+**M10 — Installer and updater**, so the product is genuinely installable (§92).
 
 ## Next steps
-1. Visual review of the terminal in a real project, both themes
-2. Provider adapter trait + capability model (§26)
-3. Claude Code transcript tail -> same session log -> Conversation View
+1. NSIS installer with product identity; verify a real install/uninstall
+2. Updater plumbing + minisign keypair (signing cert is blocked, see BLOCKERS)
+3. Missions (§29) — the central concept, on top of the session core

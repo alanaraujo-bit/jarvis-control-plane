@@ -92,6 +92,22 @@ export const en = {
   "terminal.empty.body": "Start a shell, or launch an agent in this project.",
   "terminal.notInstalled": "{name} is not installed",
 
+
+  // ---- Conversation (§24) --------------------------------------------------
+  "conversation.title": "Conversation",
+  "conversation.you": "You",
+  "conversation.agent": "Agent",
+  "conversation.thinking": "Thinking",
+  "conversation.in": "in",
+  "conversation.out": "out",
+  "conversation.cached": "cached",
+  "conversation.usageOfficial": "Reported by the provider",
+  "conversation.empty.title": "Nothing to show yet",
+  "conversation.empty.body":
+    "This session has not produced structured output yet. The terminal shows everything as it happens.",
+  "view.terminal": "Terminal",
+  "view.conversation": "Conversation",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, GitBranch, Plus, X } from "lucide-react";
+import { ConversationView } from "../conversation/ConversationView";
 import { Popover } from "../../design/Popover";
 import { useT } from "../../app/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
@@ -35,6 +36,9 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
   const active = activeTab[project.id];
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLButtonElement | null>(null);
+  const [view, setView] = useState<"terminal" | "conversation">("terminal");
+
+  const activeTab_ = projectTabs.find((tab) => tab.sessionId === active);
 
   // Reattach to sessions that are still running from a previous visit.
   useEffect(() => {
@@ -147,6 +151,27 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
             })}
           </Popover>
         </div>
+
+        {/* Terminal and Conversation are the same session, not two sessions
+            (§23). This switches how it is rendered; nothing is restarted, the
+            process keeps running, and the terminal keeps its scrollback. */}
+        {activeTab_ && (
+          <div className="workspace__view-toggle" role="radiogroup" aria-label={t("view.terminal")}>
+            {(["terminal", "conversation"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={view === mode}
+                data-active={view === mode || undefined}
+                className="workspace__view-option"
+                onClick={() => setView(mode)}
+              >
+                {mode === "terminal" ? t("view.terminal") : t("view.conversation")}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="workspace__body">
@@ -169,7 +194,20 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
               className="workspace__pane"
               data-visible={tab.sessionId === active || undefined}
             >
-              <TerminalView sessionId={tab.sessionId} autoFocus={tab.sessionId === active} />
+              {/* The terminal stays mounted even when the conversation is
+                  showing: unmounting it would discard its scrollback, and
+                  switching views must never cost the user their history. */}
+              <div className="workspace__projection" data-visible={view === "terminal" || undefined}>
+                <TerminalView
+                  sessionId={tab.sessionId}
+                  autoFocus={tab.sessionId === active && view === "terminal"}
+                />
+              </div>
+              {view === "conversation" && (
+                <div className="workspace__projection" data-visible>
+                  <ConversationView sessionId={tab.sessionId} live />
+                </div>
+              )}
             </div>
           ))
         )}

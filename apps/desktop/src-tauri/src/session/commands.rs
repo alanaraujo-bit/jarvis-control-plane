@@ -1,6 +1,7 @@
 //! Session commands exposed to the UI.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,9 @@ use tauri::ipc::{Channel, InvokeResponseBody, Response};
 use tauri::State;
 
 use super::manager::{new_session_id, timestamp, Result, SessionInfo};
-use super::{SessionLogReader, SessionState};
+use super::{transcript, SessionLogReader, SessionState};
+use crate::providers::conversation::ConversationItem;
+use crate::session::event::EventKind;
 use crate::pty::PtyOptions;
 use crate::AppState;
 
@@ -160,6 +163,16 @@ pub fn session_start(
             env,
         },
     )?;
+
+    // Follow the provider's structured transcript into the same log, so the
+    // conversation and the terminal are two views of one stream (§23).
+    transcript::spawn(
+        Arc::clone(&session),
+        kind.provider_id().to_string(),
+        cwd.clone(),
+        created_at,
+        session.stop_flag(),
+    );
 
     Ok(SessionInfo {
         id,
@@ -334,4 +347,37 @@ mod tests {
         assert_eq!(parse_state("blocked"), SessionState::Blocked);
         assert_eq!(parse_state("nonsense"), SessionState::Starting);
     }
+}
+
+/// The conversation projection of a session (§24).
+///
+/// Reads the structured frames from the same log the terminal replays, so both
+/// views are derived from one ordered stream rather than from separate stores.
+#[tauri::command]
+pub fn session_conversation(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<ConversationItem>> {
+    let log_dir: String = state.db.with(|conn| {
+        conn.query_row(
+            "SELECT log_dir FROM sessions WHERE id = ?1",
+            [&session_id],
+            |row| row.get(0),
+        )
+    })?;
+
+    let reader = SessionLogReader::open(&log_dir)?;
+    Ok(reader
+        .read_from(0)?
+        .into_iter()
+        .filter(|event| {
+            matches!(
+                event.kind,
+                EventKind::Message | EventKind::ToolCall | EventKind::ToolResult
+            )
+        })
+        // A frame written by a newer build may not deserialise here; skipping
+        // it keeps the rest of the conversation readable.
+        .filter_map(|event| serde_json::from_slice::<ConversationItem>(&event.payload).ok())
+        .collect())
 }

@@ -99,6 +99,8 @@ pub struct LiveSession {
     /// The UI sink. Replaced whenever a view attaches or detaches.
     sink: Arc<Mutex<Option<Channel<InvokeResponseBody>>>>,
     state: Arc<Mutex<SessionState>>,
+    /// Set when the session ends, so background followers wind down.
+    stopped: Arc<AtomicBool>,
 }
 
 impl LiveSession {
@@ -127,6 +129,21 @@ impl LiveSession {
         *self.state.lock()
     }
 
+    /// Append a structured frame to this session's log.
+    ///
+    /// Used by the provider transcript tailer, which is the second producer
+    /// feeding the single writer. Going through the same channel as the PTY
+    /// reader is what preserves ordering between what the terminal showed and
+    /// what the provider reported (§23).
+    pub fn log(&self, kind: EventKind, payload: Vec<u8>) {
+        let _ = self.log_tx.send(LogCommand::Append { kind, payload });
+    }
+
+    /// Signals the transcript tailer to stop when the session ends.
+    pub fn stop_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.stopped)
+    }
+
     /// Point the session's output at a terminal view.
     ///
     /// From here on the view answers terminal queries, so the core stops
@@ -144,6 +161,9 @@ impl LiveSession {
     }
 
     pub fn kill(&self) -> Result<()> {
+        // Stop the follower first: it must not keep polling a transcript for a
+        // session that no longer exists.
+        self.stopped.store(true, Ordering::SeqCst);
         self.pty.kill()?;
         let _ = self.log_tx.send(LogCommand::Stop);
         Ok(())
@@ -228,6 +248,7 @@ impl SessionManager {
             view_attached: Arc::new(AtomicBool::new(false)),
             sink: Arc::new(Mutex::new(None)),
             state: Arc::new(Mutex::new(SessionState::Starting)),
+            stopped: Arc::new(AtomicBool::new(false)),
         });
 
         spawn_pump(Arc::clone(&session), pty, pty_rx, log_tx);

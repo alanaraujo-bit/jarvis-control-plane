@@ -29,7 +29,7 @@ Write-Output "targeting pid $($info.ProcessId): $($info.Path)"
 
 Set-JarvisFocus -Hwnd $info.Hwnd
 Start-Sleep -Milliseconds $FocusSettleMs
-Assert-JarvisFocused -Hwnd $info.Hwnd
+Assert-JarvisFocused -Hwnd $info.Hwnd -ProcessId $info.ProcessId
 
 foreach ($step in $Steps.Split('|')) {
   if ($step -match '^sleep:(\d+)$') { Start-Sleep -Milliseconds ([int]$Matches[1]); continue }
@@ -37,14 +37,14 @@ foreach ($step in $Steps.Split('|')) {
   # "click:x,y" clicks a point relative to the window frame, so the UI can be
   # driven the way a person drives it rather than through internals.
   if ($step -match '^click:(\d+),(\d+)$') {
-    Assert-JarvisFocused -Hwnd $info.Hwnd
+    Assert-JarvisFocused -Hwnd $info.Hwnd -ProcessId $info.ProcessId
     [JarvisWindow]::ClickInWindow($info.Hwnd, [int]$Matches[1], [int]$Matches[2])
     Start-Sleep -Milliseconds 150
     continue
   }
 
   if ([string]::IsNullOrEmpty($step)) { continue }
-  Assert-JarvisFocused -Hwnd $info.Hwnd
+  Assert-JarvisFocused -Hwnd $info.Hwnd -ProcessId $info.ProcessId
   [System.Windows.Forms.SendKeys]::SendWait($step)
   Start-Sleep -Milliseconds 70
 }

@@ -22,7 +22,7 @@ Start-Sleep -Milliseconds $SettleMs
 
 # The capture reads the screen at the window's coordinates, so it is only
 # trustworthy if that window is genuinely on top.
-Assert-JarvisFocused -Hwnd $info.Hwnd
+Assert-JarvisFocused -Hwnd $info.Hwnd -ProcessId $info.ProcessId
 
 $r = [JarvisWindow]::GetFrameBounds($info.Hwnd)
 $width = $r.Right - $r.Left

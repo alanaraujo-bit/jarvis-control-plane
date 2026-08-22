@@ -86,6 +86,21 @@ export const ptBR: Record<MessageKey, string> = {
   "terminal.empty.body": "Inicie um shell ou execute um agente neste projeto.",
   "terminal.notInstalled": "{name} não está instalado",
 
+
+  "conversation.title": "Conversa",
+  "conversation.you": "Você",
+  "conversation.agent": "Agente",
+  "conversation.thinking": "Raciocínio",
+  "conversation.in": "entrada",
+  "conversation.out": "saída",
+  "conversation.cached": "cache",
+  "conversation.usageOfficial": "Informado pelo provedor",
+  "conversation.empty.title": "Nada para mostrar ainda",
+  "conversation.empty.body":
+    "Esta sessão ainda não produziu saída estruturada. O terminal mostra tudo em tempo real.",
+  "view.terminal": "Terminal",
+  "view.conversation": "Conversa",
+
   "common.cancel": "Cancelar",
   "common.confirm": "Confirmar",
   "common.retry": "Tentar novamente",

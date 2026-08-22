@@ -8,6 +8,7 @@ mod db;
 mod envscan;
 mod git;
 mod project;
+mod providers;
 mod pty;
 mod session;
 mod window;
@@ -80,6 +81,8 @@ pub fn run() {
             session::commands::session_close,
             session::commands::session_replay,
             session::commands::session_list,
+            session::commands::session_conversation,
+            providers::list_providers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");

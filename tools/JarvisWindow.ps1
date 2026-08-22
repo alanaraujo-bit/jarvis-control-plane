@@ -174,11 +174,19 @@ function Set-JarvisFocus {
 }
 
 function Assert-JarvisFocused {
-  param([IntPtr]$Hwnd)
+  param([IntPtr]$Hwnd, [int]$ProcessId)
 
-  # Never send keystrokes unless our own window actually holds focus. A missed
-  # activation must fail loudly rather than type into another application.
-  if ([JarvisWindow]::GetForegroundWindow() -ne $Hwnd) {
-    throw "Refusing to send input: the J.A.R.V.I.S. window is not focused."
-  }
+  # Never send keystrokes unless the foreground window belongs to the dev app.
+  # A missed activation must fail loudly rather than type into another
+  # application.
+  #
+  # The check is on the owning process, not on the exact handle: opening a file
+  # dialog moves focus to a different window of the *same* process, and driving
+  # that dialog is legitimate. Anything owned by another process is not.
+  $fg = [JarvisWindow]::GetForegroundWindow()
+  if ($fg -eq $Hwnd) { return }
+
+  if ($ProcessId -and [JarvisWindow]::ProcessIdOf($fg) -eq [uint32]$ProcessId) { return }
+
+  throw "Refusing to send input: the foreground window does not belong to the J.A.R.V.I.S. dev app."
 }
