@@ -124,6 +124,56 @@ export const en = {
     "This build is not code-signed, so Windows may warn on install. See BLOCKERS.md.",
   "update.notes": "What changed",
 
+
+  // ---- Missions (§29-§35) --------------------------------------------------
+  "mission.new": "New mission",
+  "mission.title": "Title",
+  "mission.goal": "Goal",
+  "mission.tasks": "Tasks",
+  "mission.criteria": "Acceptance criteria",
+  "mission.evidence": "Evidence",
+  "mission.autonomy": "Autonomy",
+  "mission.autonomy.guided": "Guided",
+  "mission.autonomy.autonomous": "Autonomous",
+  "mission.autonomy.unattended": "Unattended",
+  "mission.autonomy.inherited": "Inherited",
+  "mission.verify": "Verify now",
+  "mission.verifying": "Verifying…",
+  "mission.complete": "Mark complete",
+  "mission.start": "Start",
+  "mission.block": "Blocked",
+  "mission.required": "Required",
+  "mission.optional": "Optional",
+  "mission.confirm": "Confirm",
+  "mission.confirmManual": "Only a person can confirm this",
+  "mission.withdrawn": "Withdrawn",
+  "mission.withdrawnBy": "Withdrawn by {who}: {reason}",
+  "mission.notVerified_one":
+    "{count} required criterion is not verified yet. A mission is complete when there is evidence, not when it is claimed.",
+  "mission.notVerified":
+    "{count} required criteria are not verified yet. A mission is complete when there is evidence, not when it is claimed.",
+  "mission.noCriteria": "No acceptance criteria. Nothing will be checked automatically.",
+  "mission.blockedReason": "Why it is blocked",
+  "mission.empty.title": "No missions yet",
+  "mission.empty.body":
+    "A mission is work that needs finishing, with criteria that say what finished means.",
+  "mission.create": "Create mission",
+  "mission.cancel": "Cancel",
+  "mission.titlePlaceholder": "What needs to be done?",
+  "mission.goalPlaceholder": "What does success look like?",
+  "mission.criterionPlaceholder": "A check that must pass",
+  "mission.commandPlaceholder": "e.g. pnpm test",
+  "mission.addCriterion": "Add criterion",
+  "mission.checkType.command": "Command",
+  "mission.checkType.fileExists": "File exists",
+  "mission.checkType.manual": "Manual",
+
+  // ---- Mission Control (§18) -----------------------------------------------
+  "missionControl.blocked": "Blocked",
+  "missionControl.verified": "verified",
+  "missionControl.openCriteria_one": "{count} unverified",
+  "missionControl.openCriteria": "{count} unverified",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

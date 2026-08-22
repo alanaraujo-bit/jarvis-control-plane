@@ -1,0 +1,29 @@
+.status-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: var(--radius-full);
+  background: var(--state-idle);
+}
+
+.status-dot[data-status="ready"]     { background: var(--text-disabled); }
+.status-dot[data-status="idle"]      { background: var(--state-idle); }
+.status-dot[data-status="waiting"]   { background: var(--state-waiting); }
+.status-dot[data-status="blocked"]   { background: var(--state-danger); }
+.status-dot[data-status="failed"]    { background: var(--state-danger); }
+.status-dot[data-status="completed"] { background: var(--state-success); }
+
+/* Amber is agent work (§6). Running and verifying pulse; nothing else moves. */
+.status-dot[data-status="running"],
+.status-dot[data-status="verifying"] {
+  background: var(--state-working);
+  animation: status-pulse 2s var(--ease-in-out) infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.42; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot { animation: none !important; }
+}

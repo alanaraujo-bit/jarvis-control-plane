@@ -1,0 +1,116 @@
+.missions { height: 100%; overflow-y: auto; }
+
+.missions__inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-9) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.missions__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.missions__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+.missions__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 30px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.missions__primary:hover:not(:disabled) { background: var(--accent-hover); }
+.missions__primary:disabled { opacity: 0.45; }
+
+.missions__error {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--state-danger-bg);
+  color: var(--state-danger);
+  font-size: var(--text-sm);
+}
+
+.missions__list {
+  list-style: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.missions__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-5) var(--space-6);
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.missions__list li:last-child .missions__row { border-bottom: none; }
+.missions__row:hover { background: var(--bg-hover); }
+
+.missions__row-title {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.missions__row-project {
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  white-space: nowrap;
+}
+
+.missions__row-state {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  justify-self: end;
+}
+
+/* The number that matters: stated requirements without evidence (§30). */
+.missions__open { color: var(--state-warning); }
+.missions__verified { color: var(--state-success); }
+
+.missions__empty {
+  padding: var(--space-11) var(--space-8);
+  text-align: center;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.missions__empty-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.missions__empty-body {
+  max-width: 52ch;
+  margin: var(--space-4) auto 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}

@@ -7,7 +7,8 @@
     "dev": "pnpm --filter @jarvis/desktop dev",
     "tauri": "pnpm --filter @jarvis/desktop tauri",
     "build": "pnpm --filter @jarvis/desktop build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test && cd apps/desktop/src-tauri && cargo test"
   },
   "packageManager": "pnpm@11.20.0",
   "engines": {

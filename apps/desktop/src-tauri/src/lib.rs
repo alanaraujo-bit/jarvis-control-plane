@@ -7,6 +7,7 @@
 mod db;
 mod envscan;
 mod git;
+mod mission;
 mod project;
 mod providers;
 mod pty;
@@ -98,6 +99,15 @@ pub fn run() {
             session::commands::session_list,
             session::commands::session_conversation,
             providers::list_providers,
+            mission::store::list_missions,
+            mission::store::mission_summaries,
+            mission::store::mission_detail,
+            mission::store::create_mission,
+            mission::store::set_mission_status,
+            mission::store::verify_mission_now,
+            mission::store::confirm_criterion,
+            mission::store::withdraw_mission_criterion,
+            mission::store::set_mission_task_done,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");

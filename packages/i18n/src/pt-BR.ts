@@ -1,4 +1,4 @@
-import type { MessageKey } from "./en";
+import type { MessageKey } from "./en.ts";
 
 /**
  * Português brasileiro.
@@ -115,6 +115,54 @@ export const ptBR: Record<MessageKey, string> = {
   "update.unsigned":
     "Esta build não tem assinatura digital, então o Windows pode exibir um aviso na instalação. Veja BLOCKERS.md.",
   "update.notes": "O que mudou",
+
+
+  "mission.new": "Nova missão",
+  "mission.title": "Título",
+  "mission.goal": "Objetivo",
+  "mission.tasks": "Tarefas",
+  "mission.criteria": "Critérios de aceite",
+  "mission.evidence": "Evidências",
+  "mission.autonomy": "Autonomia",
+  "mission.autonomy.guided": "Guiada",
+  "mission.autonomy.autonomous": "Autônoma",
+  "mission.autonomy.unattended": "Sem supervisão",
+  "mission.autonomy.inherited": "Herdada",
+  "mission.verify": "Verificar agora",
+  "mission.verifying": "Verificando…",
+  "mission.complete": "Marcar como concluída",
+  "mission.start": "Iniciar",
+  "mission.block": "Bloqueada",
+  "mission.required": "Obrigatório",
+  "mission.optional": "Opcional",
+  "mission.confirm": "Confirmar",
+  "mission.confirmManual": "Só uma pessoa pode confirmar isto",
+  "mission.withdrawn": "Retirado",
+  "mission.withdrawnBy": "Retirado por {who}: {reason}",
+  "mission.notVerified_one":
+    "{count} critério obrigatório ainda não foi verificado. Uma missão está concluída quando há evidência, não quando alguém afirma.",
+  "mission.notVerified":
+    "{count} critérios obrigatórios ainda não foram verificados. Uma missão está concluída quando há evidência, não quando alguém afirma.",
+  "mission.noCriteria": "Sem critérios de aceite. Nada será verificado automaticamente.",
+  "mission.blockedReason": "Por que está bloqueada",
+  "mission.empty.title": "Nenhuma missão ainda",
+  "mission.empty.body":
+    "Uma missão é um trabalho que precisa ser concluído, com critérios que definem o que significa concluído.",
+  "mission.create": "Criar missão",
+  "mission.cancel": "Cancelar",
+  "mission.titlePlaceholder": "O que precisa ser feito?",
+  "mission.goalPlaceholder": "Como é o sucesso?",
+  "mission.criterionPlaceholder": "Uma verificação que precisa passar",
+  "mission.commandPlaceholder": "ex.: pnpm test",
+  "mission.addCriterion": "Adicionar critério",
+  "mission.checkType.command": "Comando",
+  "mission.checkType.fileExists": "Arquivo existe",
+  "mission.checkType.manual": "Manual",
+
+  "missionControl.blocked": "Bloqueadas",
+  "missionControl.verified": "verificado",
+  "missionControl.openCriteria_one": "{count} não verificado",
+  "missionControl.openCriteria": "{count} não verificados",
 
   "common.cancel": "Cancelar",
   "common.confirm": "Confirmar",

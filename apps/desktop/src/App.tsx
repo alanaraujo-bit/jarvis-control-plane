@@ -6,6 +6,7 @@ import { TitleBar } from "./shell/TitleBar";
 import { StatusBar } from "./shell/StatusBar";
 import { CommandPalette, type Command } from "./shell/CommandPalette";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
+import { Missions } from "./surfaces/missions/Missions";
 import { Projects } from "./surfaces/projects/Projects";
 import { ProjectWorkspace } from "./surfaces/project/ProjectWorkspace";
 import type { Project } from "./surfaces/projects/useProjects";
@@ -22,7 +23,7 @@ import "./App.css";
  * destination it cannot deliver (§81). Milestones add entries here as they
  * land; nothing has to be restructured when they do.
  */
-const IMPLEMENTED: SurfaceId[] = ["mission-control", "projects", "settings"];
+const IMPLEMENTED: SurfaceId[] = ["mission-control", "projects", "missions", "settings"];
 
 export function App() {
   const t = useT();
@@ -35,9 +36,12 @@ export function App() {
   // An open project takes over the surface area. The rail stays put, so the
   // user never loses their bearings when they go deeper (§85).
   const [openProject, setOpenProject] = useState<Project | null>(null);
+  // Set when arriving at Missions from somewhere that already knows which one.
+  const [focusMission, setFocusMission] = useState<string | undefined>();
 
   const goTo = useCallback((id: SurfaceId) => {
     setOpenProject(null);
+    setFocusMission(undefined);
     setSurface(id);
   }, []);
 
@@ -151,8 +155,17 @@ export function App() {
             <Settings />
           ) : surface === "projects" ? (
             <Projects onOpen={setOpenProject} />
+          ) : surface === "missions" ? (
+            <Missions initialMissionId={focusMission} />
           ) : (
-            <MissionControl onOpenProject={() => goTo("projects")} />
+            <MissionControl
+              onOpenProject={() => goTo("projects")}
+              onOpenMission={(mission) => {
+                setOpenProject(null);
+                setFocusMission(mission.id);
+                setSurface("missions");
+              }}
+            />
           )}
         </main>
       </div>

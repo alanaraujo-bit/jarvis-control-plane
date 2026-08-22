@@ -49,12 +49,24 @@ inspection (§76).
 - [x] Terminal ↔ Conversation toggle over one session, process untouched
 **Verified:** a real Claude Code session in a real repo, shown in both views.
 
-## M5 — Missions (§29–§35)
-- [ ] Mission model, states, tasks, acceptance criteria
-- [ ] Evidence + Verification (§30)
-- [ ] Autonomy profiles + inheritance (§32/§33)
-- [ ] Guardrails (§35)
-- [ ] Mission Control home (§18)
+## M5 — Missions (§29–§35)  ~
+- [x] Mission model, states, tasks, acceptance criteria
+- [x] Evidence + Verification by running real checks (§30)
+- [x] Completion refused without evidence, and **revoked** when evidence stops holding
+- [x] Withdrawing a criterion is recorded with a reason, never deleted (§31)
+- [x] Autonomy profiles + inheritance across mission/project/global (§33)
+- [x] Blocked always reachable, and must explain itself (§34)
+- [x] Mission Control home, sections that disappear when empty (§18)
+- [ ] Agents driving missions automatically under Unattended (§32)
+- [ ] Guardrails for sensitive operations (§35)
+**Verified in the installed app:** created a mission, was refused completion,
+ran verification, did the work, verified, completed — then deleted the artifact
+and watched completion be revoked.
+
+### Known gaps in this milestone
+- Evidence summaries are generated in Rust and are English-only. They should
+  carry a structured code the UI localises (§65).
+- Missions are not yet linked to the sessions that work on them.
 
 ## M6 — Code surfaces
 - [ ] Files explorer (§41)
@@ -84,9 +96,10 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ---
 
 ## Current milestone
-**M5 — Missions (§29)**, the central concept, built on the session core.
+**M5 — Missions**, mostly landed. Next is connecting missions to the agents
+that work on them.
 
 ## Next steps
-1. Mission model, states, tasks and acceptance criteria
-2. Evidence + Verification, so "done" means verified rather than claimed (§30)
-3. Mission Control as the real home surface (§18)
+1. Link sessions to missions, so a running agent shows on its mission
+2. Guardrails for sensitive operations (§35)
+3. Localised evidence summaries (§65)

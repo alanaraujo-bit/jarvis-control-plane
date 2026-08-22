@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 struct Migration {
     version: u32,
@@ -120,7 +120,82 @@ const MIGRATIONS: &[Migration] = &[Migration {
         value TEXT NOT NULL
     );
 "#,
-}];
+    },
+    Migration {
+        version: 2,
+        sql: r#"
+    -- ---- Missions (§29) --------------------------------------------------
+    CREATE TABLE missions (
+        id          TEXT PRIMARY KEY,
+        project_id  TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+        title       TEXT NOT NULL,
+        goal        TEXT,
+        description TEXT,
+        -- ready | running | verifying | waiting | blocked | failed | completed
+        status      TEXT NOT NULL DEFAULT 'ready',
+        -- NULL means inherit from the project, then from global (§33).
+        autonomy    TEXT,
+        -- Why a mission is blocked or waiting. A blocked mission must be able
+        -- to explain itself; silence is what §34 forbids.
+        blocked_reason TEXT,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL,
+        started_at  INTEGER,
+        completed_at INTEGER
+    );
+    CREATE INDEX idx_missions_project ON missions (project_id, updated_at DESC);
+    CREATE INDEX idx_missions_status ON missions (status);
+
+    CREATE TABLE mission_tasks (
+        id          TEXT PRIMARY KEY,
+        mission_id  TEXT NOT NULL REFERENCES missions (id) ON DELETE CASCADE,
+        description TEXT NOT NULL,
+        done        INTEGER NOT NULL DEFAULT 0,
+        position    INTEGER NOT NULL
+    );
+    CREATE INDEX idx_tasks_mission ON mission_tasks (mission_id, position);
+
+    -- ---- Acceptance criteria (§30) ---------------------------------------
+    -- The difference between "the agent says it is done" and "it is done".
+    -- `verification` is JSON describing how the criterion is *checked*, not a
+    -- note about it — see mission::verify.
+    CREATE TABLE acceptance_criteria (
+        id           TEXT PRIMARY KEY,
+        mission_id   TEXT NOT NULL REFERENCES missions (id) ON DELETE CASCADE,
+        description  TEXT NOT NULL,
+        required     INTEGER NOT NULL DEFAULT 1,
+        verification TEXT NOT NULL,
+        -- pending | verified | failed
+        status       TEXT NOT NULL DEFAULT 'pending',
+        position     INTEGER NOT NULL,
+        -- §31: an agent may not silently drop a requirement. Removal is a
+        -- recorded event with a reason, never a DELETE.
+        removed_at     INTEGER,
+        removed_reason TEXT,
+        removed_by     TEXT
+    );
+    CREATE INDEX idx_criteria_mission ON acceptance_criteria (mission_id, position);
+
+    -- ---- Evidence (§30) --------------------------------------------------
+    CREATE TABLE evidence (
+        id           TEXT PRIMARY KEY,
+        mission_id   TEXT NOT NULL REFERENCES missions (id) ON DELETE CASCADE,
+        criterion_id TEXT REFERENCES acceptance_criteria (id) ON DELETE CASCADE,
+        session_id   TEXT REFERENCES sessions (id) ON DELETE SET NULL,
+        -- command | file | commit | screenshot | url | manual
+        kind         TEXT NOT NULL,
+        ok           INTEGER NOT NULL,
+        summary      TEXT NOT NULL,
+        detail       TEXT,
+        ts_ms        INTEGER NOT NULL
+    );
+    CREATE INDEX idx_evidence_mission ON evidence (mission_id, ts_ms DESC);
+    CREATE INDEX idx_evidence_criterion ON evidence (criterion_id, ts_ms DESC);
+
+    -- Autonomy at the project level, the middle tier of the §33 chain.
+    ALTER TABLE projects ADD COLUMN autonomy TEXT;
+"#,
+    }];
 
 pub fn run(conn: &Connection) -> Result<()> {
     conn.execute(
