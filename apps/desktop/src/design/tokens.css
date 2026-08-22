@@ -1,0 +1,204 @@
+/* ==========================================================================
+   J.A.R.V.I.S. — Design Tokens
+   --------------------------------------------------------------------------
+   Personality: "Quiet Intelligence" (§6).
+   High power, low visual noise. Near-monochrome neutrals carry the interface;
+   colour is reserved for meaning.
+
+   The core idea: AMBER IS THE COLOUR OF AGENT WORK. The brand accent and the
+   "working" state are the same hue on purpose — the product's identity is the
+   work in progress. Colour therefore never decorates; it always reports state.
+
+   Dark and light are authored independently (§8). Light is not an inversion:
+   its neutrals are warmer, its accent is darkened for contrast on white, and
+   its borders are tuned separately.
+   ========================================================================== */
+
+:root {
+  /* ---- Typography ------------------------------------------------------ */
+  --font-ui: "Inter Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  /* Dense desktop scale. 13px is the body size — not 16px web default. */
+  --text-micro: 10.5px;
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-base: 13.5px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Optical letter-spacing: tighten as size grows. */
+  --tracking-wide: 0.04em;
+  --tracking-normal: 0;
+  --tracking-tight: -0.011em;
+  --tracking-tighter: -0.021em;
+
+  /* ---- Space (4px base) ------------------------------------------------ */
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 40px;
+  --space-11: 48px;
+  --space-12: 64px;
+
+  /* ---- Radius — restrained (§7 forbids giant radii) -------------------- */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-full: 999px;
+
+  /* ---- Motion (§10) ----------------------------------------------------
+     Decelerate-only easing. No overshoot, no bounce. Motion states position
+     and causality; it never performs.                                      */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.15, 1);
+  --duration-instant: 80ms;
+  --duration-fast: 130ms;
+  --duration-base: 190ms;
+  --duration-slow: 280ms;
+
+  /* ---- Layout ---------------------------------------------------------- */
+  --titlebar-height: 36px;
+  --rail-width: 52px;
+  --sidebar-width: 244px;
+  --statusbar-height: 26px;
+}
+
+/* ==========================================================================
+   DARK — the default. A near-black with a trace of warmth so the amber
+   accent sits in the same family rather than floating on cold grey.
+   ========================================================================== */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-base:     #0C0C0D;
+  --bg-surface:  #141415;
+  --bg-raised:   #1A1A1C;
+  --bg-overlay:  #202022;
+  --bg-inset:    #09090A;
+
+  --bg-hover:    rgba(255, 255, 255, 0.038);
+  --bg-active:   rgba(255, 255, 255, 0.068);
+  --bg-selected: rgba(217, 165, 92, 0.13);
+
+  --border-subtle: rgba(255, 255, 255, 0.058);
+  --border-default: rgba(255, 255, 255, 0.098);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-focus:  #D9A55C;
+
+  --text-primary:   #EDEDEF;
+  --text-secondary: #9E9EA6;
+  --text-tertiary:  #6B6B74;
+  --text-disabled:  #48484F;
+  --text-on-accent: #17130C;
+
+  /* Amber — brand and "working" are one colour by design. */
+  --accent:        #D9A55C;
+  --accent-hover:  #E5B571;
+  --accent-active: #C89448;
+  --accent-muted:  rgba(217, 165, 92, 0.14);
+  --accent-border: rgba(217, 165, 92, 0.34);
+
+  --state-working:  #D9A55C;
+  --state-waiting:  #7FA6CC;
+  --state-success:  #6FBF8E;
+  --state-danger:   #E28B7C;
+  --state-warning:  #E0A33F;
+  --state-idle:     #6B6B74;
+
+  --state-working-bg: rgba(217, 165, 92, 0.13);
+  --state-waiting-bg: rgba(127, 166, 204, 0.13);
+  --state-success-bg: rgba(111, 191, 142, 0.13);
+  --state-danger-bg:  rgba(226, 139, 124, 0.13);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
+}
+
+/* ==========================================================================
+   LIGHT — authored on its own terms (§8). Warm paper-neutral rather than
+   pure white; the accent is darkened to a bronze so it holds AA contrast,
+   and borders use ink alpha rather than inverted white alpha.
+   ========================================================================== */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base:     #F7F7F5;
+  --bg-surface:  #FFFFFF;
+  --bg-raised:   #FFFFFF;
+  --bg-overlay:  #FFFFFF;
+  --bg-inset:    #F0F0ED;
+
+  --bg-hover:    rgba(16, 16, 12, 0.042);
+  --bg-active:   rgba(16, 16, 12, 0.075);
+  --bg-selected: rgba(154, 106, 30, 0.10);
+
+  --border-subtle: rgba(16, 16, 12, 0.07);
+  --border-default: rgba(16, 16, 12, 0.12);
+  --border-strong: rgba(16, 16, 12, 0.2);
+  --border-focus:  #9A6A1E;
+
+  --text-primary:   #1A1A17;
+  --text-secondary: #5C5C55;
+  --text-tertiary:  #86867E;
+  --text-disabled:  #AEAEA6;
+  --text-on-accent: #FFFFFF;
+
+  --accent:        #9A6A1E;
+  --accent-hover:  #855A15;
+  --accent-active: #714B0F;
+  --accent-muted:  rgba(154, 106, 30, 0.10);
+  --accent-border: rgba(154, 106, 30, 0.30);
+
+  --state-working:  #9A6A1E;
+  --state-waiting:  #37648F;
+  --state-success:  #2C7A4B;
+  --state-danger:   #B23F2C;
+  --state-warning:  #96650E;
+  --state-idle:     #86867E;
+
+  --state-working-bg: rgba(154, 106, 30, 0.10);
+  --state-waiting-bg: rgba(55, 100, 143, 0.10);
+  --state-success-bg: rgba(44, 122, 75, 0.10);
+  --state-danger-bg:  rgba(178, 63, 44, 0.10);
+
+  --shadow-sm: 0 1px 2px rgba(16, 16, 12, 0.07);
+  --shadow-md: 0 4px 12px rgba(16, 16, 12, 0.09), 0 1px 3px rgba(16, 16, 12, 0.06);
+  --shadow-lg: 0 12px 32px rgba(16, 16, 12, 0.13), 0 2px 8px rgba(16, 16, 12, 0.07);
+
+  --scrollbar-thumb: rgba(16, 16, 12, 0.18);
+  --scrollbar-thumb-hover: rgba(16, 16, 12, 0.3);
+}
+
+/* §82 — respect the OS reduce-motion setting. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}

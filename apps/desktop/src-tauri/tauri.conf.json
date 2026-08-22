@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "J.A.R.V.I.S.",
+  "version": "0.1.0",
+  "identifier": "dev.jarvis.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:5273",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "J.A.R.V.I.S.",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 640,
+        "center": true,
+        "resizable": true,
+        "decorations": false,
+        "shadow": true,
+        "transparent": false,
+        "dragDropEnabled": true,
+        "visible": false,
+        "theme": null
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:* http://localhost:*"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "copyright": "© 2026 Alan Araujo. All rights reserved.",
+    "category": "DeveloperTool",
+    "shortDescription": "The control plane for AI-agent development.",
+    "longDescription": "J.A.R.V.I.S. is a universal operating environment for software development with AI agents — projects, missions, agents, terminals, code and verification in one place.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English",
+          "PortugueseBR"
+        ],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-base);
+}
+
+.app__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The surface sits on --bg-surface so the chrome (rail, titlebar, statusbar)
+   reads as a frame around the work rather than as more content. */
+.app__surface {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-surface);
+  border-top-left-radius: var(--radius-lg);
+  border-left: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle);
+  overflow: hidden;
+  /* Keyed on the surface id in App, so switching destinations fades the new
+     surface in rather than snapping. Position is unchanged — this states a
+     change of content, not of place (§10). */
+  animation: surface-enter var(--duration-base) var(--ease-out);
+}
+
+@keyframes surface-enter {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app__surface { animation: none; }
+}

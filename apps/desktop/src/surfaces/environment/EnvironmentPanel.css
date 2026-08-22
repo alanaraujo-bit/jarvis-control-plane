@@ -1,0 +1,250 @@
+.env {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.env__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.env__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.env__subtitle {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.env__rescan {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 26px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.env__rescan:hover:not(:disabled) {
+  background: var(--bg-raised);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.env__rescan:disabled {
+  opacity: 0.55;
+}
+
+.env__spin {
+  animation: env-spin 900ms linear infinite;
+}
+
+@keyframes env-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .env__spin { animation: none; }
+}
+
+.env__error {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--state-danger-bg);
+  color: var(--state-danger);
+  font-size: var(--text-sm);
+}
+
+/* ---- Rows ----------------------------------------------------------------
+   A hairline-separated list, not a stack of cards. Cards for every item is the
+   generic dashboard tell (§7); a dense list reads as a real tool. */
+.env__list {
+  list-style: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.env__row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, auto) 1fr auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.env__row:last-child {
+  border-bottom: none;
+}
+
+.env__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--state-idle);
+  flex: 0 0 auto;
+}
+
+.env__row[data-state="ready"] .env__dot { background: var(--state-success); }
+.env__row[data-state="missing"] .env__dot { background: var(--state-idle); }
+.env__row[data-state="degraded"] .env__dot { background: var(--state-warning); }
+
+.env__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.env__name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.env__tag {
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  padding: 0 var(--space-2);
+}
+
+.env__detail {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.env__version {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.env__auth {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.env__auth[data-on] {
+  color: var(--state-success);
+}
+
+.env__path {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl; /* keep the executable name visible when the path is long */
+  text-align: left;
+}
+
+.env__message {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.env__state {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.env__row[data-state="ready"] .env__state { color: var(--state-success); }
+.env__row[data-state="degraded"] .env__state { color: var(--state-warning); }
+
+/* Install affordance spans the full row width beneath the summary. */
+.env__actions {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.env__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-inset);
+  color: var(--text-tertiary);
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.env__action:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.env__action--icon {
+  padding: 0 var(--space-3);
+}
+
+.env__command {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+}
+
+/* ---- Loading skeletons --------------------------------------------------- */
+.env__row--skeleton {
+  grid-template-columns: auto 120px 1fr;
+}
+
+.env__skeleton {
+  height: 9px;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(
+    90deg,
+    var(--bg-raised) 0%,
+    var(--bg-hover) 50%,
+    var(--bg-raised) 100%
+  );
+  background-size: 200% 100%;
+  animation: env-shimmer 1.4s var(--ease-in-out) infinite;
+}
+
+.env__skeleton--dot { width: 6px; height: 6px; border-radius: var(--radius-full); }
+.env__skeleton--name { width: 84px; }
+.env__skeleton--meta { width: 40%; }
+
+@keyframes env-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .env__skeleton { animation: none; }
+}

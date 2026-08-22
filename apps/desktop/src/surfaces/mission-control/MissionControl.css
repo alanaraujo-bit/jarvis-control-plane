@@ -1,0 +1,63 @@
+.mc {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ---- Empty state ---------------------------------------------------------
+   Centred, quiet, and honest. No illustration, no fake metrics — just what is
+   true and the single action that changes it (§7, §18). */
+.mc__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-11) var(--space-8);
+  text-align: center;
+}
+
+.mc__empty-mark {
+  color: var(--text-disabled);
+  margin-bottom: var(--space-7);
+}
+
+.mc__empty-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--text-primary);
+}
+
+.mc__empty-body {
+  max-width: 42ch;
+  margin-top: var(--space-4);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}
+
+.mc__empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 30px;
+  margin-top: var(--space-8);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-instant) var(--ease-out);
+}
+
+.mc__empty-action:hover {
+  background: var(--accent-hover);
+}
+
+.mc__empty-action:active {
+  background: var(--accent-active);
+}

@@ -9,3 +9,5 @@ target/
 apps/desktop/src-tauri/target/
 **/*.tsbuildinfo
 .vite/
+shots/
+brand/icon.png

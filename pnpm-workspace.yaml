@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# esbuild ships a platform binary via its install script; Vite cannot run
+# without it. Every other package stays script-disabled by default.
+allowBuilds:
+  esbuild: true

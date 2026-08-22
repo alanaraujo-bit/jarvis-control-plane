@@ -1,0 +1,79 @@
+.settings {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* A reading measure, not a full-bleed dashboard. Settings is a document. */
+.settings__inner {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-9) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.settings__heading {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--text-primary);
+}
+
+.settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.settings__section-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.settings__field {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.settings__label-text {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+/* ---- Segmented control ---------------------------------------------------
+   One control, several states — cheaper to read than a row of radio buttons
+   and it keeps the setting and its options on a single line. */
+.settings__segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  width: fit-content;
+}
+
+.settings__segment {
+  height: 24px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.settings__segment:hover:not([data-active]) {
+  color: var(--text-secondary);
+}
+
+.settings__segment[data-active] {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}

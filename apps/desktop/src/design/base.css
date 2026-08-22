@@ -1,0 +1,92 @@
+/* J.A.R.V.I.S. — base layer. Desktop application defaults, not web defaults. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+* { margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden; /* the app manages its own scroll regions */
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+  background: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+}
+
+/* A desktop app is not a document: no accidental text selection or drag-select
+   of chrome. Selection is re-enabled explicitly on content surfaces. */
+body {
+  user-select: none;
+  cursor: default;
+}
+.selectable, input, textarea, [contenteditable] { user-select: text; cursor: auto; }
+
+button, input, select, textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+button { cursor: default; }
+button:disabled { cursor: not-allowed; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Focus: visible for keyboard, silent for pointer (§79 interaction states). */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+  border-radius: var(--radius-xs);
+}
+
+h1, h2, h3, h4, h5, h6 { font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
+h1 { font-size: var(--text-xl); letter-spacing: var(--tracking-tighter); }
+h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tighter); }
+h3 { font-size: var(--text-md); letter-spacing: var(--tracking-tight); }
+
+code, pre, .mono { font-family: var(--font-mono); font-size: var(--text-sm); font-variant-ligatures: none; }
+
+/* ---- Scrollbars: thin, quiet, only visible where content scrolls -------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ---- Shared utility primitives ----------------------------------------- */
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.grow { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Screen-reader-only, for accessible labels on icon-only controls (§82). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Theme transition: colour only, and never on first paint. */
+.theme-transition, .theme-transition * {
+  transition: background-color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out) !important;
+}

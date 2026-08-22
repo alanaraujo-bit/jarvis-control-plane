@@ -1,0 +1,87 @@
+.rail {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 0 0 var(--rail-width);
+  width: var(--rail-width);
+  padding: var(--space-4) 0;
+  background: var(--bg-base);
+  border-right: 1px solid var(--border-subtle);
+  z-index: 20;
+}
+
+.rail__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.rail__item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.rail__item:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.rail__item[data-active] {
+  color: var(--text-primary);
+  background: var(--bg-active);
+}
+
+/* Active marker: a short amber bar on the rail edge. One quiet signal rather
+   than a filled pill — the rail should not compete with the surface (§6). */
+.rail__item[data-active]::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 2px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+/* ---- Tooltip -------------------------------------------------------------
+   CSS-only, delayed, and never animated on position — it appears where it will
+   stay. Fades out instantly so moving along the rail does not trail ghosts. */
+.rail__tip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    visibility var(--duration-fast) var(--ease-out);
+  z-index: 40;
+}
+
+.rail__item:hover .rail__tip,
+.rail__item:focus-visible .rail__tip {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 420ms;
+}
