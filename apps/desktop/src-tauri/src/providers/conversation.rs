@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::session::event::Confidence;
+
 /// Who produced an item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +22,12 @@ pub enum Role {
 }
 
 /// Token usage for one turn, always carrying its confidence (§28).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+///
+/// The confidence is set by the adapter that produced the numbers, because
+/// that is the only place which knows where they came from. Deciding it later —
+/// at the point of storage, say — would mean inventing it, and everything would
+/// end up labelled Official including figures that were merely derived.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     pub input: Option<u64>,
@@ -29,6 +36,40 @@ pub struct TokenUsage {
     pub cache_write: Option<u64>,
     pub cost_usd: Option<f64>,
     pub model: Option<String>,
+    pub confidence: Confidence,
+    /// Percentage of the account quota consumed, when the provider reports it.
+    pub limit_percent: Option<f64>,
+    /// When that quota window resets, in epoch milliseconds.
+    pub limit_resets_at: Option<i64>,
+}
+
+impl Default for TokenUsage {
+    fn default() -> Self {
+        Self {
+            input: None,
+            output: None,
+            cache_read: None,
+            cache_write: None,
+            cost_usd: None,
+            model: None,
+            // Nothing is known about provenance until an adapter says so.
+            confidence: Confidence::Unknown,
+            limit_percent: None,
+            limit_resets_at: None,
+        }
+    }
+}
+
+impl TokenUsage {
+    /// Whether this sample carries any figure worth recording.
+    pub fn is_empty(&self) -> bool {
+        self.input.is_none()
+            && self.output.is_none()
+            && self.cache_read.is_none()
+            && self.cache_write.is_none()
+            && self.cost_usd.is_none()
+            && self.limit_percent.is_none()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -62,6 +103,10 @@ pub enum ConversationItem {
     },
     #[serde(rename_all = "camelCase")]
     Error { message: String, ts_ms: i64 },
+    /// A file the session touched. Providers report this; discarding it would
+    /// throw away the answer to "what did this agent actually change?" (§39).
+    #[serde(rename_all = "camelCase")]
+    FileChange { path: String, ts_ms: i64 },
 }
 
 impl ConversationItem {
@@ -71,6 +116,7 @@ impl ConversationItem {
             | Self::Thinking { ts_ms, .. }
             | Self::ToolCall { ts_ms, .. }
             | Self::ToolResult { ts_ms, .. }
+            | Self::FileChange { ts_ms, .. }
             | Self::Error { ts_ms, .. } => *ts_ms,
         }
     }

@@ -179,6 +179,47 @@ export const en = {
   "missionControl.openCriteria_one": "{count} unverified",
   "missionControl.openCriteria": "{count} unverified",
 
+
+  // ---- Analytics (§52, §53) ------------------------------------------------
+  "analytics.title": "Analytics",
+  "analytics.window": "Last {days} days",
+  "analytics.leverage": "Human leverage",
+  "analytics.humanActive": "Human active",
+  "analytics.agentRuntime": "Agent execution",
+  "analytics.leverageNote":
+    "Human time counts minutes in which you actually typed into a session. Agent time is how long agent sessions were alive.",
+  "analytics.tokens": "Tokens",
+  "analytics.input": "Input",
+  "analytics.output": "Output",
+  "analytics.cacheRead": "Cache read",
+  "analytics.cacheWrite": "Cache write",
+  "analytics.byProvider": "By provider",
+  "analytics.byModel": "By model",
+  "analytics.byProject": "By project",
+  "analytics.byDay": "By day",
+  "analytics.filesChanged": "Files changed",
+  "analytics.sessions": "Sessions",
+  "analytics.empty.title": "Nothing measured yet",
+  "analytics.empty.body":
+    "Run an agent and its token usage, runtime and file changes show up here.",
+  "analytics.confidence.official": "Reported by the provider",
+  "analytics.confidence.observed": "Measured by J.A.R.V.I.S.",
+  "analytics.confidence.estimated": "Estimated",
+  "analytics.confidence.unknown": "Unknown provenance",
+
+  // ---- Activity (§48) ------------------------------------------------------
+  "activity.title": "Activity",
+  "activity.all": "Everything",
+  "activity.attention": "Needs attention",
+  "activity.empty.title": "Nothing has happened yet",
+  "activity.empty.body": "Sessions, missions and verifications show up here as they happen.",
+  "activity.kind.session.started": "Agent started",
+  "activity.kind.session.ended": "Agent finished",
+  "activity.kind.mission.completed": "Mission completed",
+  "activity.kind.mission.blocked": "Mission blocked",
+  "activity.kind.mission.failed": "Mission failed",
+  "activity.kind.mission.waiting": "Mission waiting",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

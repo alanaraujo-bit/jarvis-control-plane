@@ -299,7 +299,30 @@ pub fn set_status(
         Ok(())
     })?;
 
-    Ok(detail(db, mission_id)?.mission)
+    let mission = detail(db, mission_id)?.mission;
+
+    // Worth a person knowing: a mission that stopped, finished, or failed.
+    // Ordinary transitions are not logged — a log of everything is a log nobody
+    // reads (§48/§49).
+    let severity = match status {
+        MissionStatus::Blocked | MissionStatus::Failed => crate::activity::Severity::Attention,
+        MissionStatus::Waiting => crate::activity::Severity::Warning,
+        _ => crate::activity::Severity::Info,
+    };
+    if status.needs_attention() || status == MissionStatus::Completed {
+        crate::activity::record(
+            db,
+            &format!("mission.{}", status.as_str()),
+            severity,
+            &mission.title,
+            mission.blocked_reason.clone(),
+            Some(&mission.project_id),
+            None,
+            Some(mission_id),
+        );
+    }
+
+    Ok(mission)
 }
 
 /// Withdraw a criterion, with a reason.

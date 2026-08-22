@@ -4,6 +4,8 @@
 //! Git, PTY sessions, the session event log, provider adapters and secure
 //! credential storage (§3 local-first). The webview owns presentation only.
 
+mod activity;
+mod analytics;
 mod db;
 mod envscan;
 mod git;
@@ -15,6 +17,7 @@ mod session;
 mod window;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tauri::Manager;
 
@@ -23,7 +26,10 @@ use session::SessionManager;
 
 /// Shared application state, resolved once during setup.
 pub struct AppState {
-    pub db: Database,
+    /// Shared so background workers — the transcript tailer, the session pump —
+    /// can record what they observe without routing everything through a
+    /// command handler.
+    pub db: Arc<Database>,
     /// Every live session in the application.
     pub sessions: SessionManager,
     /// Root for session logs and other bulk local data.
@@ -73,7 +79,7 @@ pub fn run() {
             tracing::info!(path = ?data_dir, "local data directory ready");
 
             app.manage(AppState {
-                db,
+                db: Arc::new(db),
                 data_dir,
                 sessions: SessionManager::default(),
             });
@@ -100,6 +106,8 @@ pub fn run() {
             session::commands::session_conversation,
             session::commands::mission_sessions,
             providers::list_providers,
+            activity::list_activity,
+            analytics::analytics_report,
             mission::store::list_missions,
             mission::store::mission_summaries,
             mission::store::mission_detail,

@@ -74,10 +74,19 @@ and watched completion be revoked.
 - [ ] Diff / Review (§43)
 - [ ] Git + worktrees (§44/§45)
 
-## M7 — Knowledge
+## M7 — Knowledge  ~
+- [x] Activity log (§48) — recorded at the moments worth knowing, filterable
+- [x] Analytics (§52) — tokens by provider/model/project/day, confidence-aware
+- [x] Human leverage (§53) — measured from real interaction, not inferred
 - [ ] Project Brain (§36–§38)
 - [ ] Notes (§40)
-- [ ] Activity (§48), Global Search (§51), Analytics (§52/§53)
+- [ ] Global Search (§51)
+
+### Notes on the analytics design
+Bars use one hue because each row is already named beside it: the bar carries
+magnitude, the label carries identity. Colouring by rank would double-encode
+length as hue. A single-category breakdown drops its bar entirely — a full-width
+rectangle restating the number next to it is not a chart.
 
 ## M8 — Preview / Browser (§46/§47)
 ## M9 — Onboarding (§13), Settings (§64)
@@ -102,4 +111,5 @@ that work on them.
 ## Next steps
 1. Guardrails for sensitive operations (§35)
 2. Files, Editor and Diff/Review (§41–§43)
-3. Localised evidence summaries (§65)
+3. Project Brain (§36) and Notes (§40)
+4. Localised evidence summaries (§65)

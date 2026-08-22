@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
+use crate::session::event::Confidence;
 use super::{
     ConversationSource, Correlation, Provider, ProviderCapabilities, UsageReporting,
 };
@@ -101,8 +102,7 @@ fn is_internal_noise(value: &Value) -> bool {
 
     match kind {
         // Bookkeeping with no reader-facing meaning.
-        "queue-operation" | "last-prompt" | "ai-title" | "atis-latch"
-        | "file-history-snapshot" | "file-history-delta" | "frame-link" => true,
+        "queue-operation" | "last-prompt" | "ai-title" | "atis-latch" | "frame-link" => true,
 
         // Attachments are mostly injected context; none of it was said by anyone.
         "attachment" => true,
@@ -147,6 +147,10 @@ fn parse_usage(message: &Value) -> Option<TokenUsage> {
             .get("model")
             .and_then(Value::as_str)
             .map(str::to_string),
+        // Claude Code states these numbers itself.
+        confidence: Confidence::Official,
+        limit_percent: None,
+        limit_resets_at: None,
     })
 }
 
@@ -208,6 +212,39 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
         .unwrap_or(0);
 
     let kind = value.get("type").and_then(Value::as_str).unwrap_or_default();
+
+    // File history: the provider is telling us which files it touched. Keeping
+    // it is what lets a session answer "what did this actually change?" (§39).
+    if kind == "file-history-delta" {
+        return value
+            .get("trackingPath")
+            .and_then(Value::as_str)
+            .map(|path| {
+                vec![ConversationItem::FileChange {
+                    path: path.to_string(),
+                    ts_ms,
+                }]
+            })
+            .unwrap_or_default();
+    }
+    if kind == "file-history-snapshot" {
+        // A snapshot is a checkpoint; only its tracked files carry information.
+        return value
+            .get("snapshot")
+            .and_then(|s| s.get("trackedFileBackups"))
+            .and_then(Value::as_object)
+            .map(|files| {
+                files
+                    .keys()
+                    .map(|path| ConversationItem::FileChange {
+                        path: path.clone(),
+                        ts_ms,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+
     let Some(message) = value.get("message") else {
         return Vec::new();
     };

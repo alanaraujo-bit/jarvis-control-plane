@@ -1,0 +1,136 @@
+.act { height: 100%; overflow-y: auto; }
+
+.act__inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-9) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.act__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.act__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+.act__filter {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.act__filter-option {
+  height: 22px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.act__filter-option[data-active] {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Entries -------------------------------------------------------------
+   A hairline-separated log, dense enough to scan. Severity is a marker on the
+   left edge, not a coloured row — a log where whole rows are tinted stops being
+   readable the moment anything goes wrong (§7). */
+.act__list {
+  list-style: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.act__row {
+  display: grid;
+  grid-template-columns: 3px minmax(110px, auto) minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6) var(--space-4) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.act__list li:last-child { border-bottom: none; }
+
+.act__marker {
+  align-self: stretch;
+  background: transparent;
+}
+.act__row[data-severity="warning"] .act__marker { background: var(--state-warning); }
+.act__row[data-severity="attention"] .act__marker { background: var(--state-danger); }
+
+.act__kind {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  white-space: nowrap;
+  padding-left: var(--space-5);
+}
+
+.act__subject {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 26ch;
+}
+
+.act__detail {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.act__time {
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+  white-space: nowrap;
+  justify-self: end;
+}
+
+/* ---- Empty --------------------------------------------------------------- */
+.act__empty {
+  padding: var(--space-11) var(--space-8);
+  text-align: center;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.act__empty-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.act__empty-body {
+  max-width: 52ch;
+  margin: var(--space-4) auto 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}

@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 4;
 
 struct Migration {
     version: u32,
@@ -194,6 +194,50 @@ const MIGRATIONS: &[Migration] = &[Migration {
 
     -- Autonomy at the project level, the middle tier of the §33 chain.
     ALTER TABLE projects ADD COLUMN autonomy TEXT;
+"#,
+    },
+    Migration {
+        version: 3,
+        sql: r#"
+    -- Quota reporting (§28). Codex states how much of the account allowance is
+    -- consumed and when the window resets; recording only token counts would
+    -- discard the half of usage intelligence that answers "how close am I?".
+    ALTER TABLE usage_samples ADD COLUMN limit_percent REAL;
+    ALTER TABLE usage_samples ADD COLUMN limit_resets_at INTEGER;
+
+    -- Files a session touched, mirrored from the session log so the timeline
+    -- and review surfaces can query them without scanning every log (§39).
+    CREATE TABLE file_changes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES projects (id) ON DELETE CASCADE,
+        path       TEXT NOT NULL,
+        ts_ms      INTEGER NOT NULL
+    );
+    CREATE INDEX idx_file_changes_session ON file_changes (session_id, ts_ms DESC);
+    CREATE INDEX idx_file_changes_project ON file_changes (project_id, ts_ms DESC);
+"#,
+    },
+    Migration {
+        version: 4,
+        sql: r#"
+    -- Human attention, one row per minute in which the user actually typed
+    -- something into a session (§53).
+    --
+    -- A minute bucket rather than a timestamp per keystroke: the question is
+    -- "was a person engaged during this minute", not "how fast do they type",
+    -- and one row per minute keeps the table small enough to ignore.
+    --
+    -- This is the only honest way to compute human leverage. Inferring it from
+    -- session lifetimes would count a terminal left open overnight as work.
+    CREATE TABLE interaction_minutes (
+        session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES projects (id) ON DELETE CASCADE,
+        minute     INTEGER NOT NULL,
+        PRIMARY KEY (session_id, minute)
+    ) WITHOUT ROWID;
+    CREATE INDEX idx_interaction_minute ON interaction_minutes (minute);
+    CREATE INDEX idx_interaction_project ON interaction_minutes (project_id, minute);
 "#,
     }];
 

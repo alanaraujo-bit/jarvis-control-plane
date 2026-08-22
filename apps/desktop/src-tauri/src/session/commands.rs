@@ -173,10 +173,23 @@ pub fn session_start(
     // conversation and the terminal are two views of one stream (§23).
     transcript::spawn(
         Arc::clone(&session),
+        Arc::clone(&state.db),
+        project_id.clone(),
         kind.provider_id().to_string(),
         cwd.clone(),
         created_at,
         session.stop_flag(),
+    );
+
+    crate::activity::record(
+        &state.db,
+        "session.started",
+        crate::activity::Severity::Info,
+        kind.provider_id(),
+        Some(cwd.clone()),
+        Some(&project_id),
+        Some(&id),
+        mission_id.as_deref(),
     );
 
     Ok(SessionInfo {
@@ -215,6 +228,21 @@ pub fn session_write(
     session_id: String,
     data: Vec<u8>,
 ) -> Result<()> {
+    // Record that a person was engaged this minute (§53).
+    //
+    // This command is the only path by which human input reaches a session, so
+    // it is the one honest place to measure attention. INSERT OR IGNORE against
+    // a (session, minute) key collapses a burst of typing into a single row.
+    let minute = timestamp() / 60_000;
+    let _ = state.db.with(|conn| {
+        conn.execute(
+            "INSERT OR IGNORE INTO interaction_minutes (session_id, project_id, minute)
+             SELECT id, project_id, ?2 FROM sessions WHERE id = ?1",
+            rusqlite::params![session_id, minute],
+        )?;
+        Ok(())
+    });
+
     state.sessions.get(&session_id)?.write(&data)
 }
 

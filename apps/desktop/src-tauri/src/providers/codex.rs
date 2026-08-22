@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
+use crate::session::event::Confidence;
 use super::{ConversationSource, Correlation, Provider, ProviderCapabilities, UsageReporting};
 
 pub struct Codex;
@@ -237,6 +238,24 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
         Some("token_count") => {
             let info = payload.get("info");
             let get = |key: &str| info.and_then(|i| i.get(key)).and_then(Value::as_u64);
+
+            // Codex reports quota consumption alongside token counts. Reading
+            // only the tokens would discard the half of §28 that answers
+            // "how close am I to the limit, and when does it reset?".
+            let limits = payload.get("rate_limits");
+            let window = limits
+                .and_then(|l| l.get("primary"))
+                .filter(|v| !v.is_null())
+                .or_else(|| limits.and_then(|l| l.get("secondary")).filter(|v| !v.is_null()));
+
+            let limit_percent = window
+                .and_then(|w| w.get("used_percent"))
+                .and_then(Value::as_f64);
+            let limit_resets_at = window
+                .and_then(|w| w.get("resets_in_seconds"))
+                .and_then(Value::as_i64)
+                .map(|secs| ts_ms + secs * 1_000);
+
             let usage = TokenUsage {
                 input: get("input_tokens"),
                 output: get("output_tokens"),
@@ -244,8 +263,12 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
                 cache_write: None,
                 cost_usd: None,
                 model: None,
+                // Codex states these itself, same as Claude Code.
+                confidence: Confidence::Official,
+                limit_percent,
+                limit_resets_at,
             };
-            if usage == TokenUsage::default() {
+            if usage.is_empty() {
                 return Vec::new();
             }
             vec![ConversationItem::Message {

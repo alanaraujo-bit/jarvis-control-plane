@@ -9,6 +9,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use rusqlite::params;
+
+use crate::db::Database;
 use crate::providers::conversation::ConversationItem;
 use crate::providers::{claude, codex, tail::JsonlTailer};
 use crate::session::event::EventKind;
@@ -30,9 +33,16 @@ const LOCATE_TIMEOUT: Duration = Duration::from_secs(600);
 /// deserialising everything.
 fn kind_for(item: &ConversationItem) -> EventKind {
     match item {
+        // A turn that carries only usage is a usage sample, not a message.
+        // Filing it as a message would bury the numbers Analytics reads and
+        // would put an empty bubble in the conversation.
+        ConversationItem::Message { text, usage, .. } if text.trim().is_empty() && usage.is_some() => {
+            EventKind::Usage
+        }
         ConversationItem::Message { .. } | ConversationItem::Thinking { .. } => EventKind::Message,
         ConversationItem::ToolCall { .. } => EventKind::ToolCall,
         ConversationItem::ToolResult { .. } => EventKind::ToolResult,
+        ConversationItem::FileChange { .. } => EventKind::FileChange,
         ConversationItem::Error { .. } => EventKind::Message,
     }
 }
@@ -43,6 +53,8 @@ fn kind_for(item: &ConversationItem) -> EventKind {
 /// transcript simply never starts a tailer.
 pub fn spawn(
     session: Arc<LiveSession>,
+    db: Arc<Database>,
+    project_id: String,
     provider: String,
     cwd: String,
     launched_at_ms: i64,
@@ -80,6 +92,11 @@ pub fn spawn(
                                 if let Ok(payload) = serde_json::to_vec(&item) {
                                     session.log(kind_for(&item), payload);
                                 }
+                                // The log is the record; these tables are the
+                                // index. Analytics and the timeline need to
+                                // aggregate across sessions without reading
+                                // every log file (§52, §39).
+                                mirror(&db, &session.id, &project_id, &provider, &item);
                             }
                         }
                     }
@@ -182,5 +199,65 @@ mod tests {
             ts_ms: 1,
         };
         assert_eq!(kind_for(&error), EventKind::Message);
+    }
+}
+
+/// Mirror the queryable parts of an item into SQLite.
+///
+/// Failures are logged and swallowed. This is a derived index; losing a row
+/// costs a number in a chart, and must never disturb the session it describes.
+fn mirror(
+    db: &Database,
+    session_id: &str,
+    project_id: &str,
+    provider: &str,
+    item: &ConversationItem,
+) {
+    let outcome = match item {
+        ConversationItem::Message { usage: Some(usage), ts_ms, .. } if !usage.is_empty() => {
+            db.with(|conn| {
+                conn.execute(
+                    "INSERT INTO usage_samples
+                         (session_id, project_id, provider, model, ts_ms,
+                          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+                          cost_usd, confidence, limit_percent, limit_resets_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                    params![
+                        session_id,
+                        project_id,
+                        provider,
+                        usage.model,
+                        ts_ms,
+                        usage.input.map(|v| v as i64),
+                        usage.output.map(|v| v as i64),
+                        usage.cache_read.map(|v| v as i64),
+                        usage.cache_write.map(|v| v as i64),
+                        usage.cost_usd,
+                        // Carried through from the adapter, never inferred here.
+                        serde_json::to_string(&usage.confidence)
+                            .unwrap_or_default()
+                            .trim_matches('"'),
+                        usage.limit_percent,
+                        usage.limit_resets_at,
+                    ],
+                )?;
+                Ok(())
+            })
+        }
+
+        ConversationItem::FileChange { path, ts_ms } => db.with(|conn| {
+            conn.execute(
+                "INSERT INTO file_changes (session_id, project_id, path, ts_ms)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![session_id, project_id, path, ts_ms],
+            )?;
+            Ok(())
+        }),
+
+        _ => return,
+    };
+
+    if let Err(e) = outcome {
+        tracing::warn!(error = %e, session = session_id, "could not mirror a session event");
     }
 }

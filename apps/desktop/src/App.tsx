@@ -5,6 +5,8 @@ import { Rail, RAIL_ITEMS, type SurfaceId } from "./shell/Rail";
 import { TitleBar } from "./shell/TitleBar";
 import { StatusBar } from "./shell/StatusBar";
 import { CommandPalette, type Command } from "./shell/CommandPalette";
+import { Activity } from "./surfaces/activity/Activity";
+import { Analytics } from "./surfaces/analytics/Analytics";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
 import { Missions } from "./surfaces/missions/Missions";
 import { Projects } from "./surfaces/projects/Projects";
@@ -25,7 +27,14 @@ import "./App.css";
  * destination it cannot deliver (§81). Milestones add entries here as they
  * land; nothing has to be restructured when they do.
  */
-const IMPLEMENTED: SurfaceId[] = ["mission-control", "projects", "missions", "settings"];
+const IMPLEMENTED: SurfaceId[] = [
+  "mission-control",
+  "projects",
+  "missions",
+  "activity",
+  "analytics",
+  "settings",
+];
 
 export function App() {
   const t = useT();
@@ -174,6 +183,10 @@ export function App() {
             <Settings />
           ) : surface === "projects" ? (
             <Projects onOpen={setOpenProject} />
+          ) : surface === "activity" ? (
+            <Activity />
+          ) : surface === "analytics" ? (
+            <Analytics />
           ) : surface === "missions" ? (
             <Missions
               initialMissionId={focusMission}
