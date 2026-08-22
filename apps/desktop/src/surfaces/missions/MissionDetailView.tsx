@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, CircleDashed, Play, ShieldCheck, TriangleAlert, X } from "lucide-react";
+import { Bot, Check, ChevronLeft, CircleDashed, Play, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import { useT } from "../../app/i18n";
+import { missionSessions, type SessionInfo } from "../../app/sessions";
 import { StatusDot } from "../../design/StatusDot";
 import {
   useMissions,
@@ -34,17 +35,26 @@ function describeCheck(verification: Verification): string {
 export function MissionDetailView({
   missionId,
   onBack,
+  onLaunchAgent,
+  onOpenSession,
 }: {
   missionId: string;
   onBack: () => void;
+  /** Start an agent in this mission's project, tagged with the mission (§86). */
+  onLaunchAgent?: (projectId: string, missionId: string) => void;
+  onOpenSession?: (projectId: string, sessionId: string) => void;
 }) {
   const t = useT();
   const { detail, verify, setStatus, confirmCriterion, setTaskDone } = useMissions();
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [agents, setAgents] = useState<SessionInfo[]>([]);
 
-  const load = async () => setMission(await detail(missionId));
+  const load = async () => {
+    setMission(await detail(missionId));
+    setAgents(await missionSessions(missionId));
+  };
 
   useEffect(() => {
     void load();
@@ -152,6 +162,50 @@ export function MissionDetailView({
             {t("mission.notVerified", { count: openRequired.length })}
           </p>
         )}
+
+        {/* ---- Agents (§86) ------------------------------------------------
+            The thread from a mission to the agent doing it. Clicking through
+            lands in that agent's terminal, which is the same session as its
+            conversation (§23). */}
+        <section className="md__section">
+          <div className="md__section-head">
+            <h2 className="md__section-title">{t("mission.agents")}</h2>
+            {onLaunchAgent && (
+              <button
+                type="button"
+                className="md__action"
+                onClick={() => onLaunchAgent(mission.projectId, missionId)}
+              >
+                <Bot size={13} strokeWidth={1.9} aria-hidden="true" />
+                {t("mission.launchAgent")}
+              </button>
+            )}
+          </div>
+
+          {agents.length === 0 ? (
+            <p className="md__note">{t("mission.noAgents")}</p>
+          ) : (
+            <ul className="md__agents">
+              {agents.map((session) => (
+                <li key={session.id}>
+                  <button
+                    type="button"
+                    className="md__agent"
+                    onClick={() => onOpenSession?.(session.projectId, session.id)}
+                    disabled={!onOpenSession}
+                  >
+                    <StatusDot status={session.live ? session.state : "idle"} />
+                    <span className="md__agent-provider">{session.provider}</span>
+                    <span className="md__agent-cwd">{session.cwd}</span>
+                    {onOpenSession && (
+                      <span className="md__agent-open">{t("mission.openSession")}</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         {/* ---- Acceptance criteria ---------------------------------------- */}
         <section className="md__section">

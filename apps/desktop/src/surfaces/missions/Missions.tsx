@@ -15,7 +15,15 @@ import "./Missions.css";
  * whether the mission is really finished: how many required criteria are still
  * unverified (§30).
  */
-export function Missions({ initialMissionId }: { initialMissionId?: string }) {
+export function Missions({
+  initialMissionId,
+  onLaunchAgent,
+  onOpenSession,
+}: {
+  initialMissionId?: string;
+  onLaunchAgent?: (projectId: string, missionId: string) => void;
+  onOpenSession?: (projectId: string, sessionId: string) => void;
+}) {
   const t = useT();
   const { summaries, refresh, error } = useMissions();
   const { projects, refresh: refreshProjects } = useProjects();
@@ -32,7 +40,14 @@ export function Missions({ initialMissionId }: { initialMissionId?: string }) {
   }, [initialMissionId]);
 
   if (selected) {
-    return <MissionDetailView missionId={selected} onBack={() => setSelected(null)} />;
+    return (
+      <MissionDetailView
+        missionId={selected}
+        onBack={() => setSelected(null)}
+        onLaunchAgent={onLaunchAgent}
+        onOpenSession={onOpenSession}
+      />
+    );
   }
 
   if (creating) {

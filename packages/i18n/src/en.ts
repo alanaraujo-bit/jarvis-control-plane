@@ -34,6 +34,11 @@ export const en = {
   "state.running": "Running",
   "state.verifying": "Verifying",
 
+  "mission.agents": "Agents",
+  "mission.launchAgent": "Start an agent",
+  "mission.noAgents": "No agent has worked on this mission yet.",
+  "mission.openSession": "Open",
+
   // ---- Mission Control (§18) -----------------------------------------------
   "missionControl.title": "Mission Control",
   "missionControl.needsAttention": "Needs attention",

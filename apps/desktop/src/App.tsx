@@ -12,6 +12,8 @@ import { ProjectWorkspace } from "./surfaces/project/ProjectWorkspace";
 import type { Project } from "./surfaces/projects/useProjects";
 import { Settings } from "./surfaces/settings/Settings";
 import { useEnvironmentStore } from "./surfaces/environment/useEnvironment";
+import { useProjects } from "./surfaces/projects/useProjects";
+import { useTerminals } from "./surfaces/terminal/useTerminals";
 import { useI18n, useT } from "./app/i18n";
 import { useTheme } from "./app/theme";
 import "./App.css";
@@ -30,6 +32,8 @@ export function App() {
   const { locale, setLocale } = useI18n();
   const { preference, setPreference } = useTheme();
   const rescanEnvironment = useEnvironmentStore((state) => state.scan);
+  const projects = useProjects((state) => state.projects);
+  const openTerminal = useTerminals((state) => state.openTerminal);
 
   const [surface, setSurface] = useState<SurfaceId>("mission-control");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -38,6 +42,21 @@ export function App() {
   const [openProject, setOpenProject] = useState<Project | null>(null);
   // Set when arriving at Missions from somewhere that already knows which one.
   const [focusMission, setFocusMission] = useState<string | undefined>();
+
+  /**
+   * Open a project workspace by id.
+   *
+   * Missions know their project as an id; the workspace needs the project
+   * itself, so this is the join between the two (§86).
+   */
+  const openProjectById = useCallback(
+    (projectId: string) => {
+      const project = projects.find((p) => p.id === projectId);
+      if (project) setOpenProject(project);
+      return project;
+    },
+    [projects],
+  );
 
   const goTo = useCallback((id: SurfaceId) => {
     setOpenProject(null);
@@ -156,7 +175,20 @@ export function App() {
           ) : surface === "projects" ? (
             <Projects onOpen={setOpenProject} />
           ) : surface === "missions" ? (
-            <Missions initialMissionId={focusMission} />
+            <Missions
+              initialMissionId={focusMission}
+              // Starting an agent from a mission tags the session with it, so
+              // the terminal, the conversation and the evidence all belong to
+              // the same thread of work (§86).
+              onLaunchAgent={(projectId, missionId) => {
+                if (openProjectById(projectId)) {
+                  void openTerminal(projectId, "claude-code", { cols: 120, rows: 30 }, missionId);
+                }
+              }}
+              onOpenSession={(projectId) => {
+                openProjectById(projectId);
+              }}
+            />
           ) : (
             <MissionControl
               onOpenProject={() => goTo("projects")}

@@ -38,6 +38,8 @@ export async function startSession(params: {
   cwd?: string;
   cols: number;
   rows: number;
+  /** Set when the session was started to work on a mission (§86). */
+  missionId?: string;
 }): Promise<SessionInfo> {
   return invoke<SessionInfo>("session_start", {
     projectId: params.projectId,
@@ -45,7 +47,14 @@ export async function startSession(params: {
     cwd: params.cwd ?? null,
     cols: params.cols,
     rows: params.rows,
+    missionId: params.missionId ?? null,
   });
+}
+
+/** Sessions that are working, or worked, on a mission. */
+export async function missionSessions(missionId: string): Promise<SessionInfo[]> {
+  if (!isTauri()) return [];
+  return invoke<SessionInfo[]>("mission_sessions", { missionId });
 }
 
 /**

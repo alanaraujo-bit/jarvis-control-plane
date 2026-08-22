@@ -6,6 +6,7 @@
 }
 
 .status-dot[data-status="ready"]     { background: var(--text-disabled); }
+.status-dot[data-status="starting"]  { background: var(--state-waiting); }
 .status-dot[data-status="idle"]      { background: var(--state-idle); }
 .status-dot[data-status="waiting"]   { background: var(--state-waiting); }
 .status-dot[data-status="blocked"]   { background: var(--state-danger); }
@@ -14,6 +15,7 @@
 
 /* Amber is agent work (§6). Running and verifying pulse; nothing else moves. */
 .status-dot[data-status="running"],
+.status-dot[data-status="working"],
 .status-dot[data-status="verifying"] {
   background: var(--state-working);
   animation: status-pulse 2s var(--ease-in-out) infinite;

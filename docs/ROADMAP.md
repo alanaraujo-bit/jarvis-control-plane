@@ -57,6 +57,7 @@ inspection (§76).
 - [x] Autonomy profiles + inheritance across mission/project/global (§33)
 - [x] Blocked always reachable, and must explain itself (§34)
 - [x] Mission Control home, sections that disappear when empty (§18)
+- [x] Missions linked to the agents working on them (§86)
 - [ ] Agents driving missions automatically under Unattended (§32)
 - [ ] Guardrails for sensitive operations (§35)
 **Verified in the installed app:** created a mission, was refused completion,
@@ -66,7 +67,6 @@ and watched completion be revoked.
 ### Known gaps in this milestone
 - Evidence summaries are generated in Rust and are English-only. They should
   carry a structured code the UI localises (§65).
-- Missions are not yet linked to the sessions that work on them.
 
 ## M6 — Code surfaces
 - [ ] Files explorer (§41)
@@ -100,6 +100,6 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 that work on them.
 
 ## Next steps
-1. Link sessions to missions, so a running agent shows on its mission
-2. Guardrails for sensitive operations (§35)
+1. Guardrails for sensitive operations (§35)
+2. Files, Editor and Diff/Review (§41–§43)
 3. Localised evidence summaries (§65)

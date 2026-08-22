@@ -23,6 +23,7 @@ interface TerminalsState {
     projectId: string,
     kind: SessionKind,
     size: { cols: number; rows: number },
+    missionId?: string,
   ) => Promise<void>;
   closeTerminal: (projectId: string, sessionId: string) => Promise<void>;
   setActive: (projectId: string, sessionId: string) => void;
@@ -48,7 +49,7 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
   starting: {},
   error: null,
 
-  openTerminal: async (projectId, kind, size) => {
+  openTerminal: async (projectId, kind, size, missionId) => {
     if (get().starting[projectId]) return;
     set((state) => ({ starting: { ...state.starting, [projectId]: true }, error: null }));
 
@@ -58,6 +59,7 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
         kind,
         cols: size.cols,
         rows: size.rows,
+        missionId,
       });
       set((state) => {
         const existing = state.tabs[projectId] ?? [];

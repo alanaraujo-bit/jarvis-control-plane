@@ -159,6 +159,11 @@ export const ptBR: Record<MessageKey, string> = {
   "mission.checkType.fileExists": "Arquivo existe",
   "mission.checkType.manual": "Manual",
 
+  "mission.agents": "Agentes",
+  "mission.launchAgent": "Iniciar um agente",
+  "mission.noAgents": "Nenhum agente trabalhou nesta missão ainda.",
+  "mission.openSession": "Abrir",
+
   "missionControl.blocked": "Bloqueadas",
   "missionControl.verified": "verificado",
   "missionControl.openCriteria_one": "{count} não verificado",

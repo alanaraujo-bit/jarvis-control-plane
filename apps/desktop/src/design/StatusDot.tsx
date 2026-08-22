@@ -1,6 +1,14 @@
 import "./StatusDot.css";
 
+/**
+ * Every state a mission or a session can be in.
+ *
+ * Deliberately one vocabulary for both: a mission that is running and an agent
+ * that is working mean the same thing to someone glancing at the screen, and
+ * should look the same.
+ */
 export type DotStatus =
+  // Mission states (§29)
   | "ready"
   | "running"
   | "verifying"
@@ -8,6 +16,9 @@ export type DotStatus =
   | "blocked"
   | "failed"
   | "completed"
+  // Session states (§21)
+  | "starting"
+  | "working"
   | "idle";
 
 /**

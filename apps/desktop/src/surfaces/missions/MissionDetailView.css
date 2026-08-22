@@ -256,3 +256,48 @@
 }
 .md__task input { accent-color: var(--accent); }
 .md__task span[data-done] { color: var(--text-disabled); text-decoration: line-through; }
+
+/* ---- Agents (§86) --------------------------------------------------------
+   The mission and the agent doing it are one thread, so this sits next to the
+   criteria rather than in a separate place. */
+.md__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.md__agents { list-style: none; display: flex; flex-direction: column; gap: var(--space-3); }
+
+.md__agent {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  text-align: left;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.md__agent:hover:not(:disabled) { background: var(--bg-hover); }
+
+.md__agent-provider {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.md__agent-cwd {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md__agent-open { font-size: var(--text-xs); color: var(--text-tertiary); }

@@ -98,6 +98,7 @@ pub fn run() {
             session::commands::session_replay,
             session::commands::session_list,
             session::commands::session_conversation,
+            session::commands::mission_sessions,
             providers::list_providers,
             mission::store::list_missions,
             mission::store::mission_summaries,

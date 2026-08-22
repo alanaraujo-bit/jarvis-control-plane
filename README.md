@@ -26,11 +26,14 @@ Working and verified against real agents on a real machine:
 | Terminal — real ConPTY, tabs, restore, both themes | Working |
 | Providers — Claude Code and Codex adapters, capability model | Working |
 | Conversation View — structured projection with official token usage | Working |
+| Missions — criteria, evidence, verification, autonomy | Working |
+| Mission Control — needs-attention first, empty sections vanish | Working |
+| Mission → Agent → Terminal → Conversation → Evidence thread | Working |
 | Windows installer + updater | Working (unsigned — see `docs/BLOCKERS.md`) |
 
 Not built yet — deliberately absent rather than stubbed (§81):
-Missions, Project Brain, Notes, Files/Editor/Diff, Preview, Analytics,
-Activity, onboarding, mobile companion, cloud sync, voice.
+Project Brain, Notes, Files/Editor/Diff, Preview, Analytics, Activity,
+onboarding, guardrails, mobile companion, cloud sync, voice.
 
 `docs/ROADMAP.md` is the live plan. `docs/DECISIONS.md` records why things are
 the way they are, including several findings that only showed up by running the

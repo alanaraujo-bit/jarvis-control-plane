@@ -114,6 +114,10 @@ pub fn session_start(
     cwd: Option<String>,
     cols: u16,
     rows: u16,
+    // The mission this session is working on, when it was started from one.
+    // This is what ties Mission -> Agent -> Terminal -> Conversation ->
+    // Evidence into one thread instead of five unrelated things (§86).
+    mission_id: Option<String>,
 ) -> Result<SessionInfo> {
     // The working directory defaults to the project folder.
     let project_path: String = state.db.with(|conn| {
@@ -133,12 +137,13 @@ pub fn session_start(
     state.db.with(|conn| {
         conn.execute(
             "INSERT INTO sessions
-                 (id, project_id, provider, cwd, state, log_dir, created_at, updated_at,
-                  provider_session_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8)",
+                 (id, project_id, mission_id, provider, cwd, state, log_dir, created_at,
+                  updated_at, provider_session_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)",
             params![
                 id,
                 project_id,
+                mission_id,
                 kind.provider_id(),
                 cwd,
                 "starting",
@@ -379,5 +384,53 @@ pub fn session_conversation(
         // A frame written by a newer build may not deserialise here; skipping
         // it keeps the rest of the conversation readable.
         .filter_map(|event| serde_json::from_slice::<ConversationItem>(&event.payload).ok())
+        .collect())
+}
+
+/// Sessions working on a mission (§86).
+///
+/// The thread from a mission to the agent doing it, and from there to the
+/// terminal and the conversation, is the continuity the product is built
+/// around. Without this the pieces exist but never connect.
+#[tauri::command]
+pub fn mission_sessions(
+    state: State<'_, AppState>,
+    mission_id: String,
+) -> Result<Vec<SessionInfo>> {
+    let live = state.sessions.ids();
+
+    let rows = state.db.with(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, provider, title, cwd, state, created_at
+               FROM sessions
+              WHERE mission_id = ?1
+              ORDER BY created_at DESC",
+        )?;
+        let rows: rusqlite::Result<Vec<_>> = stmt
+            .query_map([&mission_id], |row| {
+                Ok(SessionInfo {
+                    live: false,
+                    project_id: row.get(1)?,
+                    provider: row.get(2)?,
+                    title: row.get(3)?,
+                    cwd: row.get(4)?,
+                    state: parse_state(&row.get::<_, String>(5)?),
+                    created_at: row.get(6)?,
+                    id: row.get(0)?,
+                })
+            })?
+            .collect();
+        rows
+    })?;
+
+    Ok(rows
+        .into_iter()
+        .map(|mut info| {
+            info.live = live.contains(&info.id);
+            if !info.live && info.state == SessionState::Working {
+                info.state = SessionState::Failed;
+            }
+            info
+        })
         .collect())
 }
