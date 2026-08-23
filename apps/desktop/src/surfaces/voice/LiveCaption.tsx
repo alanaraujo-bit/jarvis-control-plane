@@ -11,7 +11,7 @@ interface LiveCaptionProps {
 }
 
 /**
- * The floating caption shown while recording (§54 streaming, D30) —
+ * The floating caption shown while recording (§54 streaming, D31) —
  * "text appearing while speaking", the thing this whole feature was built
  * for. It only ever previews: nothing here is what gets typed into the
  * terminal, so nothing here needs to be exactly right, only responsive.

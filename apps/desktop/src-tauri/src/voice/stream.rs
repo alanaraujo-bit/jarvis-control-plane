@@ -1,4 +1,4 @@
-//! Live captions while recording (§54 streaming, D30).
+//! Live captions while recording (§54 streaming, D31).
 //!
 //! Whisper is not a streaming model: every call re-reads the audio it is
 //! given from the start and can change its mind about words it produced on
@@ -29,7 +29,7 @@ use super::capture::AudioTap;
 use super::{Result, VoiceError};
 
 /// How long to wait between polls once one finishes. Transcription itself
-/// (a few seconds for a short utterance on `ggml-small.bin`, see D30) is the
+/// (a few seconds for a short utterance on `ggml-small.bin`, see D31) is the
 /// real pacing for anything but the very start of a recording — this floor
 /// only matters for the first, near-empty polls, and keeps the loop from
 /// hammering the server on a fast reply.
@@ -172,7 +172,7 @@ pub fn transcribe_window(
 /// Runs on its own thread (see `commands::voice_start_recording`) so it
 /// never blocks the recording it is reading from. Full-buffer, not a
 /// trailing window: every poll re-sends everything captured so far. That is
-/// the simple, honest trade this makes for v1 — see D30 — latency grows
+/// the simple, honest trade this makes for v1 — see D31 — latency grows
 /// with utterance length since whisper re-reads from the start each time,
 /// but the adaptive cadence below (next poll only after the last one
 /// returns) means a long utterance degrades to slower, still-correct

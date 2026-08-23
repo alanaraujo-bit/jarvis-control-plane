@@ -20,7 +20,7 @@ use super::transcribe;
 use super::{Result, VoiceError};
 
 /// Holds the one recording that can be in progress at a time, plus the
-/// state that lives alongside it for live captions (§54 streaming, D30):
+/// state that lives alongside it for live captions (§54 streaming, D31):
 /// `server` is a warm `whisper-server.exe` kept alive across recordings
 /// within one app session (its ~2-4s model-load cost is worth paying once,
 /// not per utterance), and `streaming_stop` is the signal that tells the

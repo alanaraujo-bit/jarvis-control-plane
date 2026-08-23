@@ -1,4 +1,4 @@
-/* Live captions while recording (§54 streaming, D30). Positioned exactly
+/* Live captions while recording (§54 streaming, D31). Positioned exactly
    like a Popover (see design/Popover.css) but not built on it — this one
    must not close on an outside click. */
 .live-caption {

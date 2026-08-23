@@ -34,7 +34,7 @@ const START_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
 
 /// A cheap, cloneable handle onto a recording's samples while it is still in
-/// progress — what the streaming poll loop (§54 streaming, D30) reads from
+/// progress — what the streaming poll loop (§54 streaming, D31) reads from
 /// without needing to touch `Recording` itself, so a `voice_stop_recording`
 /// or `voice_cancel_recording` call and an in-flight poll never contend for
 /// the same lock.

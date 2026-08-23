@@ -19,7 +19,7 @@
 //! independent path: a warm `whisper-server.exe` is polled every second or
 //! two over the audio captured so far, and `stream::AgreementState` turns
 //! that into a caption that only ever grows, never rewritten mid-word — see
-//! D30. That path never touches what gets typed; the transcript that lands
+//! D31. That path never touches what gets typed; the transcript that lands
 //! in the prompt still comes from the single, complete, unstreamed
 //! `whisper-cli.exe` pass in `commands::voice_stop_recording`, unchanged.
 

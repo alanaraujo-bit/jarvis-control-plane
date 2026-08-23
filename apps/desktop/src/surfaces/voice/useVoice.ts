@@ -31,7 +31,7 @@ interface VoiceState {
   lastTranscript: string | null;
 
   /**
-   * Live captions while recording (§54 streaming, D30) — settled text that
+   * Live captions while recording (§54 streaming, D31) — settled text that
    * will not change, and a volatile tail that may still be rewritten by the
    * next poll. Both reset to empty whenever a recording starts, stops, or is
    * cancelled; neither is ever what gets typed into the terminal — that

@@ -9,7 +9,7 @@
 //! of the underlying libraries — its `whisper.dll`/`ggml*.dll` are not
 //! interchangeable with the ones next to `whisper-cli.exe`, so it lives in
 //! its own `resources/whisper/server/` subfolder rather than sharing one.
-//! See D30 in docs/DECISIONS.md.
+//! See D31 in docs/DECISIONS.md.
 
 use std::net::TcpListener;
 use std::path::Path;
@@ -47,7 +47,7 @@ pub struct ServerHandle {
     /// — kept alive for the whole app session, not scoped to one PTY the way
     /// an agent's children are — never survives its parent. Confirmed live:
     /// without this, `taskkill`ing the app left `whisper-server.exe` running
-    /// on its own. See D30.
+    /// on its own. See D31.
     _job: ProcessJob,
 }
 
