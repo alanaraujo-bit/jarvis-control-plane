@@ -859,3 +859,82 @@ pay-the-model-load-cost-every-time shape. whisper.cpp's own `stream`
 example was also examined and rejected: it needs SDL2 for its own
 microphone capture, which this codebase does not want since `cpal` already
 owns capture here. Nothing about this has been built yet — see HANDOFF §7.
+
+---
+
+## D30 — The Global Search backfill is a background task with a bookmark, not a migration
+
+D25 shipped Global Search forward-only: `session::transcript::mirror` indexes
+conversation content as it arrives, so anything said in a session recorded
+before that build is on disk in the session log and absent from
+`session_events`. The user-facing shape of that gap is worse than a missing
+feature — searching for something you know you said returns an empty list
+that is indistinguishable from "no match".
+
+**The obvious place to fix it is a migration, and that is the wrong place.**
+A migration runs inside one transaction with its own version record, on the
+startup path, before the window exists. Walking every session log on the
+machine is unbounded work over on-disk data of unknown size, and a failure
+partway through is precisely the situation rule 9 in `docs/HANDOFF.md` was
+written about — a database that already recorded a version it does not
+actually have. There are 42 session directories on this development machine
+and no reason to believe that is the ceiling.
+
+So the split is: **migration 10 adds a column and nothing else** — the
+bookmark, `sessions.events_backfilled_at` — and `search::backfill` does the
+walk afterwards, on its own thread, five seconds after launch, one session
+at a time with a rest in between. The first seconds after launch belong to
+the window, the project list and any session being restored; search is
+simply more complete a moment later than it was. A backfill that saturates
+the disk to finish four seconds sooner is a worse product than one nobody
+notices running.
+
+**Rows go in chunked, because the database is one connection behind one
+mutex.** `db::Database` is deliberately a single connection (its own doc
+comment says why), so a transaction held for the length of a whole session
+is a stall in every other surface. 500 rows per transaction holds the lock
+for milliseconds at a time instead.
+
+**Idempotence is the load-bearing property, not a nicety.** A session is
+backfilled inside a delete-then-insert, and its bookmark is stamped *last*.
+A process killed mid-session therefore leaves a NULL bookmark and half its
+rows, and the next launch clears those rows before writing again — so the
+answer to "what happens if this dies at the worst moment" is "it is redone",
+not "it is doubled". The FTS index has to be cleared alongside the table or
+every result from that session appears twice, which is the specific mistake
+`an_interrupted_backfill_is_redone_without_doubling_anything` exists to
+catch: it reproduces exactly that crash (run, then blank the bookmark, then
+run again) and asserts on both the row count and the number of search hits.
+
+**A session created from this build on is stamped at insert time.** Its live
+transcript tailer already indexes it, so leaving it NULL would mean the
+backfill re-reads a log whose contents are already in the table. NULL means
+"recorded before search existed", and that is never true of a new session.
+
+**A session whose log directory is gone is stamped too, not skipped.** There
+is nothing to index and there never will be, so leaving it pending would
+mean reopening the same question on every launch for the rest of the
+product's life.
+
+### The reader this needed
+
+`SessionLogReader::read_from` returns a `Vec`, which is right for a
+projection reading a bounded tail and wrong for a one-time pass over every
+session ever recorded: a real agent log is overwhelmingly PTY output, so
+materialising all of it to pick out a few kilobytes of JSON would allocate
+hundreds of megabytes. That is the same mistake `replay_pty` already carries
+a comment about avoiding, one caller along.
+
+`for_each_structured` walks frames by header, steps over terminal payloads
+without ever reading them, and hands the caller one structured event at a
+time. `walking_structured_frames_skips_the_terminal_bytes_entirely` writes
+400KB of PTY output around 40 bytes of JSON and asserts fewer than 1KB was
+read into memory — the cost, not just the result. Returning `false` from the
+visitor stops the walk where it stands, so a caller asked to shut down does
+not have to finish a large log first.
+
+### What this does not do
+
+It does not backfill `usage_samples` or `file_changes`. Those have had
+writers since long before D25 and are not missing anything; `session_events`
+was the one table with no writer at all (HANDOFF §5 item 29).
