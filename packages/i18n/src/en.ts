@@ -118,6 +118,36 @@ export const en = {
   "project.sessions": "Sessions",
   "project.files": "Files",
   "project.review": "Review",
+  "project.worktrees": "Worktrees",
+
+  // ---- Worktrees (§45) -----------------------------------------------------
+  "worktree.title": "Worktrees",
+  "worktree.subtitle":
+    "A second checkout of this repository, on its own branch, in its own folder. An agent can work in one without touching the tree you are reading. Each is a project, so opening one opens it everywhere.",
+  "worktree.main": "Repository",
+  "worktree.current": "You are here",
+  "worktree.detached": "Detached HEAD",
+  "worktree.locked": "Locked",
+  "worktree.gone": "Folder missing",
+  "worktree.open": "Open",
+  "worktree.remove": "Remove",
+  "worktree.notOpened": "Made outside J.A.R.V.I.S.",
+  "worktree.refused": "A guardrail refuses this. Change the rule in Settings if you meant it.",
+  "worktree.notARepo.title": "Not a Git repository",
+  "worktree.notARepo.body":
+    "Worktrees are a Git feature. This project folder is not under Git, so there are none to show.",
+
+  "worktree.confirm.title": "Remove the worktree for {branch}?",
+  "worktree.confirm.body":
+    "Git refused because this worktree has uncommitted work in it. Removing it deletes the folder and everything in it that was never committed.",
+  "worktree.confirm.anyway": "Remove it anyway",
+
+  "worktree.new.title": "New worktree",
+  "worktree.new.placeholder": "branch name",
+  "worktree.new.create": "New branch",
+  "worktree.new.existing": "Existing branch",
+  "worktree.new.action": "Create",
+  "worktree.new.hint": "Created beside this repository, in a folder named after the branch.",
 
   // ---- Files and the editor (§41/§42) --------------------------------------
   "files.loading": "Reading…",
@@ -399,6 +429,8 @@ export const en = {
   "guardrail.coverage.note":
     "Guardrails govern agents, not what you type yourself. Verification commands J.A.R.V.I.S. runs are always enforced.",
 
+  "activity.kind.git.worktreeAdded": "Created a worktree",
+  "activity.kind.git.worktreeRemoved": "Removed a worktree",
   "activity.kind.git.staged": "Staged a change",
   "activity.kind.git.unstaged": "Unstaged a change",
   "activity.kind.git.discarded": "Discarded uncommitted work",

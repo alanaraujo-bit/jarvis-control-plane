@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 6;
+pub const SCHEMA_VERSION: u32 = 7;
 
 struct Migration {
     version: u32,
@@ -319,6 +319,27 @@ const MIGRATIONS: &[Migration] = &[Migration {
     -- needing a separate code per distinct sentence.
     ALTER TABLE evidence ADD COLUMN code_args TEXT;
 "#,
+    },
+    Migration {
+        version: 7,
+        sql: r#"
+    -- ---- Worktrees (§45) ---------------------------------------------------
+    --
+    -- A worktree is a second checkout of one repository, in its own directory,
+    -- on its own branch. In this product that is a **project**: a project is a
+    -- folder on this machine with a checkout in it (§16), and that is exactly
+    -- what a worktree is. Verified rather than assumed --
+    -- `rev-parse --show-toplevel` inside a worktree returns the worktree's own
+    -- path, so Files, the editor and Review all answer about the right tree
+    -- with no changes, and path confinement (§41) keeps the meaning it has
+    -- everywhere else.
+    --
+    -- What is missing without this column is only the relationship. A worktree
+    -- registered as a bare project row is a folder that appeared in the list
+    -- with no explanation of where it came from, and removing the worktree
+    -- would leave that row pointing at nothing.
+    ALTER TABLE projects ADD COLUMN worktree_of TEXT REFERENCES projects (id);
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -423,6 +444,7 @@ mod tests {
             (4, 0xe44a_5219_db9e_f30d),
             (5, 0x6ee9_96ed_2d3e_b954),
             (6, 0x1851_a45c_4cbe_3881),
+            (7, 0x119d_80b1_fc88_9edc),
         ];
 
         for migration in MIGRATIONS {

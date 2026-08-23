@@ -192,7 +192,11 @@ export function App() {
 
         <main className="app__surface" key={openProject ? openProject.id : surface}>
           {openProject ? (
-            <ProjectWorkspace project={openProject} onBack={() => setOpenProject(null)} />
+            <ProjectWorkspace
+              project={openProject}
+              onBack={() => setOpenProject(null)}
+              onOpenProject={openProjectById}
+            />
           ) : surface === "settings" ? (
             <Settings />
           ) : surface === "projects" ? (

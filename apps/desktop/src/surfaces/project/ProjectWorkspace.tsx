@@ -4,7 +4,9 @@ import { ConversationView } from "../conversation/ConversationView";
 import { Popover } from "../../design/Popover";
 import { FilesView } from "../files/FilesView";
 import { ReviewView } from "../review/ReviewView";
+import { WorktreesView } from "../worktrees/WorktreesView";
 import { useT } from "../../app/i18n";
+import type { MessageKey } from "@jarvis/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
 import { useEnvironment } from "../environment/useEnvironment";
 import { TerminalView } from "../terminal/TerminalView";
@@ -15,6 +17,8 @@ import "./ProjectWorkspace.css";
 interface ProjectWorkspaceProps {
   project: Project;
   onBack: () => void;
+  /** Opening a worktree is opening a project — see §45. */
+  onOpenProject: (projectId: string) => void;
 }
 
 /**
@@ -25,13 +29,14 @@ interface ProjectWorkspaceProps {
  * The list is the same kind of thing `App.tsx` keeps for the rail: an area that
  * is not built is absent from it, never a "coming soon" screen (§81).
  */
-const AREAS = ["sessions", "files", "review"] as const;
+const AREAS = ["sessions", "files", "review", "worktrees"] as const;
 type Area = (typeof AREAS)[number];
 
-const AREA_LABEL: Record<Area, "project.sessions" | "project.files" | "project.review"> = {
+const AREA_LABEL: Record<Area, MessageKey> = {
   sessions: "project.sessions",
   files: "project.files",
   review: "project.review",
+  worktrees: "project.worktrees",
 };
 
 /** Which agents can actually be launched, from the real environment scan (§14). */
@@ -46,7 +51,7 @@ const AGENT_TOOL_ID: Record<Exclude<SessionKind, "shell">, string> = {
  * Everything here is scoped to one project. Only surfaces that exist are shown;
  * the rest arrive with the milestones that build them (§81).
  */
-export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
+export function ProjectWorkspace({ project, onBack, onOpenProject }: ProjectWorkspaceProps) {
   const t = useT();
   const { report } = useEnvironment();
   const { tabs, activeTab, openTerminal, closeTerminal, setActive, adopt, error } = useTerminals();
@@ -277,6 +282,12 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
       {visited.has("review") && (
         <div className="workspace__area-body" data-visible={area === "review" || undefined}>
           <ReviewView projectId={project.id} />
+        </div>
+      )}
+
+      {visited.has("worktrees") && (
+        <div className="workspace__area-body" data-visible={area === "worktrees" || undefined}>
+          <WorktreesView projectId={project.id} onOpenProject={onOpenProject} />
         </div>
       )}
     </div>

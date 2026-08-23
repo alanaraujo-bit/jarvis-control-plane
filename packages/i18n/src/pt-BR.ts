@@ -104,6 +104,35 @@ export const ptBR: Record<MessageKey, string> = {
   "project.sessions": "Sessões",
   "project.files": "Arquivos",
   "project.review": "Revisão",
+  "project.worktrees": "Worktrees",
+
+  "worktree.title": "Worktrees",
+  "worktree.subtitle":
+    "Um segundo checkout deste repositório, no branch dele, na pasta dele. Um agente pode trabalhar em um sem encostar na árvore que você está lendo. Cada um é um projeto, então abrir um abre em todo lugar.",
+  "worktree.main": "Repositório",
+  "worktree.current": "Você está aqui",
+  "worktree.detached": "HEAD desanexado",
+  "worktree.locked": "Travado",
+  "worktree.gone": "Pasta não encontrada",
+  "worktree.open": "Abrir",
+  "worktree.remove": "Remover",
+  "worktree.notOpened": "Criado fora do J.A.R.V.I.S.",
+  "worktree.refused": "Um guardrail recusa isso. Mude a regra em Configurações se era mesmo a intenção.",
+  "worktree.notARepo.title": "Não é um repositório Git",
+  "worktree.notARepo.body":
+    "Worktrees são um recurso do Git. Esta pasta não está sob Git, então não há nenhuma para mostrar.",
+
+  "worktree.confirm.title": "Remover a worktree de {branch}?",
+  "worktree.confirm.body":
+    "O Git recusou porque esta worktree tem trabalho não commitado. Remover apaga a pasta e tudo que nunca foi commitado nela.",
+  "worktree.confirm.anyway": "Remover mesmo assim",
+
+  "worktree.new.title": "Nova worktree",
+  "worktree.new.placeholder": "nome do branch",
+  "worktree.new.create": "Branch novo",
+  "worktree.new.existing": "Branch existente",
+  "worktree.new.action": "Criar",
+  "worktree.new.hint": "Criada ao lado deste repositório, numa pasta com o nome do branch.",
 
   "files.loading": "Lendo…",
   "files.emptyFolder": "Pasta vazia",
@@ -370,6 +399,8 @@ export const ptBR: Record<MessageKey, string> = {
   "guardrail.coverage.note":
     "As proteções governam os agentes, não o que você digita. Comandos de verificação que o J.A.R.V.I.S. roda são sempre impedidos.",
 
+  "activity.kind.git.worktreeAdded": "Criou uma worktree",
+  "activity.kind.git.worktreeRemoved": "Removeu uma worktree",
   "activity.kind.git.staged": "Preparou uma mudança",
   "activity.kind.git.unstaged": "Tirou uma mudança do índice",
   "activity.kind.git.discarded": "Descartou trabalho não commitado",

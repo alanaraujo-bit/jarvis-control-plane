@@ -19,6 +19,7 @@ mod pty;
 mod review;
 mod session;
 mod window;
+mod worktrees;
 
 use std::path::PathBuf;
 use std::sync::Arc;

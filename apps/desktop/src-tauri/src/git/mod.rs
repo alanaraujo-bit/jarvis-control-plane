@@ -14,6 +14,7 @@
 
 pub mod diff;
 pub mod status;
+pub mod worktree;
 pub mod write;
 
 use std::path::{Path, PathBuf};
