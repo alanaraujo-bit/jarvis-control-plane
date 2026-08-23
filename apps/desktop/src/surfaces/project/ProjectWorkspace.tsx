@@ -7,13 +7,14 @@ import { ReviewView } from "../review/ReviewView";
 import { WorktreesView } from "../worktrees/WorktreesView";
 import { BrainView } from "../brain/BrainView";
 import { HistoricalTabBadge } from "../../shell/GlobalSearch";
-import { useT } from "../../app/i18n";
+import { useI18n } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
 import { useEnvironment } from "../environment/useEnvironment";
 import { TerminalView } from "../terminal/TerminalView";
 import { useTerminals } from "../terminal/useTerminals";
 import type { Project } from "../projects/useProjects";
+import { VoiceButton } from "./VoiceButton";
 import "./ProjectWorkspace.css";
 
 interface ProjectWorkspaceProps {
@@ -71,7 +72,7 @@ export function ProjectWorkspace({
   focusSessionProvider,
   focusSessionTitle,
 }: ProjectWorkspaceProps) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const { report } = useEnvironment();
   const { tabs, activeTab, openTerminal, openHistorical, closeTerminal, setActive, adopt, error } =
     useTerminals();
@@ -248,6 +249,10 @@ export function ProjectWorkspace({
             A historical tab has no terminal to toggle to — there is nothing
             running to attach a PTY view to — so it skips the pill entirely
             and always shows as a conversation below. */}
+        {activeTab_ && !activeTab_.historical && (
+          <VoiceButton projectId={project.id} sessionId={activeTab_.sessionId} locale={locale} />
+        )}
+
         {activeTab_ && !activeTab_.historical && (
           <div className="workspace__view-toggle" role="radiogroup" aria-label={t("view.terminal")}>
             {(["terminal", "conversation"] as const).map((mode) => (

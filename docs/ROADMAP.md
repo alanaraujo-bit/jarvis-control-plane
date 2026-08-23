@@ -32,7 +32,9 @@ inspection (§76).
 - [x] xterm.js integration, scrollback, per-theme palettes, tabs
 - [ ] Split panes and layout presets (§20)
 - [ ] Search within scrollback
-- [ ] Image paste as first-class attachment (§22)
+- [ ] Image paste as first-class attachment (§22) — pasted into the terminal,
+      with a hover preview of the image rather than a bare filename/placeholder
+      (Alan's own requirement, 2026-08-23; not yet scoped further)
 
 ## M3 — Providers (§26)  ✅
 - [x] Provider adapter trait + capability model (capabilities as data)
@@ -93,11 +95,33 @@ still there afterwards.
 - Under Unattended, "ask" becomes a refusal rather than a prompt nobody can
   answer, and the mission goes to Waiting with a reason (§34).
 
-### Known gaps in this milestone
-- Evidence summaries generated in Rust are still English-only, **except** the
-  guardrail refusal, which now carries a structured code the UI localises. The
-  `code`/`code_args` columns and the rendering path exist; the remaining
-  summaries need converting one at a time (§65).
+### Evidence summaries, fully localised (§65)
+Every sentence J.A.R.V.I.S. authors as evidence now carries a `code` and
+`code_args` alongside its English `summary` fallback — the same shape the
+guardrail refusal pioneered, extended to the other ten: a command's pass,
+fail, timeout and spawn-failure; a file existing, missing, containing or not
+containing text, or being unreadable; a manual criterion's "needs a person"
+and "confirmed by {who}". Command/file **output** in `detail` (stdout,
+stderr, an OS error string) is deliberately left with no code — it is the
+tool speaking, not a sentence J.A.R.V.I.S. wrote, and translating it would be
+inventing words nobody said.
+
+A real bug caught before it shipped: `Outcome` grew `code`/`code_args` and
+`evidence_from` threaded them through cleanly, but the raw `INSERT` in
+`run_and_record` — a different place entirely — still named only the
+original columns, so every code would have been computed correctly and then
+silently dropped on the way into the database. The same gap existed
+separately in `confirm_manual`'s own `INSERT`. Both are the same lesson as
+item 17 in HANDOFF's list: a correct struct is not correct bytes on disk;
+each is pinned by a test that reads the evidence back through the real
+database, not just checks the in-memory value.
+
+**Verified in the installed app:** ran a Command criterion built to fail and
+watched the row read exactly `` `exit 1` saiu com código 1, esperado 0 `` in
+pt-BR, with the command and both exit codes substituted and no `{placeholder}`
+left visible; confirmed a Manual criterion and watched it read `Confirmado
+por you`. Both exercise a different one of the two `INSERT` sites this pass
+fixed.
 
 ## M6 — Code surfaces  ✅
 - [x] Files explorer (§41)
@@ -207,6 +231,8 @@ back.
 - [x] Notes (§40) — working memory, never sent anywhere
 - [x] Global Search (§51) — knowledge, notes, missions, activity and
       conversation content, across every project, from Ctrl+Shift+F
+- [x] An agent writes to its own Brain (§36–§38, D27) — once, at the end of
+      an Unattended run, asked one narrow question it can decline to answer
 
 ### The memory layer, as built
 - **Knowledge is briefed; a note is not** (D21). One question decides which a
@@ -274,6 +300,34 @@ Search opened it back up as a read-only conversation tab, model name and token
 counts intact, and closing that tab touched nothing on the backend. Both
 themes, both languages.
 
+### An agent writes to its own Brain, as built (§36–§38, D27)
+- **Only at the end of an Unattended run, once, and only into one narrow
+  question.** `Step::Complete` in `autopilot::driver` is the one place a
+  driven run holds the seat with nobody else in it (D15) — a manually
+  completed mission is never asked, because typing a question into a
+  terminal a person is watching is a different conversation to interrupt.
+- **The prompt asks for what would still matter *next time*, not a summary
+  of the task**, forbids touching anything (a stray edit here could be why a
+  later re-verify revokes the completion it just set), and offers a named
+  escape hatch (`NOTHING TO RECORD`) expected to fire most of the time.
+- **A real bug caught before it shipped:** the reflection's reply window
+  originally started at the cursor the work turn's own `TurnEnded` left
+  behind — the same tail-frame risk `SETTLE` exists for one turn earlier.
+  Fixed by re-baselining to the log's current end immediately before the
+  question is sent, pinned by a test with a deliberately planted straggler
+  frame, then reconfirmed against a real agent.
+
+**Verified in the installed app:** a scratch project's README stated one
+non-obvious fact — the dev server listens on 4173 because something
+unrelated already holds port 3000. Ran a trivial mission Unattended against
+a real Claude Code agent: on completion the reflection question arrived as
+the agent's next input, it answered `GOTCHA: The dev server runs on port
+4173, not the conventional 3000, because port 3000 on this machine is
+already held by an unrelated port scanner — anyone expecting localhost:3000
+will find nothing there.`, and the Brain's Gotcha tab showed exactly that
+sentence under **Um agente registrou isto** in amber, briefed-size counter
+moved, Activity recorded in pt-BR right after the mission's own completion.
+
 ### Notes on the analytics design
 Bars use one hue because each row is already named beside it: the bar carries
 magnitude, the label carries identity. Colouring by rank would double-encode
@@ -281,7 +335,16 @@ length as hue. A single-category breakdown drops its bar entirely — a full-wid
 rectangle restating the number next to it is not a chart.
 
 ## M8 — Preview / Browser (§46/§47)
-## M9 — Onboarding (§13), Settings (§64)
+## M9 — Onboarding (§13), Settings (§64)  ~
+- [x] Welcome screen shown once per install, gated on a `settings` row
+- [x] Reuses the environment scan (§14) and `openFolder`, no bespoke picker
+- [x] Window reveal waits on the onboarding check, so there is no flash of
+      the wrong screen — and defaults to "already seen" if the check fails,
+      so a broken check can never leave the window hidden
+- [ ] Settings (§64) itself
+**Verified:** fresh install simulated by deleting the local db; the welcome
+screen showed, opening a folder from it landed inside that project's own
+workspace, and relaunching afterward skipped straight to Mission Control.
 ## M10 — Installer (§12) + Updater (§62)  ✅
 - [x] NSIS installer with product identity, OS-language auto-detection
 - [x] Per-user install — no administrator prompt
@@ -292,23 +355,64 @@ rectangle restating the number next to it is not a chart.
 **Verified on this machine:** installed, launched, upgraded, uninstalled and
 reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ## M11 — Mobile PWA (§55–§58) + Cloud relay (§59)
-## M12 — Voice (§54)
+## M12 — Voice (§54)  ~
+- [x] Microphone input that transcribes into the terminal — dictation as an
+      input method for a running session, not a separate voice-command
+      surface (Alan's own requirement, 2026-08-23)
+- [x] Fully local: whisper.cpp bundled and spawned, no cloud API, no key
+- [x] Primed with the project's own vocabulary (its files, its branch) —
+      verified to fix exactly the proper nouns a generic dictation tool gets
+      wrong, on the same recorded sentence, twice (D29)
+- [x] Typed into the prompt, never auto-submitted
+- [x] Verified against a **real** microphone — Alan tested with a real
+      headset; worked, and surfaced two real bugs (PSReadLine's audible
+      bell, UTF-8 chunk-splitting breaking Claude Code's own TUI on
+      accented text), both fixed and proven against real infrastructure
+      (see HANDOFF §5 items 35–36)
+- [x] Pleasant start/finish sound cues — soft two-note Web Audio chimes,
+      not yet re-verified by ear against the latest rebuild
+- [ ] **Real-time streaming transcription** (Alan's explicit follow-up
+      request, 2026-08-23) — text should appear incrementally while
+      speaking, VS Code/Cursor-style, with a considered visual treatment
+      ("animação na transcrição"), not today's record-then-type-once flow.
+      Architecture investigated (`whisper-server.exe` from the same
+      whisper.cpp release, kept warm, polled on a rolling audio window)
+      but not yet built — see HANDOFF §7 item 1.
+**Verified on this machine, including a real microphone once.** The model
+downloads and hash-verifies through the app's own UI; the whole
+capture → transcribe → type pipeline was run for real end to end, first
+with a temporary synthetic-audio bypass and then with a real headset; a
+missing microphone is reported honestly rather than hanging. What remains
+is streaming transcription itself, plus one more live pass confirming the
+sound-cue and bug fixes together by ear.
 
 ---
 
 ## Current milestone
 **M6 and M7 are both complete.** Files, the editor, Review, Git write
-operations, worktrees, the memory layer and Global Search are all built and
-verified against real data and a real agent.
+operations, worktrees, the memory layer, Global Search, and an agent writing
+to its own Brain are all built and verified against real data and a real
+agent. Onboarding (§13) is also built and verified; Settings (§64) is what
+remains of M9. Voice dictation (§54, M12) has been tested with a real
+microphone once — it works, and two real bugs it surfaced (an irritating
+PSReadLine bell, and dictated accents garbling specifically inside Claude
+Code's TUI) are fixed and proven. Open on M12: real-time streaming
+transcription, a substantial follow-up feature request, plus a second live
+pass confirming the new sound cues and both fixes together by ear.
 
 ## Next steps
-1. Let an agent write to the Brain. The column and the provenance exist
-   (`source = 'agent'`, `session_id`), and nothing produces such a row yet:
-   what is missing is the moment worth writing one, most likely at the end of
-   a verified mission.
-2. Onboarding (§13) — the environment scan already provides its data
-3. Finish localising the remaining evidence summaries (§65)
-4. The rest of M2: split panes (§20), scrollback search, image paste (§22)
-5. Global Search does not backfill (D25) — it finds everything said from this
+1. Build real-time streaming transcription for voice dictation (§54) — text
+   appearing incrementally while speaking, with a considered animated
+   treatment, matching VS Code/Cursor's own dictation UX. See HANDOFF §7
+   item 1 for the investigated architecture (`whisper-server.exe`, kept
+   warm, polled on a rolling window) and what is not yet built.
+2. Re-verify voice dictation's sound cues and both bug fixes by ear on a
+   real microphone — small, but not yet done against the latest rebuild.
+   See HANDOFF §7 item 2.
+3. The rest of M2: split panes (§20), scrollback search, image paste (§22,
+   with a hover preview of the pasted image)
+4. Global Search does not backfill (D25) — it finds everything said from this
    build onward, forward-only. A one-time backfill over every session log was
    deliberately left out of this pass; see HANDOFF §7.
+5. A manually completed mission is never asked what it learned (D27) — the
+   reflection only fires at the end of an Unattended run, deliberately.

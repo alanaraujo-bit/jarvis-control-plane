@@ -528,3 +528,334 @@ pins the contract, and
 actual line captured from the failing turn through the real parser, not a
 hand-built `ConversationItem`, so the whole pipeline is pinned rather than just
 `mirror`'s contract in isolation.
+
+## D27 — An agent is asked to reflect only at the end of an unattended run, once, and only into a narrow question
+
+**Date:** 2026-08-23
+**Why:** `add_knowledge` has accepted `Source::Agent` since §36–§38 was built
+(D21–D23), and nothing ever called it that way — HANDOFF §7 named this as the
+open item and named the risk in the same breath: an agent that writes freely
+into a project's memory fills it with restatements of its own last task,
+which is worse than an empty Brain because `brief::compose` (D23) hands
+**every** non-archived knowledge row to **every** future agent that starts in
+that project, with no per-row filter. A bad entry here is not clutter sitting
+in a tab; it is system-prompt context for every session afterward.
+
+**Where:** `Step::Complete`, right after `mission::store::set_status` reports
+the completion actually stuck, and only when the run got there through
+`autopilot::driver` (§32). This is the one place a driven run holds the seat
+with nobody else in it (D15) — an attended completion is watched by a person,
+and typing a question into that terminal mid-conversation is not this run's
+conversation to interrupt. **A manually completed mission is never asked.**
+That is a real gap, left deliberately: the reusable machinery here is the PTY
+write / transcript read pattern the briefing test proved (D23), and applying
+it to an attended session raises a UX question — whose seat is it — this pass
+did not need to answer.
+
+**What keeps it narrow, all decided up front rather than tuned after the
+fact:**
+- **One question, asked once per completed mission.** Not "what did you do,"
+  which invites a summary of the task — the prompt asks explicitly for what
+  would still matter *next time*, forbids restating the task, and offers a
+  named escape hatch (`NOTHING TO RECORD`) that is expected to fire most of
+  the time. Trusting the agent's own judgement about whether it has anything
+  durable to say is the same trust `plan::instruction_for` already extends
+  when it lets an agent say "I cannot proceed" instead of guessing (§34).
+- **The prompt forbids touching anything.** Completion has already been set,
+  and `verify_mission` **revokes** it if a later check finds the evidence no
+  longer holds (D25's own doc, one milestone earlier). A reflection turn that
+  edited a file could be the reason a completed mission silently un-completes
+  itself. Pinned by `the_reflection_prompt_forbids_touching_anything`.
+- **A hard length cap, truncated rather than rejected.** 500 characters forces
+  the one-or-two-sentence answer the prompt asks for; a reply that ignores the
+  hint is cut, not thrown away — a long true fact still beats nothing.
+- **An exact-duplicate body is not recorded twice.** Several missions in the
+  same project are likely to rediscover the same fact; a straight
+  case-insensitive equality check against existing knowledge catches the
+  common case cheaply. Similarity matching was deliberately not attempted —
+  the same restraint D22 applies to derived facts.
+- **No per-item "confirm before briefing" flag.** D21 already rejected a
+  per-item switch for knowledge-versus-note, for the same reason: something
+  for someone to forget to set. Agent-written knowledge renders in amber
+  (`brain.source.agent`, already built before this decision) so a person can
+  see and archive a bad entry — that is the review mechanism, not a gate in
+  front of the brief.
+
+**A real bug found before this shipped, not after:** the first version read
+the reflection's reply starting from the cursor left by the work turn's own
+`TurnEnded`. `SETTLE`'s own doc comment says a turn's last frames can still be
+arriving when `TurnEnded` is seen — that is one turn earlier than where this
+looks, but the same fact applies again here: a straggler frame from the
+finished work turn can land after the cursor was captured and before the
+reflection question is even sent. Left alone, that stray text is read back as
+if it were part of the answer, and the recorded knowledge opens with the
+agent restating what it just did — the exact failure this decision exists to
+avoid, arriving through a side door instead of the front one. Fixed by
+re-baselining to the log's current end immediately before `send()`, not by
+trusting the cursor handed in. `a_stray_frame_from_the_finished_turn_never_reaches_the_reflection`
+pins it with a straggler frame deliberately written between the two points in
+time. Found by writing the test the way §3 asks for tests to be written here —
+against a real session log on disk, not a mock — before ever running it
+against a live agent.
+
+**Verified in the installed app, against a real Claude Code agent, not just
+the unit tests above.** A scratch project's README stated one fact a reader
+would not get from the code — the dev server listens on 4173 because
+something unrelated on the machine already holds 3000. Created a mission
+whose only criterion was a file's existence, set it Unattended, and ran it:
+the agent wrote the file, the mission completed, and the terminal showed the
+exact `REFLECT_PROMPT` text arrive as the agent's *next* input — not folded
+into the completed turn, confirming the re-baseline fix actually holds
+outside a test. The agent answered `GOTCHA: The dev server runs on port
+4173, not the conventional 3000, because port 3000 on this machine is
+already held by an unrelated port scanner — anyone expecting localhost:3000
+will find nothing there.` The Brain's Gotcha section showed exactly that
+sentence under **Um agente registrou isto** in amber, the brief-size counter
+moved (`383 caracteres`), and
+Activity recorded `Um agente registrou algo que aprendeu` immediately after
+`Missão concluída sem supervisão`, both in pt-BR. Nothing in `done.txt`'s own
+"Work confirmed complete" line leaked into the recorded knowledge — the
+straggler this decision's own fix targets never showed up.
+
+## D28 — Onboarding is a settings flag, shown once, with no in-app reset
+
+**Date:** 2026-08-23
+**Why:** §13 needed a first-run screen and no spec document existed for it in
+the repo — the scope was inferred from what was already sitting unused: the
+`app.name`/`app.tagline` i18n keys, the environment scan (§14) as its own
+finished surface, and `Projects.useProjects().openFolder()` as the only way
+the product opens a project. Building a second folder picker or a second
+summary of the environment scan would have contradicted §6 (Quiet
+Intelligence: one calm screen, not a wizard) for no reason — both already
+exist and are already right.
+
+**Where the flag lives:** the shared `settings (key TEXT PRIMARY KEY, value
+TEXT NOT NULL)` table, one row keyed `onboarding.seen`, read and written by a
+new `onboarding` module — not a new table, because there is exactly one
+boolean and `mission::store::global_autonomy` already established the pattern
+of using `settings` for singleton state.
+
+**The window reveal waits on the check, not the other way round.** §11
+already defers the window's reveal to first paint via `window_ready`, to
+avoid a flash of the wrong content; the onboarding check is now one more gate
+on that same reveal, so the very first frame a person sees is either the
+welcome screen or the normal shell, never one flashing into the other.
+Fetching the flag can fail — database unreadable, command not yet
+registered — and a check that fails must never be the reason a window stays
+hidden forever (HANDOFF item 31 is exactly that failure mode from a different
+cause). The frontend fetch defaults to `seen: true` on any error, so the
+worst case is skipping onboarding once, never a stuck window. Verified by
+temporarily removing `onboarding_status` from `invoke_handler!`, rebuilding,
+and confirming on screen that the window still appeared and rendered the
+normal app rather than staying hidden.
+
+**No UI control to see it again.** This is a first-run screen, not a tour a
+person might want to replay — the environment scan it reuses already has its
+own always-available copy in Settings. Seeing it again means resetting the
+one row by deleting the local database file, which is a deliberate deletion
+of app state, not a click a person could reach by accident. Documented in
+HANDOFF §6 with the exact path, since this machine has no `sqlite3` to
+`UPDATE` the row directly.
+
+**A real bug found while verifying, not designed against in advance:**
+opening a brand-new folder from this screen landed on Mission Control instead
+of the project just opened. The cause was not in this module — `Onboarding`
+called `onOpenProject(project.id)`, and the id-based lookup one level up in
+`App.tsx` was a `useCallback` memoized on `projects`, closed over the array
+as it stood when the click fired, which was before `openFolder()`'s own
+`refresh()` had put the new project into it. See HANDOFF item 33. Fixed by
+having `Onboarding` hand back the `Project` object `openFolder()` already
+returned, and adding `openProjectDirect(project)` in `App.tsx` for every
+caller that already holds one — which turned out to include the pre-existing
+`Projects.tsx` row click, carrying the identical latent bug one screen over.
+
+**Verified in a real build, fresh install simulated by deleting the local
+database.** The welcome screen showed with the environment scan rendered
+inside it; clicking **Abrir pasta**, selecting a scratch project, and
+confirming landed directly inside that project's own workspace (Sessões tab,
+`Nenhum terminal em execução`) rather than Mission Control. Opening the same
+project afterward from the Projects list did the same. Relaunching the app a
+second time went straight to Mission Control with no flash of the welcome
+screen. Caught and refused mid-verification, not shipped: the native folder
+picker opened on its own last-used location, which was one of Alan's real
+projects — cancelled without selecting anything, per the standing rule to
+never open a real project through a test flow.
+
+## D29 — Voice dictation runs whisper.cpp locally, as a spawned binary, primed with the project's own vocabulary
+
+**Date:** 2026-08-23
+**Why:** Alan asked for dictation into the terminal that is genuinely worth a
+paid tier — "algo realmente profissional... premium" — and gave full
+autonomy on the technology, with one explicit warning from the session
+before this one to think carefully rather than assume. Three real
+architectures were probed on this machine, not reasoned about in the
+abstract, before picking one.
+
+**What was tried and why it lost:**
+- **Windows' own dictation (SAPI / OneCore).** `System.Speech.Recognition`
+  has **zero installed recognizers** on this machine at all — confirmed by
+  calling `InstalledRecognizers()` and getting nothing back, for any
+  language. The newer engine behind Win+H voice typing does have a pt-BR
+  token (`MS-1046-110-WINMO-DNN`), but it is reachable only through
+  `Windows.Media.SpeechRecognition`, a WinRT API built around a live
+  microphone session with no documented way to feed it a pre-recorded file
+  — which would have made it untestable by this product's own §80 standard
+  (real infrastructure, not assumptions) on top of needing COM/WinRT
+  interop this codebase has none of.
+- **`whisper-rs` (linking whisper.cpp as a library via FFI).** Real crate,
+  real Windows build docs — and **currently broken on Windows/MSVC**: its
+  bindgen step emits *glibc*-specific types (`_G_fpos_t`, `_IO_FILE`) for an
+  MSVC target regardless of `--target`, a confirmed upstream issue hit
+  identically on two crate versions (0.14.4 and 0.16.0), not a local
+  misconfiguration. Getting even this far needed installing LLVM, CMake and
+  Ninja on this machine — none of which the finished feature uses; see
+  HANDOFF for the disclosure of what got installed chasing this path.
+
+**What won: a bundled `whisper-cli.exe`, spawned as a subprocess.**
+`ggml-org/whisper.cpp`'s own GitHub release ships a prebuilt Windows
+binary. Running it directly sidesteps the FFI/bindgen breakage entirely and
+matches a pattern this product already trusts completely — spawning and
+reading back an external tool (Claude Code, Codex, `git`) rather than
+linking it in, `CREATE_NO_WINDOW` included so it never flashes a console.
+It is also the one path that was actually *measurable* here: whisper.cpp
+takes a WAV file, so quality could be probed with real audio today, where
+the WinRT path could not.
+
+**Local over cloud, deliberately, not by default:** no API key to obtain or
+store, no per-utterance network cost, and it keeps voice data inside the
+same local-first boundary (§3) as everything else a session touches — a
+person's voice never leaves the machine, which is a stronger privacy story
+than most competitors' "AI dictation" features can make, and worth saying
+in the product itself (see `voice.download.body`). The trade is a real
+one-time cost: no billing system exists in this product to actually gate a
+"paid tier" on (there is nothing to build there yet), and a ~490MB model
+download the first time a person turns this on — never bundled in the
+installer, so the base install footprint (§62, currently 7.3MB) is
+untouched by a feature most people may never enable.
+
+**Vocabulary priming is the actual product idea, not a footnote.** Proven
+with a real, repeatable probe, not assumed: the same pt-BR TTS sentence
+("Roda o comando pnpm tauri build... jarvis-desktop.exe... target/release"),
+transcribed twice with `ggml-small.bin`. Unprimed, whisper mangled every
+proper noun it did not recognise — `tauri build` became "talibiu",
+`jarvis-desktop.exe` became "jarvisifn desktop.errisse". Primed with
+whisper.cpp's own `--prompt` argument, built from the shared baseline (this
+product's own tools and name), the project's current branch, and its
+top-level file and directory names (a single non-recursive `read_dir`, not
+a full-tree walk — see rule 9 in HANDOFF on what a slow repo-wide scan
+costs here), `jarvis-desktop.exe` came back **exactly right** and `Tauri`
+was recognised on its own. That gap, measured on the *same* audio, is the
+whole argument for local whisper.cpp over a generic dictation tool: this
+product already knows a project's own vocabulary, and nothing else speaking
+into this terminal does.
+
+**The transcript is typed, never submitted.** `voice_stop_recording` calls
+`session::typing::type_text` and stops there — no `submit`. It lands in the
+prompt exactly where a person's own typing would sit, for them to read, fix
+or discard with Ctrl+C, never auto-run. The paced/chunked write itself was
+extracted out of `autopilot::driver::send` into `session::typing` for this
+— D16's "typed, not pasted" finding was never autopilot-specific, and
+voice dictation needed the identical protection against the same line-editor
+character loss.
+
+**A microphone cannot be tested on this machine — it has none.**
+`cpal::default_host().default_input_device()` returns `None` here,
+confirmed, not assumed (no recording device appears in Device Manager
+either — the machine genuinely lacks one, not merely a blocked one). Every
+part of the pipeline downstream of a captured buffer was verified for real:
+the resample/downmix math has direct unit tests, and the full
+record → resample → WAV → whisper-cli → type-into-terminal path was run
+end to end using a temporary, fully-reverted bypass that fed the pipeline
+one second of silence instead of a live device (see the capture module's
+git history / HANDOFF for the exact revert). It worked — whisper.cpp
+hallucinated `[MÚSICA DE FUNDO]` on the silence, in Portuguese, correctly
+matching the pt-BR locale mapping, and it landed unsubmitted in the real
+terminal prompt. What was **not** verified, because it cannot be on this
+hardware, is a real human voice through a real microphone. That is the one
+step handed back — see HANDOFF.
+
+**Model integrity is checked like the updater checks its own artifacts.**
+`voice::model::download` writes to a `.part` file, hashes every chunk as it
+streams, and only renames into place if the SHA-256 matches a pinned
+constant — the same bar §62 already holds signed installer artifacts to,
+applied here because nothing else verifies a ~490MB file pulled from
+Hugging Face on first use. A hash mismatch deletes the `.part` and reports
+failure; nothing `is_present` would trust is ever left behind.
+
+**Addendum, after a real headset test surfaced two real bugs.** Alan
+connected a real microphone and dictated live: the feature worked and a
+correct transcript landed unsubmitted in the prompt, closing the one gap
+above (a real human voice through a real microphone). That same test
+surfaced two problems, both root-caused and fixed rather than patched
+around:
+
+*The "irritating high-pitched sound" was never this feature's own audio* —
+nothing in §54 played a sound before this addendum. A real session log,
+inspected byte-for-byte, showed literal BEL (0x07) bytes sitting in the PTY
+output stream right where typed text landed. The cause is PSReadLine's
+default `BellStyle: Audible`: it writes a BEL for ordinary line-editor
+redraws, which happens on any long or fast-arriving input, not something
+specific to dictation. Fixed at the source — `session::commands::default_shell`
+now launches PowerShell with `-Command "Set-PSReadLineOption -BellStyle
+None"` — rather than trying to filter or intercept the byte downstream,
+since xterm.js (v5) has no bell playback of its own to disable in the first
+place; whatever played the sound was Windows' own console host reacting to
+the byte before this app ever read it back out of the pty. Verified live:
+launching PowerShell with the exact args the app uses and reading back
+`(Get-PSReadLineOption).BellStyle` returns `None`, and a fresh session's log
+shows no more bare BEL bytes after typing through it. This only changes
+shells jarvis itself spawns — a person's own `$PROFILE` is untouched.
+
+*The Claude-Code-specific garbling had nothing to do with voice or
+whisper.cpp at all* — it was a latent bug in `session::typing::type_text`,
+shared by dictation and the autopilot (D16), that dictation's own Portuguese
+accents simply had the bad luck to trigger. The chunker split text into
+48-byte pieces by raw offset, for the pacing item 11 in HANDOFF documents;
+a raw byte offset can land inside a multi-byte UTF-8 character, and an
+accented letter split across two writes 30ms apart is exactly what "ção",
+"informação" and similar words produce. A plain shell's line buffer happens
+to reassemble the two halves silently; Claude Code's own TUI decodes each
+PTY read independently and renders the invalid half as replacement-character
+garbage instead — which is the entire explanation for "works in a normal
+terminal, breaks specifically in Claude Code" with no other moving part
+involved. Fixed by walking a chunk boundary back to the nearest real
+character boundary (`char_boundary_chunks` in `session/typing.rs`) rather
+than trusting a fixed byte count. This was proven against the actual
+regression, not just the isolated chunker: a real-PTY test spawns the
+genuine `claude` CLI, clears its own first-run "trust this folder?" prompt,
+types an accented Portuguese sentence through the real `type_text`, and
+reads the captured PTY bytes back — the accented words render intact. That
+test is `#[ignore]`d by default (it needs `claude` on `PATH`, which CI
+cannot promise) but is real, not a mock, and was run by hand to confirm the
+fix against the exact reported symptom before considering it closed.
+
+**Also added in the same pass, not yet re-verified by ear:** soft two-note
+start/finish chimes, synthesized with the Web Audio API
+(`surfaces/voice/sound.ts`) rather than shipped as audio files — this app's
+CSP has no `media-src`/`data:` allowance for audio, and an oscillator needs
+neither. Both cues are pure sine tones with gain ramped up and back down
+rather than switched, since an oscillator toggled at full volume produces
+an audible click from the waveform discontinuity — a small version of the
+exact harshness this was written to avoid. The start chime is explicitly
+awaited to finish *before* the microphone opens (`useVoice.startRecording`
+awaits `playStartChime()` then an explicit `CHIME_DURATION_MS` pause before
+calling `voice_start_recording`), so a recording never captures its own
+cue and transcribes it back — the same self-recording risk a chime-after-open
+ordering would have reintroduced. Tuned by eye against the numbers, not by
+ear against a speaker; Alan is the one who can actually confirm these sound
+right, which had not happened as of this addendum.
+
+**What is next for §54, from Alan's own follow-up in the same
+conversation:** real-time streaming transcription — text appearing
+incrementally while speaking, VS Code/Cursor-style, rather than today's
+record-the-whole-utterance-then-type-once flow, with a deliberately
+designed animated treatment for text arriving live. Investigated but not
+built: whisper.cpp's own GitHub release (`b4938`) ships `whisper-server.exe`
+alongside the already-bundled `whisper-cli.exe` — an HTTP server that loads
+the model once and stays warm across requests, with `/inference` accepting
+`prompt` and `language` fields per call, which is what would make repeated
+polling of a rolling audio window cheap enough versus `whisper-cli`'s
+pay-the-model-load-cost-every-time shape. whisper.cpp's own `stream`
+example was also examined and rejected: it needs SDL2 for its own
+microphone capture, which this codebase does not want since `cpal` already
+owns capture here. Nothing about this has been built yet — see HANDOFF §7.

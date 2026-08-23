@@ -30,6 +30,10 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "v7"] }
 parking_lot = "0.12"
 portable-pty = "0.9"
+cpal = "0.15"
+hound = "3"
+sha2 = "0.10"
+ureq = "2"
 
 [target."cfg(windows)".dependencies]
 # Job objects: children of a PTY (node, git, nested shells) do not die with the

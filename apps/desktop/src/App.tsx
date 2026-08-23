@@ -11,6 +11,8 @@ import { Activity } from "./surfaces/activity/Activity";
 import { Analytics } from "./surfaces/analytics/Analytics";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
 import { Missions } from "./surfaces/missions/Missions";
+import { Onboarding } from "./surfaces/onboarding/Onboarding";
+import { useOnboarding } from "./surfaces/onboarding/useOnboarding";
 import { Projects } from "./surfaces/projects/Projects";
 import { ProjectWorkspace, type Area } from "./surfaces/project/ProjectWorkspace";
 import type { Project } from "./surfaces/projects/useProjects";
@@ -46,6 +48,8 @@ export function App() {
   const rescanEnvironment = useEnvironmentStore((state) => state.scan);
   const projects = useProjects((state) => state.projects);
   const openTerminal = useTerminals((state) => state.openTerminal);
+  const onboardingSeen = useOnboarding((state) => state.seen);
+  const loadOnboarding = useOnboarding((state) => state.load);
 
   const [surface, setSurface] = useState<SurfaceId>("mission-control");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -62,37 +66,48 @@ export function App() {
   const [focusSessionProvider, setFocusSessionProvider] = useState<SessionKind | undefined>();
   const [focusSessionTitle, setFocusSessionTitle] = useState<string | undefined>();
 
+  type Focus = {
+    area?: Area;
+    sessionId?: string;
+    sessionProvider?: SessionKind;
+    sessionTitle?: string;
+  };
+
   /**
-   * Open a project workspace by id.
+   * Open a project workspace from a `Project` already in hand.
    *
-   * Missions know their project as an id; the workspace needs the project
-   * itself, so this is the join between the two (§86). This is the *only*
-   * place `openProject` is set to a real project, so it is also the one place
-   * that has to decide the focus fields — every caller that does not pass one
-   * clears it, or a stale search result would leak its focus into the next,
-   * unrelated project somebody opens by hand.
+   * This is the *only* place `openProject` is set to a real project, so it is
+   * also the one place that has to decide the focus fields — every caller
+   * that does not pass one clears it, or a stale search result would leak its
+   * focus into the next, unrelated project somebody opens by hand.
+   */
+  const openProjectDirect = useCallback((project: Project, focus?: Focus) => {
+    setOpenProject(project);
+    setFocusArea(focus?.area);
+    setFocusSessionId(focus?.sessionId);
+    setFocusSessionProvider(focus?.sessionProvider);
+    setFocusSessionTitle(focus?.sessionTitle);
+  }, []);
+
+  /**
+   * Open a project workspace by id, looked up in the already-loaded list.
+   *
+   * Missions and Global Search know their project only as an id, so this is
+   * the join between the two (§86). **Do not use this for a project that was
+   * just created in the same gesture** — `projects` here is whatever this
+   * render closed over, and a project added a moment ago by `openFolder()`
+   * can lose that race and simply not be found. `openProjectDirect` with the
+   * `Project` the caller already has is what those callers want instead.
+   * Found by opening a brand-new folder from this screen and landing back on
+   * Mission Control instead of inside it.
    */
   const openProjectById = useCallback(
-    (
-      projectId: string,
-      focus?: {
-        area?: Area;
-        sessionId?: string;
-        sessionProvider?: SessionKind;
-        sessionTitle?: string;
-      },
-    ) => {
+    (projectId: string, focus?: Focus) => {
       const project = projects.find((p) => p.id === projectId);
-      if (project) {
-        setOpenProject(project);
-        setFocusArea(focus?.area);
-        setFocusSessionId(focus?.sessionId);
-        setFocusSessionProvider(focus?.sessionProvider);
-        setFocusSessionTitle(focus?.sessionTitle);
-      }
+      if (project) openProjectDirect(project, focus);
       return project;
     },
-    [projects],
+    [projects, openProjectDirect],
   );
 
   const handleSearchResult = useCallback(
@@ -130,9 +145,22 @@ export function App() {
     setSurface(id);
   }, []);
 
-  // Reveal the window only once the first frame has painted, so launching
-  // never shows an empty white rectangle (§11).
+  // Whether this machine has ever gotten past the welcome screen (§13).
+  // Fetched once, up front, so the reveal below never shows the normal shell
+  // for one frame before swapping to onboarding.
   useEffect(() => {
+    void loadOnboarding();
+  }, [loadOnboarding]);
+
+  // Reveal the window only once the first frame has painted, so launching
+  // never shows an empty white rectangle (§11) — and now, only once it is
+  // also known whether that first frame is the welcome screen or the normal
+  // shell, so the window never shows one and then silently swaps to the
+  // other. `onboardingSeen` starts `null` and `load()` always resolves it to
+  // a real boolean, even on failure (see `useOnboarding`'s own comment) —
+  // this must never be the reason the window stays hidden (item 31, HANDOFF).
+  useEffect(() => {
+    if (onboardingSeen === null) return;
     let cancelled = false;
     const reveal = async () => {
       if (!("__TAURI_INTERNALS__" in window)) return;
@@ -144,7 +172,7 @@ export function App() {
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [onboardingSeen]);
 
   const togglePalette = useCallback(() => setPaletteOpen((open) => !open), []);
 
@@ -264,57 +292,61 @@ export function App() {
     <div className="app">
       <TitleBar onOpenPalette={togglePalette} />
 
-      <div className="app__body">
-        <Rail active={surface} available={IMPLEMENTED} onNavigate={goTo} />
+      {onboardingSeen === false ? (
+        <Onboarding onOpenProject={(project) => openProjectDirect(project)} />
+      ) : (
+        <div className="app__body">
+          <Rail active={surface} available={IMPLEMENTED} onNavigate={goTo} />
 
-        <main className="app__surface" key={openProject ? openProject.id : surface}>
-          {openProject ? (
-            <ProjectWorkspace
-              project={openProject}
-              onBack={() => setOpenProject(null)}
-              onOpenProject={openProjectById}
-              focusArea={focusArea}
-              focusSessionId={focusSessionId}
-              focusSessionProvider={focusSessionProvider}
-              focusSessionTitle={focusSessionTitle}
-            />
-          ) : surface === "settings" ? (
-            <Settings />
-          ) : surface === "projects" ? (
-            <Projects onOpen={(project) => openProjectById(project.id)} />
-          ) : surface === "activity" ? (
-            <Activity />
-          ) : surface === "analytics" ? (
-            <Analytics />
-          ) : surface === "missions" ? (
-            <Missions
-              initialMissionId={focusMission}
-              // Starting an agent from a mission tags the session with it, so
-              // the terminal, the conversation and the evidence all belong to
-              // the same thread of work (§86).
-              onLaunchAgent={(projectId, missionId) => {
-                if (openProjectById(projectId)) {
-                  void openTerminal(projectId, "claude-code", { cols: 120, rows: 30 }, missionId);
-                }
-              }}
-              onOpenSession={(projectId) => {
-                openProjectById(projectId);
-              }}
-            />
-          ) : (
-            <MissionControl
-              onOpenProject={() => goTo("projects")}
-              onOpenMission={(mission) => {
-                setOpenProject(null);
-                setFocusMission(mission.id);
-                setSurface("missions");
-              }}
-            />
-          )}
-        </main>
-      </div>
+          <main className="app__surface" key={openProject ? openProject.id : surface}>
+            {openProject ? (
+              <ProjectWorkspace
+                project={openProject}
+                onBack={() => setOpenProject(null)}
+                onOpenProject={openProjectById}
+                focusArea={focusArea}
+                focusSessionId={focusSessionId}
+                focusSessionProvider={focusSessionProvider}
+                focusSessionTitle={focusSessionTitle}
+              />
+            ) : surface === "settings" ? (
+              <Settings />
+            ) : surface === "projects" ? (
+              <Projects onOpen={(project) => openProjectDirect(project)} />
+            ) : surface === "activity" ? (
+              <Activity />
+            ) : surface === "analytics" ? (
+              <Analytics />
+            ) : surface === "missions" ? (
+              <Missions
+                initialMissionId={focusMission}
+                // Starting an agent from a mission tags the session with it, so
+                // the terminal, the conversation and the evidence all belong to
+                // the same thread of work (§86).
+                onLaunchAgent={(projectId, missionId) => {
+                  if (openProjectById(projectId)) {
+                    void openTerminal(projectId, "claude-code", { cols: 120, rows: 30 }, missionId);
+                  }
+                }}
+                onOpenSession={(projectId) => {
+                  openProjectById(projectId);
+                }}
+              />
+            ) : (
+              <MissionControl
+                onOpenProject={() => goTo("projects")}
+                onOpenMission={(mission) => {
+                  setOpenProject(null);
+                  setFocusMission(mission.id);
+                  setSurface("missions");
+                }}
+              />
+            )}
+          </main>
+        </div>
+      )}
 
-      <StatusBar />
+      {onboardingSeen !== false && <StatusBar />}
 
       <CommandPalette open={paletteOpen} commands={commands} onClose={() => setPaletteOpen(false)} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchResult} />

@@ -1,0 +1,73 @@
+/* A reading measure, not a full-bleed hero — the same restraint Settings
+   applies (§6). This screen is shown once; it should not perform. */
+.onboarding {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.onboarding__inner {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-9) var(--space-12);
+  display: flex;
+  flex-direction: column;
+}
+
+.onboarding__mark {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--text-primary);
+}
+
+.onboarding__tagline {
+  margin-top: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+}
+
+.onboarding__intro {
+  margin-top: var(--space-10);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.onboarding__environment {
+  margin-top: var(--space-6);
+}
+
+.onboarding__actions {
+  margin-top: var(--space-9);
+  display: flex;
+  align-items: center;
+  gap: var(--space-7);
+}
+
+.onboarding__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 32px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.onboarding__primary:hover:not(:disabled) { background: var(--accent-hover); }
+.onboarding__primary:active:not(:disabled) { background: var(--accent-active); }
+.onboarding__primary:disabled { opacity: 0.6; }
+
+.onboarding__skip {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.onboarding__skip:hover { color: var(--text-secondary); }

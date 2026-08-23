@@ -38,7 +38,15 @@ const MAX_DETAIL: usize = 8 * 1024;
 /// The outcome of checking one criterion.
 pub struct Outcome {
     pub ok: bool,
+    /// English text, always present as the fallback (§65).
     pub summary: String,
+    /// A stable code the UI translates, for the sentences we author below.
+    pub code: Option<&'static str>,
+    /// Arguments for that code, as JSON. `None` when the code takes none.
+    pub code_args: Option<serde_json::Value>,
+    /// The tool's own output, or an OS error string. Never given a code —
+    /// it is the tool speaking, not J.A.R.V.I.S., so it is not ours to
+    /// translate (§65).
     pub detail: Option<String>,
     pub kind: EvidenceKind,
 }
@@ -66,6 +74,12 @@ pub fn check(verification: &Verification, project_dir: &Path) -> Outcome {
                 } else {
                     format!("{path} does not exist")
                 },
+                code: Some(if exists {
+                    "evidence.file.exists"
+                } else {
+                    "evidence.file.missing"
+                }),
+                code_args: Some(serde_json::json!({ "path": path })),
                 detail: Some(full.to_string_lossy().to_string()),
                 kind: EvidenceKind::File,
             }
@@ -83,6 +97,12 @@ pub fn check(verification: &Verification, project_dir: &Path) -> Outcome {
                         } else {
                             format!("{path} does not contain the expected text")
                         },
+                        code: Some(if found {
+                            "evidence.file.contains"
+                        } else {
+                            "evidence.file.doesNotContain"
+                        }),
+                        code_args: Some(serde_json::json!({ "path": path })),
                         detail: Some(format!("looked for: {text}")),
                         kind: EvidenceKind::File,
                     }
@@ -90,6 +110,8 @@ pub fn check(verification: &Verification, project_dir: &Path) -> Outcome {
                 Err(e) => Outcome {
                     ok: false,
                     summary: format!("{path} could not be read"),
+                    code: Some("evidence.file.unreadable"),
+                    code_args: Some(serde_json::json!({ "path": path })),
                     detail: Some(e.to_string()),
                     kind: EvidenceKind::File,
                 },
@@ -99,6 +121,8 @@ pub fn check(verification: &Verification, project_dir: &Path) -> Outcome {
         Verification::Manual => Outcome {
             ok: false,
             summary: "Needs a person to confirm".into(),
+            code: Some("evidence.manual.needsConfirmation"),
+            code_args: None,
             detail: Some(
                 "This criterion cannot be checked automatically, so it stays unverified \
                  until someone confirms it."
@@ -151,6 +175,10 @@ fn run_command(
             return Outcome {
                 ok: false,
                 summary: format!("`{command}` did not finish within {}s", COMMAND_TIMEOUT.as_secs()),
+                code: Some("evidence.command.timedOut"),
+                code_args: Some(
+                    serde_json::json!({ "command": command, "seconds": COMMAND_TIMEOUT.as_secs() }),
+                ),
                 detail: Some(
                     "A verification that never finishes is not a pass; it was stopped.".into(),
                 ),
@@ -161,6 +189,8 @@ fn run_command(
             return Outcome {
                 ok: false,
                 summary: format!("`{command}` could not be run"),
+                code: Some("evidence.command.notRun"),
+                code_args: Some(serde_json::json!({ "command": command })),
                 detail: Some(e.to_string()),
                 kind: EvidenceKind::Command,
             }
@@ -177,13 +207,24 @@ fn run_command(
         String::from_utf8_lossy(&output.stderr)
     );
 
+    let seconds = format!("{:.1}", elapsed.as_secs_f32());
     Outcome {
         ok,
         summary: if ok {
-            format!("`{command}` exited {code} in {:.1}s", elapsed.as_secs_f32())
+            format!("`{command}` exited {code} in {seconds}s")
         } else {
             format!("`{command}` exited {code}, expected {expect_exit}")
         },
+        code: Some(if ok {
+            "evidence.command.passed"
+        } else {
+            "evidence.command.failed"
+        }),
+        code_args: Some(if ok {
+            serde_json::json!({ "command": command, "exitCode": code, "seconds": seconds })
+        } else {
+            serde_json::json!({ "command": command, "exitCode": code, "expectExitCode": expect_exit })
+        }),
         detail: Some(tail(&combined, MAX_DETAIL)),
         kind: EvidenceKind::Command,
     }
@@ -270,10 +311,11 @@ pub fn evidence_from(
         kind: outcome.kind,
         ok: outcome.ok,
         summary: outcome.summary.clone(),
-        // A command's own output is not ours to translate — it is the tool
-        // speaking, not J.A.R.V.I.S. Codes are for sentences we author.
-        code: None,
-        code_args: None,
+        // The sentence above is ours to author, so a code lets the interface
+        // say it in the reader's language (§65). `detail` is the tool's own
+        // output and is never given a code — see `Outcome::detail`.
+        code: outcome.code.map(str::to_string),
+        code_args: outcome.code_args.as_ref().map(|v| v.to_string()),
         detail: outcome.detail.clone(),
         ts_ms: now_ms(),
     }
@@ -301,6 +343,11 @@ mod tests {
             dir.path(),
         );
         assert!(outcome.ok, "summary: {}", outcome.summary);
+        assert_eq!(outcome.code, Some("evidence.command.passed"));
+        assert_eq!(
+            outcome.code_args.unwrap()["command"],
+            "echo verification-ran"
+        );
         assert!(outcome.detail.unwrap().contains("verification-ran"));
     }
 
@@ -322,8 +369,28 @@ mod tests {
         );
         assert!(!outcome.ok);
         assert!(outcome.summary.contains("exited 1"));
+        assert_eq!(outcome.code, Some("evidence.command.failed"));
+        assert_eq!(outcome.code_args.unwrap()["exitCode"], 1);
         // The output matters: a human has to be able to see *why* it failed.
         assert!(outcome.detail.unwrap().contains("something-broke"));
+    }
+
+    /// A command that never even starts — here, a working directory that does
+    /// not exist — is a distinct outcome from one that ran and failed.
+    #[test]
+    fn a_command_that_cannot_be_spawned_is_reported_as_such() {
+        let dir = project();
+        let outcome = check(
+            &Verification::Command {
+                command: "echo hi".into(),
+                cwd: Some("this/path/does/not/exist".into()),
+                expect_exit: 0,
+            },
+            dir.path(),
+        );
+        assert!(!outcome.ok);
+        assert_eq!(outcome.code, Some("evidence.command.notRun"));
+        assert_eq!(outcome.code_args.unwrap()["command"], "echo hi");
     }
 
     #[test]
@@ -357,12 +424,15 @@ mod tests {
             dir.path(),
         );
         assert!(present.ok);
+        assert_eq!(present.code, Some("evidence.file.exists"));
 
         let absent = check(
             &Verification::FileExists { path: "missing.txt".into() },
             dir.path(),
         );
         assert!(!absent.ok);
+        assert_eq!(absent.code, Some("evidence.file.missing"));
+        assert_eq!(absent.code_args.unwrap()["path"], "missing.txt");
     }
 
     #[test]
@@ -378,6 +448,7 @@ mod tests {
             dir.path(),
         );
         assert!(hit.ok);
+        assert_eq!(hit.code, Some("evidence.file.contains"));
 
         let miss = check(
             &Verification::FileContains {
@@ -387,6 +458,17 @@ mod tests {
             dir.path(),
         );
         assert!(!miss.ok);
+        assert_eq!(miss.code, Some("evidence.file.doesNotContain"));
+
+        let unreadable = check(
+            &Verification::FileContains {
+                path: "does-not-exist.log".into(),
+                text: "anything".into(),
+            },
+            dir.path(),
+        );
+        assert!(!unreadable.ok);
+        assert_eq!(unreadable.code, Some("evidence.file.unreadable"));
     }
 
     /// The single most important assertion in this module.
@@ -399,6 +481,7 @@ mod tests {
             "a criterion only a human can judge must not pass itself"
         );
         assert_eq!(outcome.kind, EvidenceKind::Manual);
+        assert_eq!(outcome.code, Some("evidence.manual.needsConfirmation"));
     }
 
     #[test]
@@ -419,6 +502,14 @@ mod tests {
         assert_eq!(evidence.session_id.as_deref(), Some("s1"));
         assert!(evidence.ok);
         assert!(evidence.ts_ms > 1_500_000_000_000);
+
+        // The code and its arguments survive the trip from Outcome to
+        // Evidence — code_args in particular, which crosses a
+        // serde_json::Value -> String boundary here (§65).
+        assert_eq!(evidence.code.as_deref(), Some("evidence.command.passed"));
+        let args: serde_json::Value =
+            serde_json::from_str(&evidence.code_args.unwrap()).unwrap();
+        assert_eq!(args["command"], "echo hi");
     }
 
     #[test]

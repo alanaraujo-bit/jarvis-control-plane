@@ -44,6 +44,9 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
+    "resources": {
+      "resources/whisper/*": "whisper/"
+    },
     "copyright": "© 2026 Alan Araujo. All rights reserved.",
     "category": "DeveloperTool",
     "shortDescription": "The control plane for AI-agent development.",

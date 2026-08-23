@@ -9,14 +9,14 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::db::Database;
 use crate::mission::model::{CriterionStatus, MissionStatus};
-use crate::providers::conversation::ConversationItem;
+use crate::providers::conversation::{ConversationItem, Role};
 use crate::session::event::EventKind;
 use crate::session::manager::LiveSession;
 use crate::session::SessionLogReader;
@@ -44,18 +44,47 @@ const SETTLE: Duration = Duration::from_millis(1200);
 /// mangled, which looked exactly like the autopilot doing nothing.
 const FIRST_PROMPT: Duration = Duration::from_secs(4);
 
-/// Pause between chunks of an instruction as it is typed in.
+/// How long to wait for an answer to the reflection question asked at the end
+/// of a completed run (§36–§38, D27).
 ///
-/// An agent CLI's line editor re-renders on every keystroke; writing a long
-/// instruction in one go outruns it and characters are lost. See `send`.
-const TYPING_PACE: Duration = Duration::from_millis(30);
+/// The mission is already `Completed` by the time this runs, so nothing
+/// downstream is blocked on it — this bound exists only so the thread does
+/// not sit parked indefinitely if the agent ignores the question or wanders
+/// off exploring instead of answering it.
+const REFLECT_TIMEOUT: Duration = Duration::from_secs(90);
 
-/// Pause between the last of the text and the key that submits it.
+/// The exact phrase that means "nothing worth recording."
 ///
-/// Without this the editor is still catching up when the carriage return
-/// arrives and swallows it, leaving the instruction in the prompt unsent — a
-/// failure that looks entirely correct on screen. See `send`.
-const SUBMIT_PAUSE: Duration = Duration::from_millis(400);
+/// Checked as a substring, not an exact match — a reply that wraps it in a
+/// sentence still counts, and skipping is always the safe read: an empty
+/// Brain entry costs nothing, a polluted one is briefed to every agent that
+/// starts here afterward.
+const REFLECT_SENTINEL: &str = "NOTHING TO RECORD";
+
+/// The longest an agent-written knowledge entry is allowed to be.
+///
+/// Forces the one-or-two-sentence answer the prompt asks for. A reply that
+/// ignores the length hint is truncated rather than discarded — an over-long
+/// but genuinely durable fact still beats nothing.
+const REFLECT_MAX_CHARS: usize = 500;
+
+/// Asked once, right after a mission completes unattended.
+///
+/// Addressed the same way `plan::instruction_for` addresses every other
+/// instruction: as a brief to a competent colleague. Three things are
+/// deliberate: it asks for what would still matter *next time*, not a
+/// restatement of this task (the risk Alan named before this was built); it
+/// forbids touching anything, because completion has already been set and a
+/// stray edit here could be the reason a later re-verify revokes it (§30);
+/// and it names the four kinds up front so a plain answer can still be filed
+/// correctly without a second round trip.
+const REFLECT_PROMPT: &str = "One more thing before we're done. Is there anything about \
+     this project that is not obvious from reading the code, and would still matter to \
+     whoever touches it next -- a gotcha, a constraint, a convention, what a term means \
+     here? Not a summary of this task, only something durable. Do not run anything or \
+     change any file, just answer. Reply in one or two sentences, starting with one of \
+     WHAT:, CONVENTION:, GOTCHA: or GLOSSARY:. If there is nothing durable to say, reply \
+     with exactly: NOTHING TO RECORD.";
 
 /// Where a driven run has got to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -291,8 +320,21 @@ pub fn start(
                             MissionStatus::Completed,
                             None,
                         );
-                        if let Err(e) = outcome {
-                            tracing::warn!(error = %e, "autopilot completion was refused");
+                        match &outcome {
+                            Ok(_) => reflect_and_record(
+                                &driven,
+                                &session,
+                                &db,
+                                &log_dir,
+                                cursor,
+                                &project_id,
+                                &driven.session_id,
+                                &mission_id,
+                                &detail.mission.title,
+                            ),
+                            Err(e) => {
+                                tracing::warn!(error = %e, "autopilot completion was refused")
+                            }
                         }
                         finish(&driven, &db, &project_id, &detail.mission.title, "autopilot.completed");
                         break;
@@ -350,46 +392,210 @@ fn poll_for_turn_end(log_dir: &std::path::Path, cursor: u64) -> Option<(bool, u6
     Some((ended, next))
 }
 
-/// Send an instruction to the agent, as if typed.
+/// After a mission completes unattended, ask whether the agent learned
+/// anything durable enough to outlive the session, and record it in the
+/// Brain if so (§36–§38, D27).
 ///
-/// The trailing newline is what submits it — this is a terminal, and the agent
-/// is reading a line. Sent through the session so it lands in the log as
-/// `PtyInput`, which is what keeps the record honest: a replay shows what the
-/// autopilot said, indistinguishable in kind from what a person would have said,
-/// because it occupies exactly the same seat.
-fn send(session: &LiveSession, text: &str) -> Result<(), ()> {
-    // Newlines inside the text would submit it a fragment at a time.
-    let single_line = text.replace('\n', " ").replace('\r', " ");
+/// This only ever runs here, immediately after `Step::Complete`, because this
+/// is the one place a driven run holds the seat with nobody else in it (D15).
+/// An attended completion is watched by a person, and typing a question into
+/// that terminal would be interrupting a conversation that is not this
+/// run's to have — so a manually completed mission is never asked.
+#[allow(clippy::too_many_arguments)]
+fn reflect_and_record(
+    run: &Autopilot,
+    session: &LiveSession,
+    db: &Database,
+    log_dir: &std::path::Path,
+    cursor: u64,
+    project_id: &str,
+    session_id: &str,
+    mission_id: &str,
+    mission_title: &str,
+) {
+    // `Deciding` renders as "Verifying" in the UI, and would sit there,
+    // stale, for up to REFLECT_TIMEOUT once this starts. The agent is
+    // working again, just on a different question.
+    *run.state.lock() = RunState::Working;
 
-    // Typed, not pasted.
-    //
-    // Both halves of this were found by driving a real agent and reading the
-    // session log, not by reasoning about it:
-    //
-    // 1. Sending the whole line in one write **drops characters**. The observed
-    //    result was "so tere is no" — an agent CLI reads its input through a
-    //    line editor that re-renders as it goes, and a large burst outruns it.
-    //    Writing in small pieces with a breath between them arrives intact.
-    //
-    // 2. The submit key had to be sent **separately, after a pause**. Appending
-    //    `\r` to the text left the instruction sitting in the prompt as an
-    //    unsent draft: the editor was still processing the paste when the
-    //    carriage return arrived, and swallowed it. That failure is especially
-    //    nasty because the terminal *looks* right — the words are on screen —
-    //    while the agent has been told nothing at all.
-    const CHUNK: usize = 48;
-    let bytes = single_line.as_bytes();
-    for chunk in bytes.chunks(CHUNK) {
-        session.write(chunk).map_err(|e| {
-            tracing::warn!(error = %e, "autopilot could not write to the session");
-        })?;
-        std::thread::sleep(TYPING_PACE);
+    // SETTLE exists because a turn's last frames can still be arriving when
+    // TurnEnded is seen (see that constant's own doc comment). Baseline here,
+    // immediately before the question is sent, rather than trusting `cursor`
+    // as handed in — otherwise the tail of the work turn that just finished
+    // is read back as if it were part of the answer, and the recorded
+    // knowledge opens with the agent restating what it just did: exactly the
+    // restatement risk this feature exists to avoid.
+    let cursor = drain_to_end(log_dir, cursor);
+
+    if send(session, REFLECT_PROMPT).is_err() {
+        return;
     }
 
-    std::thread::sleep(SUBMIT_PAUSE);
-    session.write(b"\r").map_err(|e| {
-        tracing::warn!(error = %e, "autopilot could not submit to the session");
-    })
+    let deadline = Instant::now() + REFLECT_TIMEOUT;
+    let session_stop = session.stop_flag();
+    let Some(reply) = await_reflection(log_dir, cursor, deadline, &run.stop, &session_stop) else {
+        tracing::info!(mission = %mission_id, "reflection: no usable answer in time");
+        return;
+    };
+
+    let Some((kind, body)) = interpret_reflection(&reply) else {
+        return;
+    };
+
+    // An exact repeat of something already known does not need saying again
+    // — most likely across several missions in the same project each
+    // rediscovering the same fact. Similarity matching is deliberately not
+    // attempted here; an exact match is cheap and catches the common case.
+    let already_known = crate::brain::knowledge(db, project_id)
+        .map(|existing| existing.iter().any(|k| k.body.eq_ignore_ascii_case(&body)))
+        .unwrap_or(false);
+    if already_known {
+        return;
+    }
+
+    match crate::brain::add_knowledge(
+        db,
+        project_id,
+        kind,
+        &body,
+        crate::brain::Source::Agent,
+        Some(session_id),
+        Some(mission_id),
+    ) {
+        Ok(_) => record(
+            db,
+            "brain.agentRecorded",
+            crate::activity::Severity::Info,
+            mission_title,
+            None,
+            project_id,
+            session_id,
+            mission_id,
+        ),
+        Err(e) => tracing::warn!(error = %e, "could not record the agent's reflection"),
+    }
+}
+
+/// Read to the current end of the log without acting on anything found there.
+fn drain_to_end(log_dir: &std::path::Path, cursor: u64) -> u64 {
+    SessionLogReader::open(log_dir)
+        .and_then(|reader| reader.read_from(cursor))
+        .map(|events| cursor + events.len() as u64)
+        .unwrap_or(cursor)
+}
+
+/// Wait for the agent's turn to end and return what it said.
+///
+/// `None` means: told to stop, the session ended, or nothing arrived before
+/// the deadline. All three are the same outcome from the caller's side —
+/// nothing gets recorded — because this runs after the mission is already
+/// complete, so there is nothing here worth failing loudly over.
+fn await_reflection(
+    log_dir: &std::path::Path,
+    mut cursor: u64,
+    deadline: Instant,
+    stop: &Arc<AtomicBool>,
+    session_stop: &Arc<AtomicBool>,
+) -> Option<String> {
+    let mut pieces: Vec<String> = Vec::new();
+    loop {
+        if stop.load(Ordering::SeqCst) || session_stop.load(Ordering::Relaxed) {
+            return None;
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+
+        let reader = SessionLogReader::open(log_dir).ok()?;
+        let events = reader.read_from(cursor).ok()?;
+        if events.is_empty() {
+            std::thread::sleep(POLL_INTERVAL);
+            continue;
+        }
+        cursor += events.len() as u64;
+
+        let mut ended = false;
+        for event in &events {
+            if event.kind != EventKind::Message {
+                continue;
+            }
+            match serde_json::from_slice::<ConversationItem>(&event.payload) {
+                Ok(ConversationItem::Message {
+                    role: Role::Assistant,
+                    text,
+                    ..
+                }) => {
+                    if !text.trim().is_empty() {
+                        pieces.push(text);
+                    }
+                }
+                Ok(ConversationItem::TurnEnded { .. }) => ended = true,
+                _ => {}
+            }
+        }
+
+        if ended {
+            std::thread::sleep(SETTLE);
+            return Some(pieces.join(" "));
+        }
+    }
+}
+
+/// Turn the agent's raw reply into a knowledge entry, or `None` if there is
+/// nothing worth keeping.
+fn interpret_reflection(raw: &str) -> Option<(crate::brain::Kind, String)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.to_ascii_uppercase().contains(REFLECT_SENTINEL) {
+        return None;
+    }
+
+    let prefixes: [(&str, crate::brain::Kind); 4] = [
+        ("WHAT:", crate::brain::Kind::What),
+        ("CONVENTION:", crate::brain::Kind::Convention),
+        ("GOTCHA:", crate::brain::Kind::Gotcha),
+        ("GLOSSARY:", crate::brain::Kind::Glossary),
+    ];
+    let (kind, body) = prefixes
+        .iter()
+        .find(|(prefix, _)| {
+            trimmed.len() >= prefix.len() && trimmed[..prefix.len()].eq_ignore_ascii_case(prefix)
+        })
+        .map(|(prefix, kind)| (*kind, trimmed[prefix.len()..].trim().to_string()))
+        // No recognised prefix is not a parse failure — an agent that
+        // answers plainly still gets recorded, filed under the kind the
+        // module doc already calls the most valuable one when nothing more
+        // specific was said.
+        .unwrap_or((crate::brain::Kind::Gotcha, trimmed.to_string()));
+
+    if body.is_empty() {
+        return None;
+    }
+
+    let body = if body.chars().count() > REFLECT_MAX_CHARS {
+        let mut truncated: String = body.chars().take(REFLECT_MAX_CHARS).collect();
+        truncated.push('…');
+        truncated
+    } else {
+        body
+    };
+
+    Some((kind, body))
+}
+
+/// Send an instruction to the agent, as if typed.
+///
+/// Sent through the session so it lands in the log as `PtyInput`, which is
+/// what keeps the record honest: a replay shows what the autopilot said,
+/// indistinguishable in kind from what a person would have said, because it
+/// occupies exactly the same seat. The typing itself — paced chunks, then the
+/// submit key as its own write after a pause — is shared with voice dictation
+/// (§54); see `session::typing` for why both halves are the way they are.
+fn send(session: &LiveSession, text: &str) -> Result<(), ()> {
+    crate::session::typing::type_text(session, text)?;
+    crate::session::typing::submit(session)
 }
 
 fn finish(
@@ -448,7 +654,6 @@ pub use plan::reason;
 mod tests {
     use super::*;
     use crate::session::log::SessionLog;
-    use crate::providers::conversation::Role;
 
     fn write_items(dir: &std::path::Path, items: &[ConversationItem]) {
         let mut log = SessionLog::open(dir).unwrap();
@@ -503,44 +708,9 @@ mod tests {
         assert!(!ended);
     }
 
-    /// The instruction is one line: a multi-line one typed into a terminal
-    /// submits on the first newline, handing the agent a fragment and leaving
-    /// the rest sitting as a second prompt.
-    #[test]
-    fn an_instruction_is_flattened_to_one_line() {
-        let text = "first line\nsecond line\r\nthird";
-        let flattened = text.replace('\n', " ").replace('\r', " ");
-        assert!(!flattened.contains('\n'));
-        assert!(!flattened.contains('\r'));
-        assert!(flattened.starts_with("first line second line"));
-    }
-
-    /// Long instructions go out in pieces.
-    ///
-    /// One large write loses characters to the agent CLI's line editor, which
-    /// re-renders on every keystroke. Observed in a real run as "so tere is no".
-    #[test]
-    fn a_long_instruction_is_written_in_pieces_that_survive() {
-        let long = "x".repeat(500);
-        let chunks: Vec<_> = long.as_bytes().chunks(48).collect();
-        assert!(chunks.len() > 1, "a long line must not go out in one write");
-        // The chunking itself loses nothing.
-        assert_eq!(chunks.concat(), long.as_bytes());
-    }
-
-    /// The submit key is a separate write, after a pause.
-    ///
-    /// Appending it to the text left the instruction unsent in the prompt: the
-    /// editor was still catching up and swallowed the carriage return. On
-    /// screen it looked completely correct, which is what made it worth a test.
-    #[test]
-    fn the_submit_key_gets_its_own_write_and_a_pause() {
-        assert!(
-            SUBMIT_PAUSE >= Duration::from_millis(200),
-            "the editor needs time to settle before the return arrives"
-        );
-        assert!(TYPING_PACE > Duration::ZERO, "typing must be paced");
-    }
+    // The typing itself — flattening, chunking, the separate paced submit —
+    // lives in `session::typing` and is tested there against a real PTY (§54
+    // needs the same path for voice dictation), not duplicated here.
 
     #[test]
     fn stopping_a_run_does_not_end_the_session() {
@@ -575,5 +745,151 @@ mod tests {
 
         pilots.remove("s1");
         assert!(pilots.get("s1").is_none());
+    }
+
+    /// A straggler frame from the just-finished work turn — written after
+    /// `cursor` was captured but before the reflection question is asked —
+    /// must not be read back as part of the answer.
+    ///
+    /// This is the same risk `SETTLE` exists for one turn earlier: a turn's
+    /// last frames can still be arriving when `TurnEnded` is seen. Without
+    /// re-baselining right before `send()`, that straggler text would be
+    /// folded into the recorded knowledge, opening every agent-written entry
+    /// with a restatement of the task just finished — the exact failure mode
+    /// this feature exists to avoid.
+    #[test]
+    fn a_stray_frame_from_the_finished_turn_never_reaches_the_reflection() {
+        let dir = tempfile::tempdir().unwrap();
+        write_items(
+            dir.path(),
+            &[
+                ConversationItem::Message {
+                    role: Role::Assistant,
+                    text: "finished the task".into(),
+                    ts_ms: 1,
+                    usage: None,
+                },
+                ConversationItem::TurnEnded {
+                    reason: "end_turn".into(),
+                    ts_ms: 2,
+                },
+            ],
+        );
+        let (_, cursor) = poll_for_turn_end(dir.path(), 0).unwrap();
+
+        // Still part of the work turn's own flush, landing after the cursor
+        // above was captured but before reflection ever runs.
+        write_items(
+            dir.path(),
+            &[ConversationItem::Message {
+                role: Role::Assistant,
+                text: "(late flush from the finished turn)".into(),
+                ts_ms: 3,
+                usage: None,
+            }],
+        );
+
+        let baseline = drain_to_end(dir.path(), cursor);
+
+        write_items(
+            dir.path(),
+            &[
+                ConversationItem::Message {
+                    role: Role::Assistant,
+                    text: "GOTCHA: the seed depends on insertion order.".into(),
+                    ts_ms: 4,
+                    usage: None,
+                },
+                ConversationItem::TurnEnded {
+                    reason: "end_turn".into(),
+                    ts_ms: 5,
+                },
+            ],
+        );
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let reply = await_reflection(
+            dir.path(),
+            baseline,
+            Instant::now() + Duration::from_secs(5),
+            &stop,
+            &stop,
+        )
+        .expect("a reply was written");
+
+        assert_eq!(reply, "GOTCHA: the seed depends on insertion order.");
+        assert!(!reply.contains("late flush"));
+    }
+
+    #[test]
+    fn a_stopped_run_does_not_wait_for_a_reflection_answer() {
+        let dir = tempfile::tempdir().unwrap();
+        let stop = Arc::new(AtomicBool::new(true));
+        let never = Arc::new(AtomicBool::new(false));
+        let reply = await_reflection(
+            dir.path(),
+            0,
+            Instant::now() + Duration::from_secs(30),
+            &stop,
+            &never,
+        );
+        assert!(reply.is_none(), "a stopped run must not wait on an answer");
+    }
+
+    #[test]
+    fn the_sentinel_records_nothing() {
+        assert!(interpret_reflection("NOTHING TO RECORD").is_none());
+        assert!(interpret_reflection("  nothing to record ").is_none());
+        assert!(interpret_reflection("Honestly, nothing to record here.").is_none());
+    }
+
+    #[test]
+    fn an_empty_reply_records_nothing() {
+        assert!(interpret_reflection("").is_none());
+        assert!(interpret_reflection("   ").is_none());
+    }
+
+    #[test]
+    fn a_recognised_prefix_selects_its_kind() {
+        let (kind, body) =
+            interpret_reflection("GOTCHA: the port is hardcoded to 4173.").unwrap();
+        assert_eq!(kind, crate::brain::Kind::Gotcha);
+        assert_eq!(body, "the port is hardcoded to 4173.");
+
+        let (kind, _) =
+            interpret_reflection("convention: tests live beside the code.").unwrap();
+        assert_eq!(kind, crate::brain::Kind::Convention);
+
+        let (kind, _) = interpret_reflection("WHAT: this is a CLI, not a library.").unwrap();
+        assert_eq!(kind, crate::brain::Kind::What);
+
+        let (kind, _) =
+            interpret_reflection("GLOSSARY: a \"run\" means one CI job.").unwrap();
+        assert_eq!(kind, crate::brain::Kind::Glossary);
+    }
+
+    /// A plain answer with no prefix is still recorded rather than discarded
+    /// — the model missing the formatting hint is not the same as having
+    /// nothing to say.
+    #[test]
+    fn a_reply_with_no_prefix_defaults_to_gotcha() {
+        let (kind, body) =
+            interpret_reflection("the CI runner is pinned to an old Node.").unwrap();
+        assert_eq!(kind, crate::brain::Kind::Gotcha);
+        assert_eq!(body, "the CI runner is pinned to an old Node.");
+    }
+
+    #[test]
+    fn an_overlong_reply_is_truncated_not_dropped() {
+        let long = "x".repeat(REFLECT_MAX_CHARS + 50);
+        let (_, body) = interpret_reflection(&format!("GOTCHA: {long}")).unwrap();
+        assert!(body.chars().count() <= REFLECT_MAX_CHARS + 1, "the ellipsis adds one char");
+        assert!(body.ends_with('…'));
+    }
+
+    #[test]
+    fn the_reflection_prompt_forbids_touching_anything() {
+        assert!(REFLECT_PROMPT.contains("Do not run anything or change any file"));
+        assert!(REFLECT_PROMPT.contains(REFLECT_SENTINEL));
     }
 }

@@ -10,6 +10,22 @@ export const ptBR: Record<MessageKey, string> = {
   "app.name": "J.A.R.V.I.S.",
   "app.tagline": "O centro de controle do desenvolvimento com agentes de IA.",
 
+  // ---- Onboarding (§13), exibido uma única vez -------------------------------
+  "onboarding.intro": "Aqui está o que o J.A.R.V.I.S. encontrou nesta máquina.",
+  "onboarding.continue": "Continuar sem abrir um projeto",
+
+  // ---- Ditado por voz (§54) --------------------------------------------------
+  "voice.start": "Ditar no terminal",
+  "voice.recording": "Ouvindo — clique para parar",
+  "voice.transcribing": "Transcrevendo…",
+  "voice.error": "O ditado por voz falhou",
+  "voice.downloadNeeded": "Baixe o ditado por voz para usá-lo",
+  "voice.download.title": "Ditado por voz",
+  "voice.download.body": "Baixa um modelo de reconhecimento de fala local (cerca de 490 MB, uma vez). Sua voz nunca sai desta máquina.",
+  "voice.download.action": "Baixar",
+  "voice.download.verifying": "Verificando…",
+  "voice.download.retry": "Tentar novamente",
+
   "nav.missionControl": "Central de Missões",
   "nav.projects": "Projetos",
   "nav.missions": "Missões",
@@ -477,8 +493,20 @@ export const ptBR: Record<MessageKey, string> = {
   "activity.kind.git.committed": "Fez um commit",
   "activity.kind.guardrail.denied": "Proteção recusou uma operação",
   "activity.kind.guardrail.allowed": "Proteção aprovou uma operação",
+  "activity.kind.brain.agentRecorded": "Um agente registrou algo que aprendeu",
 
   "evidence.guardrailRefused": "Não verificado: uma proteção recusou {operation}",
+  "evidence.command.passed": "`{command}` saiu com código {exitCode} em {seconds}s",
+  "evidence.command.failed": "`{command}` saiu com código {exitCode}, esperado {expectExitCode}",
+  "evidence.command.timedOut": "`{command}` não terminou em {seconds}s",
+  "evidence.command.notRun": "Não foi possível executar `{command}`",
+  "evidence.file.exists": "{path} existe",
+  "evidence.file.missing": "{path} não existe",
+  "evidence.file.contains": "{path} contém o texto esperado",
+  "evidence.file.doesNotContain": "{path} não contém o texto esperado",
+  "evidence.file.unreadable": "Não foi possível ler {path}",
+  "evidence.manual.needsConfirmation": "Precisa que uma pessoa confirme",
+  "evidence.manual.confirmedBy": "Confirmado por {who}",
 
 
   "autopilot.title": "Executar sem supervisão",

@@ -471,8 +471,9 @@ fn run_and_record(
     db.with(|conn| {
         conn.execute(
             "INSERT INTO evidence
-                 (id, mission_id, criterion_id, session_id, kind, ok, summary, detail, ts_ms)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                 (id, mission_id, criterion_id, session_id, kind, ok, summary,
+                  code, code_args, detail, ts_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 record.id,
                 record.mission_id,
@@ -481,6 +482,8 @@ fn run_and_record(
                 record.kind.as_str(),
                 record.ok as i64,
                 record.summary,
+                record.code,
+                record.code_args,
                 record.detail,
                 record.ts_ms
             ],
@@ -685,13 +688,15 @@ pub fn confirm_manual(db: &Database, criterion_id: &str, by: String) -> Result<(
         )?;
         conn.execute(
             "INSERT INTO evidence
-                 (id, mission_id, criterion_id, kind, ok, summary, ts_ms)
-             VALUES (?1, ?2, ?3, 'manual', 1, ?4, ?5)",
+                 (id, mission_id, criterion_id, kind, ok, summary, code, code_args, ts_ms)
+             VALUES (?1, ?2, ?3, 'manual', 1, ?4, ?5, ?6, ?7)",
             params![
                 uuid::Uuid::now_v7().to_string(),
                 mission_id,
                 id,
                 format!("Confirmed by {by}"),
+                "evidence.manual.confirmedBy",
+                serde_json::to_string(&serde_json::json!({ "who": by })).ok(),
                 now_ms()
             ],
         )?;
@@ -942,6 +947,14 @@ mod tests {
         assert_eq!(after_fail.criteria[0].status, CriterionStatus::Failed);
         assert_eq!(after_fail.evidence.len(), 1);
         assert!(!after_fail.evidence[0].ok);
+        // `code`/`code_args` are set on the `Outcome` in `verify.rs`, but the
+        // INSERT this row goes through is a separate place they can be
+        // silently dropped again (as `run_and_record`'s once did) — round
+        // trip through the real database, not just the in-memory struct.
+        assert_eq!(
+            after_fail.evidence[0].code.as_deref(),
+            Some("evidence.file.missing")
+        );
         assert!(set_status(&f.db, &mission.id, MissionStatus::Completed, None).is_err());
 
         // Do the work for real, then verify again.
@@ -951,6 +964,10 @@ mod tests {
         let after_pass = verify_mission(&f.db, &mission.id).unwrap();
         assert_eq!(after_pass.criteria[0].status, CriterionStatus::Verified);
         assert!(after_pass.evidence.iter().any(|e| e.ok));
+        assert!(after_pass
+            .evidence
+            .iter()
+            .any(|e| e.code.as_deref() == Some("evidence.file.exists")));
 
         let completed = set_status(&f.db, &mission.id, MissionStatus::Completed, None).unwrap();
         assert_eq!(completed.status, MissionStatus::Completed);
@@ -1060,7 +1077,18 @@ mod tests {
         confirm_manual(&f.db, &after.criteria[0].id, "Alan".into()).unwrap();
         let confirmed = detail(&f.db, &mission.id).unwrap();
         assert_eq!(confirmed.criteria[0].status, CriterionStatus::Verified);
-        assert!(confirmed.evidence.iter().any(|e| e.summary.contains("Alan")));
+        let evidence = confirmed
+            .evidence
+            .iter()
+            .find(|e| e.summary.contains("Alan"))
+            .expect("confirmation evidence");
+        // Pinned so the INSERT that writes this row cannot silently drop the
+        // two columns again — the struct being right is not enough (§65).
+        assert_eq!(evidence.code.as_deref(), Some("evidence.manual.confirmedBy"));
+        assert_eq!(
+            evidence.code_args.as_deref().map(|raw| serde_json::from_str::<serde_json::Value>(raw).unwrap()["who"].clone()),
+            Some(serde_json::json!("Alan"))
+        );
         assert!(set_status(&f.db, &mission.id, MissionStatus::Completed, None).is_ok());
     }
 

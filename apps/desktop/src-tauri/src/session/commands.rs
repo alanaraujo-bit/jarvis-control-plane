@@ -70,7 +70,26 @@ impl SessionKind {
 fn default_shell() -> (String, Vec<String>) {
     for candidate in ["pwsh.exe", "powershell.exe"] {
         if which(candidate).is_some() {
-            return (candidate.to_string(), vec!["-NoLogo".into()]);
+            // A real session log showed literal BEL (0x07) bytes landing
+            // right where dictated text (§54) got typed in — PSReadLine's
+            // default BellStyle is Audible and writes one for things as
+            // mundane as redrawing a long inline suggestion. xterm.js (the
+            // terminal this app renders with) has no bell playback in v5, so
+            // whatever plays the irritating sound the user heard is
+            // downstream of what we read out of the pty, not something this
+            // app's own rendering does — the byte itself is the one thing
+            // confirmed, so it's the one thing worth suppressing at the
+            // source. This only touches sessions jarvis spawns, not the
+            // user's own $PROFILE.
+            return (
+                candidate.to_string(),
+                vec![
+                    "-NoLogo".into(),
+                    "-NoExit".into(),
+                    "-Command".into(),
+                    "Set-PSReadLineOption -BellStyle None".into(),
+                ],
+            );
         }
     }
     (

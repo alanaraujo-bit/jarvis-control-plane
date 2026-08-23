@@ -18,6 +18,10 @@ export function isTauri(): boolean {
 
 /** Fixtures used only when rendering outside the desktop shell. */
 const BROWSER_FIXTURES: Record<string, unknown> = {
+  // Previewing other surfaces should not land on the welcome screen every
+  // time; flip this to `false` locally to preview onboarding itself.
+  onboarding_status: true,
+  voice_model_status: { present: true },
   scan_environment: {
     scannedAt: new Date().toISOString(),
     ready: true,

@@ -9,6 +9,7 @@ pub mod event;
 pub mod log;
 pub mod manager;
 pub mod transcript;
+pub mod typing;
 
 pub use event::{EventKind, Lifecycle, SessionState};
 pub use log::{SessionLog, SessionLogReader};

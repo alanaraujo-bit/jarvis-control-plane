@@ -14,12 +14,14 @@ mod files;
 mod git;
 mod guardrail;
 mod mission;
+mod onboarding;
 mod project;
 mod providers;
 mod pty;
 mod review;
 mod search;
 mod session;
+mod voice;
 mod window;
 mod worktrees;
 
@@ -50,6 +52,8 @@ pub struct AppState {
     pub sessions: SessionManager,
     /// Missions being driven by an agent right now (§32).
     pub autopilots: autopilot::driver::Autopilots,
+    /// The one voice recording that can be in progress at a time (§54).
+    pub voice: voice::VoiceState,
     /// Root for session logs and other bulk local data.
     pub data_dir: PathBuf,
 }
@@ -101,6 +105,7 @@ pub fn run() {
                 data_dir,
                 sessions: SessionManager::default(),
                 autopilots: autopilot::driver::Autopilots::default(),
+                voice: voice::VoiceState::default(),
             });
             Ok(())
         })
@@ -111,6 +116,8 @@ pub fn run() {
             window::window_is_maximized,
             window::window_ready,
             envscan::scan_environment,
+            onboarding::onboarding_status,
+            onboarding::onboarding_mark_seen,
             project::list_projects,
             project::open_project,
             project::archive_project,
@@ -167,6 +174,11 @@ pub fn run() {
             autopilot::commands::autopilot_start,
             autopilot::commands::autopilot_stop,
             search::global_search,
+            voice::voice_model_status,
+            voice::voice_download_model,
+            voice::voice_start_recording,
+            voice::voice_cancel_recording,
+            voice::voice_stop_recording,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");

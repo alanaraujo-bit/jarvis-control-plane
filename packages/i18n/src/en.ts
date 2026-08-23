@@ -8,6 +8,22 @@ export const en = {
   "app.name": "J.A.R.V.I.S.",
   "app.tagline": "The control plane for AI-agent development.",
 
+  // ---- Onboarding (§13), shown once ------------------------------------------
+  "onboarding.intro": "Here's what J.A.R.V.I.S. found on this machine.",
+  "onboarding.continue": "Continue without opening a project",
+
+  // ---- Voice dictation (§54) ------------------------------------------------
+  "voice.start": "Dictate into the terminal",
+  "voice.recording": "Listening — click to stop",
+  "voice.transcribing": "Transcribing…",
+  "voice.error": "Voice dictation failed",
+  "voice.downloadNeeded": "Download voice dictation to use it",
+  "voice.download.title": "Voice dictation",
+  "voice.download.body": "Downloads a local speech-to-text model (about 490 MB, once). Your voice never leaves this machine.",
+  "voice.download.action": "Download",
+  "voice.download.verifying": "Verifying…",
+  "voice.download.retry": "Retry",
+
   // ---- Global navigation (§87) --------------------------------------------
   "nav.missionControl": "Mission Control",
   "nav.projects": "Projects",
@@ -508,9 +524,21 @@ export const en = {
   "activity.kind.git.committed": "Committed",
   "activity.kind.guardrail.denied": "Guardrail refused an operation",
   "activity.kind.guardrail.allowed": "Guardrail approved an operation",
+  "activity.kind.brain.agentRecorded": "An agent recorded something it learned",
 
   // ---- Evidence, worded here rather than in Rust (§65) ----------------------
   "evidence.guardrailRefused": "Not checked: a guardrail refused {operation}",
+  "evidence.command.passed": "`{command}` exited {exitCode} in {seconds}s",
+  "evidence.command.failed": "`{command}` exited {exitCode}, expected {expectExitCode}",
+  "evidence.command.timedOut": "`{command}` did not finish within {seconds}s",
+  "evidence.command.notRun": "`{command}` could not be run",
+  "evidence.file.exists": "{path} exists",
+  "evidence.file.missing": "{path} does not exist",
+  "evidence.file.contains": "{path} contains the expected text",
+  "evidence.file.doesNotContain": "{path} does not contain the expected text",
+  "evidence.file.unreadable": "{path} could not be read",
+  "evidence.manual.needsConfirmation": "Needs a person to confirm",
+  "evidence.manual.confirmedBy": "Confirmed by {who}",
 
 
   // ---- Autopilot (§32) -----------------------------------------------------

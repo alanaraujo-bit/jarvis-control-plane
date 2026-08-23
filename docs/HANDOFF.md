@@ -74,7 +74,9 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**349 tests** (340 Rust, 9 i18n) · all green.
+**379 tests** (370 Rust — 365 run, 5 intentionally `#[ignore]`d because they
+need a real `claude` CLI or other environment this machine cannot guarantee —
+9 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -107,6 +109,9 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Project history (§39)** | the project's own story, and what the record shows — derived, never stored (D22) |
 | **Notes (§40)** | working memory, never sent to an agent; promotable into knowledge |
 | **Global Search (§51)** | knowledge, notes, missions, activity and conversation content, across **every** project, from one shortcut (D25/D26) |
+| **An agent writes to its own Brain (§36–§38)** | once, right after an Unattended mission completes, asked one narrow question — never a manually completed mission (D27) |
+| **Onboarding (§13)** | shown once per install, reuses the environment scan and `openFolder` as-is, gates the window reveal so there is no flash of the wrong screen |
+| **Voice dictation (§54)** | fully local speech-to-text, primed with the project's own vocabulary, typed into the prompt — never auto-submitted (D29) |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -174,9 +179,120 @@ tab it had never started, with the model name and token counts still shown,
 and closing that tab called nothing on the backend because nothing had ever
 been attached.
 
+*An agent writes to its own Brain (§36–§38, D27), in the installed app.* A
+scratch project's README stated one fact a reader would not get from the code
+alone — the dev server listens on 4173 because something unrelated on the
+machine already holds port 3000. Created a mission with a single trivial
+criterion, set it Unattended, and ran it against a real Claude Code agent:
+the mission completed, and the terminal showed the reflection question arrive
+as the agent's very next input rather than folded into the finished turn —
+confirming a real bug (item 30 below) actually stays fixed outside its unit
+test. The agent answered `GOTCHA: The dev server runs on port 4173, not the
+conventional 3000, because port 3000 on this machine is already held by an
+unrelated port scanner — anyone expecting localhost:3000 will find nothing
+there.` The Brain's Gotcha tab showed exactly that sentence under **Um
+agente registrou isto** in amber, the briefed-size counter moved, and
+Activity recorded it in pt-BR right after the mission's own completion.
+Nothing from `done.txt`'s own "Work confirmed complete" line leaked into the
+recorded knowledge. A manually completed mission is never asked — see D27 for
+why that gap is deliberate.
+
+*Evidence summaries, fully localised (§65), in the installed app.* The
+guardrail refusal was the one sentence J.A.R.V.I.S. authors that already
+carried a `code`; the other ten — a command's pass, fail, timeout and
+spawn-failure, a file existing, missing, containing text or not, or being
+unreadable, and a manual criterion's two states — did not. Gave `Outcome` the
+same `code`/`code_args` fields and found, before ever running it, that the
+`INSERT` in `run_and_record` named only the original columns: every code
+would have been computed and then silently dropped on the way into the
+database, the same shape as item 17 below. Fixed both that `INSERT` and
+`confirm_manual`'s own copy of the same gap. Ran a Command criterion built to
+fail and read `` `exit 1` saiu com código 1, esperado 0 `` in pt-BR with both
+exit codes substituted; confirmed a Manual criterion and read `Confirmado por
+you`.
+
+*Onboarding (§13), in a real build.* Deleted `jarvis.db` to simulate a fresh
+install and launched: the welcome screen showed, the environment scan
+rendered inside it exactly as it does in Settings, and clicking **Abrir
+pasta** opened a scratch project and landed *inside its workspace* — not on
+Mission Control. That first attempt is why item 33 below exists: the wiring
+that got there the first time silently failed. Reopening the same project
+later from the Projects list, and reopening the app a second time after
+onboarding had already completed, both skipped straight past the welcome
+screen with no flash of it. Also caught mid-verification and refused before
+it went anywhere: the folder picker's own remembered last-used location was
+one of Alan's real projects (Casco) — cancelled without selecting it, never
+touched.
+
+*Voice dictation (§54, D29), in the installed app.* Downloaded the real
+~490MB model from Hugging Face through the app's own UI and watched the
+progress bar move in real percentages, then verified — hash mismatch, not
+assumed — that the file that landed on disk matches the pinned SHA-256.
+Clicking the mic with no microphone on this machine produced an honest,
+immediate "no microphone is available" rather than a hang or a silent
+no-op. With a temporary, fully-reverted bypass feeding the pipeline one
+second of silence in place of a live device, ran the whole thing for
+real: capture → resample → WAV → the bundled `whisper-cli.exe` → a real
+model inference → the transcript typed into the actual terminal prompt.
+whisper.cpp hallucinated `[MÚSICA DE FUNDO]` on the silence — in
+Portuguese, confirming the locale-to-language mapping actually reaches the
+binary — and it sat unsubmitted after the shell prompt, exactly where a
+person's own typing would land.
+
+*Voice dictation, against a real headset (§54, D29), in the installed
+app.* Alan connected a real microphone and dictated live — the feature
+worked and a real sentence landed correctly, unsubmitted, in the terminal
+prompt. Two problems came back from that real test, both fixed and
+re-verified, not just patched and assumed:
+
+1. **An irritating high-pitched sound played every time a recording
+   stopped**, and nothing in this feature intentionally plays audio. Found
+   by inspecting a real session log byte-for-byte: literal BEL (0x07) bytes
+   sitting in the PTY output, right where typed text landed. The source is
+   PSReadLine's default `BellStyle: Audible`, which writes a BEL for
+   ordinary line-editor redraws — nothing to do with dictation specifically,
+   it would fire from a person's own typing too. Fixed by setting
+   `Set-PSReadLineOption -BellStyle None` when a PowerShell session starts
+   (`session::commands::default_shell`) — verified by launching the exact
+   `-NoLogo -NoExit -Command "..."` args the app uses and reading back
+   `(Get-PSReadLineOption).BellStyle` as `None`, then confirming no bare BEL
+   appears in a fresh session's log after typing through it.
+2. **Dictated Portuguese text came out garbled specifically inside Claude
+   Code's own terminal**, while the identical text typed into a plain shell
+   arrived intact. Root cause: `session::typing::type_text`'s chunker split
+   text by a fixed 48-byte offset with no regard for UTF-8 character
+   boundaries, so an accented letter (ção, informação, ...) landing on a
+   chunk boundary got sliced across two separate writes. A plain shell's
+   line buffer often reassembles that; Claude Code's TUI decodes each PTY
+   read independently and renders the split character as replacement
+   garbage instead. Fixed by walking every chunk boundary back to the
+   nearest real char boundary. Proved against the actual regression, not
+   just the isolated logic: a real-PTY test
+   (`a_multibyte_sentence_survives_claude_codes_own_tui`, `#[ignore]`d
+   because it spawns the real `claude` CLI) drives an actual Claude Code
+   session through its first-run trust prompt and types "testando
+   informação e configuração" into it — the raw captured PTY bytes show the
+   accented words rendered perfectly.
+
+Also implemented in response to the same conversation: soft, two-note start
+and finish chimes (`surfaces/voice/sound.ts`, pure Web Audio sine tones,
+gain ramped rather than switched to avoid a click), synthesized rather than
+shipped as audio files because this app's CSP has no `media-src`
+allowance. The start chime is awaited before the microphone opens, so a
+recording never captures its own cue. **Not yet re-verified by ear against
+this latest rebuild** — Alan asked to move that verification, plus a much
+bigger ask (real-time streaming transcription, see next steps), to a fresh
+conversation. Read `docs/DECISIONS.md`'s voice dictation entry for the full
+before/after on both fixes.
+
+A real human voice through a real microphone was verified once (see
+above); a **repeat** pass confirming the sound fixes and testing the
+now-fixed Claude Code path with real speech has not happened yet — see next
+steps.
+
 ### Not built — deliberately absent, not stubbed
 
-Preview (§46), onboarding (§13), mobile PWA (§55), cloud (§59), voice (§54).
+Preview (§46), mobile PWA (§55), cloud (§59).
 
 Also absent by choice: **push and pull**. Review commits but does not talk to a
 remote — see section 7.
@@ -404,6 +520,72 @@ Every one of these is real and already cost time.
     `docs/BLOCKERS.md` B5). Use `--no-bundle` to verify a change against the
     real app; a bare `cargo build` is not that.
 
+32. **A struct carrying the right fields does not mean the row on disk has
+    them.** Evidence's `code`/`code_args` (§65) reached `Outcome` and
+    `evidence_from` cleanly, and would still have never once reached the
+    database: `run_and_record`'s raw `INSERT` named only the columns it was
+    written with before those fields existed, so every localisation code
+    would have been computed correctly and silently dropped a function call
+    later. `confirm_manual` had the identical gap in its own `INSERT`. Same
+    lesson as item 17, one call site further from where the value is
+    computed — checked before running anything, by reading the SQL rather
+    than trusting the type, then confirmed on screen in pt-BR.
+
+33. **A `useCallback` memoized on a list closes over the render it was created
+    in, not the render that runs it.** `openProjectById(project.id)` looked up
+    the id in `projects` — but the click handler holding that closure had
+    already fired before `openFolder()`'s own `refresh()` updated the store, so
+    the closure it ran still had the *old* (often empty) `projects` array
+    baked in. The lookup returned `undefined`, and the failure was silent: no
+    error, just a fall-through to whatever the surface renders by default —
+    Mission Control instead of the project just opened. JS does not hot-swap a
+    running async closure for a fresher one after a re-render. Found by
+    opening a first project from the new Onboarding screen and landing on
+    Mission Control instead. Every caller that already holds the `Project`
+    object — `openFolder()`'s return value, a row click, `Projects.tsx`'s own
+    `pick()` — now calls `openProjectDirect(project)` and skips the lookup
+    entirely; `openProjectById(id)` still exists for the callers (Missions,
+    Global Search) that genuinely only have an id, and is not safe to use for
+    a project that may not be in the store yet.
+
+34. **`whisper-rs` (whisper.cpp linked as an FFI library) is currently broken
+    on Windows/MSVC.** Its bindgen step emits *glibc*-specific types
+    (`_G_fpos_t`, `_IO_FILE`) for an MSVC target regardless of `--target` —
+    confirmed by hitting the identical `attempt to compute N - M, which would
+    overflow` compile error on two crate versions (0.14.4 and 0.16.0), not a
+    local misconfiguration. `WHISPER_DONT_GENERATE_BINDINGS=1` does not avoid
+    it either. Voice dictation (§54, D29) works around this entirely by
+    spawning the official prebuilt `whisper-cli.exe` as a subprocess instead
+    of linking the library — do not re-attempt the FFI path without checking
+    whether this upstream issue has since been fixed.
+
+35. **This development machine has no microphone.** `cpal`'s
+    `default_input_device()` returns `None` here, and Device Manager agrees —
+    it is not a driver or a privacy-setting problem, the hardware is simply
+    absent. **Resolved for a first pass**: Alan connected a real headset and
+    dictation worked. It surfaced two real bugs (PSReadLine's bell, and
+    UTF-8 chunk-splitting — see item 36), both fixed and proven. What is
+    still unverified is a repeat pass with the fixes in place, plus the new
+    sound cues, by ear, on a real microphone — see section 7.
+
+36. **Chunking a string by a fixed byte count is not safe for anything
+    outside ASCII.** `session::typing::type_text` split dictated text into
+    48-byte pieces for pacing (item 11 above), and a raw byte offset can
+    land inside a multi-byte UTF-8 character — an accented letter (ção,
+    informação, ...) sliced across two separate writes 30ms apart. A plain
+    shell's line buffer tends to reassemble that silently; Claude Code's own
+    TUI decodes each PTY read independently and renders the split character
+    as garbage instead — which is exactly the shape of a real bug report
+    ("dictation works in a plain terminal, breaks specifically inside Claude
+    Code"). `char_boundary_chunks` now walks a chunk boundary back to the
+    nearest real character boundary before writing. Proved against the
+    actual failure, not just the isolated function: a real-PTY test spawns
+    the genuine `claude` CLI, clears its first-run trust prompt, types an
+    accented Portuguese sentence, and reads the captured bytes back —
+    `a_multibyte_sentence_survives_claude_codes_own_tui` in
+    `session/typing.rs`, `#[ignore]`d because `claude` is not guaranteed to
+    be on every machine that runs the test suite.
+
 ## 6. Commands
 
 ```bash
@@ -461,29 +643,93 @@ new project rather than assuming the existing entry is live.
 Driving the folder picker: click **Abrir pasta**, click the `Pasta:` field, then
 `^a` and `{DEL}` **before** typing the path. The field pre-fills with whatever is
 selected in the listing, and typing over it silently produces
-`testsC:\Users\...` and an "invalid folder name" box.
+`testsC:\Users\...` and an "invalid folder name" box. The picker also opens on
+whatever folder was browsed last — **screenshot it before typing anything**;
+it has landed on one of Alan's real project folders more than once, which the
+scratch-folder rule (below) exists to keep you out of.
+
+Onboarding (§13) shows once per install, gated on a `settings` row keyed
+`onboarding.seen`. To see it again — after a real change, not just to look —
+close the app and delete the whole db file, there is no in-app reset and no
+`sqlite3` on this machine to `UPDATE` a single row:
+
+```powershell
+Remove-Item "$env:APPDATA\dev.jarvis.desktop\jarvis.db*" -Force
+```
+
+(The installed app's data directory is `%LOCALAPPDATA%\J.A.R.V.I.S`, not
+`%APPDATA%\dev.jarvis.desktop` — that path is the dev build's own app-data dir,
+named after the Tauri identifier. Confirm which binary you're resetting for.)
+
+Voice dictation (§54) needs `resources/whisper/whisper-cli.exe` and its DLLs
+on disk — `pnpm tauri build --no-bundle` copies them into
+`target/release/whisper/` automatically (verified: `--no-bundle` does copy
+declared `bundle.resources`, not just full `tauri build`). The model itself
+downloads through the app's own UI on first use; it is **not** checked into
+the repo. Chasing the FFI path (item 34 above) installed LLVM, CMake and
+Ninja on this machine via `winget` — none of them are needed by the shipped
+architecture, so there was nothing to revert, but a future session should
+know they are here and why.
+
+`whisper.cpp` release `b4938`'s Windows x64 zip (`whisper-bin-x64.zip`, at
+`https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-x64.zip`,
+confirmed via the GitHub releases API) also ships `whisper-server.exe`,
+`whisper-stream.exe` and their own DLLs alongside `whisper-cli.exe` — none
+of those are in `resources/whisper/` yet. `whisper-server.exe` is what
+real-time streaming (section 7, item 1) would spawn instead of `-cli`;
+`whisper-stream.exe` needs SDL2 for its own microphone capture and is not
+a fit for this codebase, which already owns capture via `cpal`.
 
 ---
 
 ## 7. Suggested next steps, in priority order
 
 **M6 and M7 are both finished.** Files, editor, Review, Git, worktrees, the
-memory layer and Global Search are all built and verified against real data
-and a real agent.
+memory layer, Global Search, an agent writing to its own Brain, Onboarding
+and voice dictation are all built and verified against real data and a real
+agent. Voice dictation has now been tested with a real microphone once (see
+section 4) and two real bugs it surfaced are fixed (items 35–36 in section
+5) — what is open is a **second** live pass confirming those fixes by ear,
+and a substantial feature request from that same session:
 
-1. **Let an agent write to the Brain.** The whole path is in place —
-   `add_knowledge` takes `Source::Agent`, `session_id` and `mission_id`, the
-   surface renders "an agent recorded this" in amber, and no code produces such
-   a row. What is missing is the *moment*: most plausibly at the end of a
-   verified mission, asking the agent what it learned that should outlive the
-   session. Worth thinking about carefully — an agent that writes freely into
-   a project's memory will fill it with restatements of its own last task.
-2. **Onboarding (§13)** — the environment scan already provides its data.
-3. **Finish localising evidence summaries (§65)** — the mechanism exists
-   (`evidence.code` + `code_args`); the command/file summaries still need it.
-4. **The rest of M2** — split panes (§20), scrollback search, image paste (§22).
-   The terminal is the hero surface and these are what it still lacks.
-5. **Global Search does not backfill.** It has found everything said in a
+1. **Real-time streaming transcription (Alan's explicit request,
+   2026-08-23).** Today §54 is push-to-talk: record the whole utterance,
+   stop, transcribe, then type the full result in one go. Alan wants it to
+   work like VS Code / Cursor's own dictation — text appears incrementally
+   *while speaking*, so a person can see it land and optimizes their own
+   pacing around it, then stops the same way (click to stop) as today.
+   Explicitly asked for this to be done to the same premium/elegant bar as
+   the rest of §54, "com animação na transcrição" — some kind of pleasant,
+   considered visual treatment for text arriving live, not a bare text
+   dump. Investigated but not yet built: whisper.cpp's official release
+   (`b4938`, confirmed via the GitHub API) ships `whisper-server.exe`
+   alongside `whisper-cli.exe` — an HTTP server that loads the model once
+   and stays warm, with `/inference` accepting a `prompt` and `language`
+   field per request, which is what makes a request cheap enough to repeat
+   every second or two rather than paying the full model-load cost per
+   utterance the way `whisper-cli` does today. The bundled binary is
+   currently only `whisper-cli.exe` — `whisper-server.exe` and its
+   dependency DLLs are not yet in `resources/whisper/`. Whisper.cpp's own
+   `stream` example needs SDL2 and is not a fit; the server approach (poll
+   a short rolling audio window against the warm server every second or
+   so, and diff/replace the visible text as later windows supersede
+   earlier partial ones) is the shape worth prototyping first. This is a
+   real architecture change — capture needs to feed a rolling buffer
+   instead of accumulating until stop, and the UI needs a live-updating
+   caption surface instead of a single post-hoc type. Budget real design
+   time for the animation Alan asked for; do not ship a bare text swap.
+2. **Re-verify voice dictation's sound cues and both bug fixes, by ear, on
+   a real microphone.** The start/finish chimes (`surfaces/voice/sound.ts`)
+   and the PSReadLine-bell and UTF-8-chunking fixes (items 35–36 in section
+   5) were built and proven mechanically this session, but nobody has
+   listened to the chimes yet, and the fixed build has not been driven
+   through a live headset dictation pass end to end. Do this before or
+   alongside item 1 — it is small and closes a real gap.
+3. **The rest of M2** — split panes (§20), scrollback search, image paste (§22,
+   with a hover preview of the pasted image — reinforced explicitly, make sure
+   it lands with the rest rather than as a bare paste). The terminal is the
+   hero surface and these are what it still lacks.
+3. **Global Search does not backfill.** It has found everything said in a
    session from this build onward, forward-only (D25) — a session recorded
    before today has nothing in `session_events` and simply will not surface in
    the Conversas group, which looks identical to "no match" rather than
@@ -492,6 +738,12 @@ and a real agent.
    out of this pass: it is a migration-time scan over unbounded on-disk data,
    on a machine with dozens of transcripts, and earlier bugs here (rule 9) came
    from exactly that kind of operation running inside a schema migration.
+4. **A manually completed mission is never asked what it learned (D27).**
+   The reflection only fires at the end of an Unattended run, because that is
+   the one place a driven run holds the seat with nobody else in it (D15).
+   Extending it to an attended completion needs an answer to whose seat it
+   is — typing a question into a terminal a person is watching mid-conversation
+   is a different UX problem than this pass solved.
 
 ### Things left on the table, deliberately
 
