@@ -134,6 +134,12 @@ export const en = {
   "files.tooLarge.title": "Too large to open",
   "files.tooLarge.body": "This file is {size}, past the editor's limit of 2 MB.",
 
+  "files.stale":
+    "This file changed on disk after you opened it — an agent may have edited it. Nothing was saved. Reload to take the new version, or save again to overwrite it.",
+  "files.unsaved.title": "Unsaved changes",
+  "files.unsaved.saveAndClose": "Save and close",
+  "files.unsaved.discard": "Close without saving",
+
   // ---- Diff / Review (§43) -------------------------------------------------
   "review.changedFiles": "{count} changed files",
   "review.changedFiles_one": "{count} changed file",

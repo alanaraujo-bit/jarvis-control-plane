@@ -228,11 +228,26 @@ pub enum Unreadable {
     TooLarge,
 }
 
+/// Milliseconds since the epoch for a file's modified time.
+///
+/// The unit the rest of the product uses for time, and the only fact we need
+/// about it: whether it is the same as it was when the file was read.
+fn modified_ms(meta: &std::fs::Metadata) -> Option<i64> {
+    meta.modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_millis() as i64)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileContents {
     pub path: String,
     pub size: u64,
+    /// When the file was last written, as the editor found it. Handed back on
+    /// save so a write can tell whether anything happened in between.
+    pub modified_ms: Option<i64>,
     /// Absent when `unreadable` is set. The product says why rather than
     /// rendering mojibake and calling it a file (§81).
     pub text: Option<String>,
@@ -261,6 +276,7 @@ pub fn read(root: &Path, relative: &str) -> Result<FileContents> {
     let mut contents = FileContents {
         path: relative.to_string(),
         size,
+        modified_ms: modified_ms(&meta),
         text: None,
         unreadable: None,
         trailing_newline: false,
@@ -287,15 +303,55 @@ pub fn read(root: &Path, relative: &str) -> Result<FileContents> {
     Ok(contents)
 }
 
+/// What happened to a save.
+///
+/// A refusal is not an error: it is an answer the interface has to render in
+/// the user's own language (§65), and a serialised error string cannot be
+/// translated. So the outcome is data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum WriteOutcome {
+    Written { modified_ms: Option<i64> },
+    /// The file on disk is not the one that was opened. Nothing was written.
+    Stale { modified_ms: Option<i64> },
+}
+
 /// Write a file back, restoring the line endings and trailing newline it had.
+///
+/// `expected_modified_ms` is the modified time the editor saw when it read the
+/// file. When it is supplied and no longer matches, **nothing is written** and
+/// the caller is told the file is stale.
+///
+/// This matters more here than in an ordinary editor. The whole product exists
+/// so that an agent can be working in one tab while a person reads in another,
+/// which makes "both of us edited this file" the normal case rather than the
+/// exotic one. Overwriting blind would delete an agent's work with no trace
+/// that it ever existed, and the person doing it would have no way to know.
+///
+/// Passing `None` writes regardless. That is how the interface offers to save
+/// anyway, once it has said what happened.
 pub fn write(
     root: &Path,
     relative: &str,
     text: &str,
     crlf: bool,
     trailing_newline: bool,
-) -> Result<()> {
+    expected_modified_ms: Option<i64>,
+) -> Result<WriteOutcome> {
     let path = resolve(root, relative)?;
+
+    if let Some(expected) = expected_modified_ms {
+        // A file that has since been deleted is not stale — writing it back is
+        // exactly what the user is asking for.
+        if let Ok(meta) = std::fs::metadata(&path) {
+            let current = modified_ms(&meta);
+            if current != Some(expected) {
+                return Ok(WriteOutcome::Stale {
+                    modified_ms: current,
+                });
+            }
+        }
+    }
 
     let mut out = text.replace("\r\n", "\n");
     if trailing_newline {
@@ -314,7 +370,11 @@ pub fn write(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| FileError::Io(e.to_string()))?;
     }
-    std::fs::write(&path, out).map_err(|e| FileError::Io(e.to_string()))
+    std::fs::write(&path, out).map_err(|e| FileError::Io(e.to_string()))?;
+
+    Ok(WriteOutcome::Written {
+        modified_ms: std::fs::metadata(&path).ok().as_ref().and_then(modified_ms),
+    })
 }
 
 // ---- Commands ---------------------------------------------------------------
@@ -372,9 +432,17 @@ pub fn write_file(
     text: String,
     crlf: bool,
     trailing_newline: bool,
-) -> Result<()> {
+    expected_modified_ms: Option<i64>,
+) -> Result<WriteOutcome> {
     let root = project_root(&state, &project_id)?;
-    write(&root, &path, &text, crlf, trailing_newline)
+    write(
+        &root,
+        &path,
+        &text,
+        crlf,
+        trailing_newline,
+        expected_modified_ms,
+    )
 }
 
 #[cfg(test)]

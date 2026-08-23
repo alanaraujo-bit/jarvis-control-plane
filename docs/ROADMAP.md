@@ -136,6 +136,16 @@ screenshotted.
   from the same append-only log everything else reads (D2).
 - **Monaco is loaded on demand and ships without its language services** (D17).
   +1.04 MB installed, measured on the real installer rather than estimated.
+- **A save will not silently overwrite an agent.** The editor remembers the
+  file's modified time and the core refuses a write when the file on disk is no
+  longer the one that was opened — nothing is written, the buffer is untouched,
+  and the surface says what happened and what the two ways out are. Saving
+  again overwrites deliberately. This matters here more than in an ordinary
+  editor: the product exists so an agent can be working in one tab while a
+  person reads in another, which makes the conflict the normal case.
+- **Closing a tab with unsaved work asks first.** Closing disposes the model,
+  so the undo history goes with it; a single click must not be able to destroy
+  an edit the dirty dot was advertising.
 
 ### Deliberately not in M6
 - **Git + worktrees (§44/§45).** Review is **read-only**. Staging, discarding

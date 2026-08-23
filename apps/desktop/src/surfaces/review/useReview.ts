@@ -24,8 +24,6 @@ export interface ReviewFile {
   path: string;
   fromPath: string | null;
   kind: ChangeKind;
-  staged: boolean;
-  unstaged: boolean;
   insertions: number;
   deletions: number;
   binary: boolean;

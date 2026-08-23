@@ -119,6 +119,12 @@ export const ptBR: Record<MessageKey, string> = {
   "files.tooLarge.title": "Grande demais para abrir",
   "files.tooLarge.body": "Este arquivo tem {size}, acima do limite de 2 MB do editor.",
 
+  "files.stale":
+    "Este arquivo mudou no disco depois que você o abriu — pode ter sido um agente. Nada foi salvo. Recarregue para ficar com a nova versão, ou salve de novo para sobrescrevê-la.",
+  "files.unsaved.title": "Alterações não salvas",
+  "files.unsaved.saveAndClose": "Salvar e fechar",
+  "files.unsaved.discard": "Fechar sem salvar",
+
   "review.changedFiles": "{count} arquivos alterados",
   "review.changedFiles_one": "{count} arquivo alterado",
   "review.refresh": "Reler a árvore de trabalho",

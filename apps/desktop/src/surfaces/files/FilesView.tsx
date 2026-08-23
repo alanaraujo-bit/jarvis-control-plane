@@ -1,5 +1,6 @@
-import { Suspense, lazy, useCallback, useEffect } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { RotateCcw, Save, X } from "lucide-react";
+import { Popover } from "../../design/Popover";
 import { useT } from "../../app/i18n";
 import { useTheme } from "../../app/theme";
 import { FileTree } from "./FileTree";
@@ -39,6 +40,28 @@ export function FilesView({ projectId }: FilesViewProps) {
 
   const tabs = open ?? [];
   const active = tabs.find((file) => file.path === activePath);
+
+  // Which tab is asking to be closed while it still has unsaved work, and the
+  // button the question is anchored to.
+  const [closing, setClosing] = useState<string | null>(null);
+  const [closeAnchor, setCloseAnchor] = useState<HTMLButtonElement | null>(null);
+
+  /**
+   * Close a tab, but never throw away an edit on a single click.
+   *
+   * The dirty dot exists to say "this is not on disk yet"; closing the tab
+   * disposes the model, so the undo history goes with it and there is no way
+   * back. A popover rather than a modal — this is one tab, not the window
+   * (§84) — and portalled, because the tab strip scrolls and would clip it.
+   */
+  const requestClose = (path: string, dirty: boolean, anchor: HTMLButtonElement) => {
+    if (!dirty) {
+      closeFile(projectId, path);
+      return;
+    }
+    setCloseAnchor(anchor);
+    setClosing(path);
+  };
 
   const saveActive = useCallback(() => {
     if (activePath) void save(projectId, activePath);
@@ -98,7 +121,9 @@ export function FilesView({ projectId }: FilesViewProps) {
                   <button
                     type="button"
                     className="files__tab-close"
-                    onClick={() => closeFile(projectId, file.path)}
+                    onClick={(event) =>
+                      requestClose(file.path, isDirty(file), event.currentTarget)
+                    }
                     aria-label={t("files.close")}
                   >
                     <X size={11} strokeWidth={2.2} aria-hidden="true" />
@@ -133,8 +158,57 @@ export function FilesView({ projectId }: FilesViewProps) {
                   </button>
                 </div>
               )}
+
+              <Popover
+                anchor={closeAnchor}
+                open={closing !== null}
+                onClose={() => setClosing(null)}
+              >
+                <p className="popover__heading">{t("files.unsaved.title")}</p>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="popover__item"
+                  onClick={() => {
+                    const path = closing;
+                    setClosing(null);
+                    if (!path) return;
+                    // Close only once the write has actually landed.
+                    // `save` reports failure by setting an error rather than
+                    // rejecting, so the store is what has to be asked — a
+                    // read-only file would otherwise close and take the edit.
+                    void save(projectId, path).then(() => {
+                      const saved = useFiles
+                        .getState()
+                        .open[projectId]?.find((f) => f.path === path);
+                      if (saved && !isDirty(saved) && !saved.error) {
+                        closeFile(projectId, path);
+                      }
+                    });
+                  }}
+                >
+                  {t("files.unsaved.saveAndClose")}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="popover__item"
+                  data-danger
+                  onClick={() => {
+                    const path = closing;
+                    setClosing(null);
+                    if (path) closeFile(projectId, path);
+                  }}
+                >
+                  {t("files.unsaved.discard")}
+                </button>
+              </Popover>
             </div>
 
+            {/* A refused save is not an error — it is the product protecting
+                work that is not ours. It reads as a warning and it says what
+                the two ways out are. */}
+            {active?.stale && <p className="files__warning">{t("files.stale")}</p>}
             {active?.error && <p className="files__error">{active.error}</p>}
 
             <div className="files__surface">

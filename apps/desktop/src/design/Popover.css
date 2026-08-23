@@ -43,3 +43,21 @@
   font-size: var(--text-xs);
   color: var(--text-disabled);
 }
+
+/* A popover that asks a question rather than offering a menu: the heading says
+   what is at stake, and the destructive answer is coloured so it is never the
+   one taken by accident. */
+.popover__heading {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-tertiary);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.popover__item[data-danger] { color: var(--state-danger); }
+.popover__item[data-danger]:hover:not(:disabled) {
+  background: var(--state-danger-bg);
+  color: var(--state-danger);
+}

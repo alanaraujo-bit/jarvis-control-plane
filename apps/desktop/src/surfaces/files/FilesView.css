@@ -218,3 +218,15 @@
   line-height: var(--leading-relaxed);
   color: var(--text-tertiary);
 }
+
+/* A refused save. Amber rather than red: nothing broke, and the file on disk
+   is intact — the product declined to throw away work it did not author. */
+.files__warning {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--state-warning);
+  background: var(--state-working-bg);
+  border-bottom: 1px solid var(--border-subtle);
+}

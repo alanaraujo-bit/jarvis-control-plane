@@ -51,8 +51,9 @@ pub struct ReviewFile {
     pub path: String,
     pub from_path: Option<String>,
     pub kind: ChangeKind,
-    pub staged: bool,
-    pub unstaged: bool,
+    // Whether a change is staged is parsed and tested (`ChangedFile`), but not
+    // sent: Review is read-only, so nothing here can act on it. §44 adds it
+    // back when there is a stage button to attach it to.
     pub insertions: u32,
     pub deletions: u32,
     pub binary: bool,
@@ -322,8 +323,6 @@ pub fn report(state: &AppState, project_id: &str) -> Result<ReviewReport> {
             path,
             from_path,
             kind: change.kind,
-            staged: change.staged,
-            unstaged: change.unstaged,
             insertions,
             deletions,
             binary,

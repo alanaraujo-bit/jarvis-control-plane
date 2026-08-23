@@ -182,6 +182,7 @@ fn a_round_trip_leaves_a_crlf_file_byte_identical() {
         contents.text.as_deref().unwrap(),
         contents.crlf,
         contents.trailing_newline,
+        None,
     )
     .unwrap();
 
@@ -201,6 +202,7 @@ fn a_round_trip_preserves_a_missing_trailing_newline() {
         contents.text.as_deref().unwrap(),
         contents.crlf,
         contents.trailing_newline,
+        None,
     )
     .unwrap();
 
@@ -230,9 +232,68 @@ fn says_when_a_file_is_too_large_rather_than_opening_it() {
 }
 
 #[test]
+fn a_save_refuses_when_the_file_changed_underneath_it() {
+    // The case this exists for: an agent is editing the same file in another
+    // tab. Overwriting blind would delete its work with nothing left to show
+    // it ever happened.
+    let (_guard, root) = tempdir();
+    std::fs::write(root.join("f.txt"), "original\n").unwrap();
+    let opened = read(&root, "f.txt").unwrap();
+
+    // Something else writes it. The sleep is not decoration: filesystem
+    // timestamps have limited resolution, and two writes in the same
+    // millisecond would be indistinguishable — which is the one case this
+    // check genuinely cannot catch.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(root.join("f.txt"), "written by somebody else\n").unwrap();
+
+    let outcome = write(&root, "f.txt", "mine\n", false, true, opened.modified_ms).unwrap();
+    assert!(matches!(outcome, WriteOutcome::Stale { .. }));
+    assert_eq!(
+        std::fs::read_to_string(root.join("f.txt")).unwrap(),
+        "written by somebody else\n",
+        "a refused save must not have written anything"
+    );
+
+    // Saving again without an expectation is the "save anyway" the interface
+    // offers once it has explained itself.
+    let outcome = write(&root, "f.txt", "mine\n", false, true, None).unwrap();
+    assert!(matches!(outcome, WriteOutcome::Written { .. }));
+    assert_eq!(std::fs::read_to_string(root.join("f.txt")).unwrap(), "mine\n");
+}
+
+#[test]
+fn an_untouched_file_saves_normally_and_reports_its_new_time() {
+    let (_guard, root) = tempdir();
+    std::fs::write(root.join("f.txt"), "original\n").unwrap();
+    let opened = read(&root, "f.txt").unwrap();
+
+    let outcome = write(&root, "f.txt", "edited\n", false, true, opened.modified_ms).unwrap();
+    let WriteOutcome::Written { modified_ms } = outcome else {
+        panic!("expected the save to go through, got {outcome:?}");
+    };
+    assert!(modified_ms.is_some());
+    assert_eq!(std::fs::read_to_string(root.join("f.txt")).unwrap(), "edited\n");
+}
+
+#[test]
+fn saving_a_file_that_was_deleted_writes_it_back() {
+    // Not a conflict: there is nothing to lose, and the user is asking for the
+    // file to exist again.
+    let (_guard, root) = tempdir();
+    std::fs::write(root.join("f.txt"), "original\n").unwrap();
+    let opened = read(&root, "f.txt").unwrap();
+    std::fs::remove_file(root.join("f.txt")).unwrap();
+
+    let outcome = write(&root, "f.txt", "back\n", false, true, opened.modified_ms).unwrap();
+    assert!(matches!(outcome, WriteOutcome::Written { .. }));
+    assert_eq!(std::fs::read_to_string(root.join("f.txt")).unwrap(), "back\n");
+}
+
+#[test]
 fn writing_creates_missing_parent_directories() {
     let (_guard, root) = tempdir();
-    write(&root, "a/b/c/new.txt", "hello", false, true).unwrap();
+    write(&root, "a/b/c/new.txt", "hello", false, true, None).unwrap();
     assert_eq!(
         std::fs::read_to_string(root.join("a/b/c/new.txt")).unwrap(),
         "hello\n"
@@ -246,7 +307,7 @@ fn writing_outside_the_project_is_refused_before_anything_is_created() {
     std::fs::create_dir_all(&root).unwrap();
 
     assert!(matches!(
-        write(&root, "../escaped.txt", "x", false, true),
+        write(&root, "../escaped.txt", "x", false, true, None),
         Err(FileError::Outside)
     ));
     assert!(!base.join("escaped.txt").exists());
