@@ -161,6 +161,7 @@ export const en = {
   "project.review": "Review",
   "project.worktrees": "Worktrees",
   "project.brain": "Brain",
+  "project.settings": "Settings",
 
   // ---- Project Brain (§36–§39) and Notes (§40) -----------------------------
   "brain.title": "Brain",

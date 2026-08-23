@@ -143,6 +143,7 @@ export const ptBR: Record<MessageKey, string> = {
   "project.review": "Revisão",
   "project.worktrees": "Worktrees",
   "project.brain": "Memória",
+  "project.settings": "Configurações",
 
   "brain.title": "Memória",
   "brain.subtitle":

@@ -472,3 +472,22 @@
   pointer-events: none;
 }
 .workspace__projection[data-visible] { visibility: visible; pointer-events: auto; }
+
+/* ---- Project settings (§64) ----------------------------------------------
+   The same reading measure global Settings uses, for the same reason: this is
+   a document of choices, not a dashboard. Centred rather than left-aligned so
+   it does not read as a narrow column stranded beside empty space. */
+.workspace__settings {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-9) var(--space-8) var(--space-11);
+}
+
+.workspace__settings > * {
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.workspace__settings > * + * {
+  margin-top: var(--space-10);
+}

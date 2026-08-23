@@ -6,6 +6,8 @@ import { FilesView } from "../files/FilesView";
 import { ReviewView } from "../review/ReviewView";
 import { WorktreesView } from "../worktrees/WorktreesView";
 import { BrainView } from "../brain/BrainView";
+import { GuardrailPanel } from "../guardrails/GuardrailPanel";
+import { AutonomyPanel } from "../settings/AutonomyPanel";
 import { HistoricalTabBadge } from "../../shell/GlobalSearch";
 import { useI18n } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
@@ -40,7 +42,7 @@ interface ProjectWorkspaceProps {
  * The list is the same kind of thing `App.tsx` keeps for the rail: an area that
  * is not built is absent from it, never a "coming soon" screen (§81).
  */
-export const AREAS = ["sessions", "files", "review", "worktrees", "brain"] as const;
+export const AREAS = ["sessions", "files", "review", "worktrees", "brain", "settings"] as const;
 export type Area = (typeof AREAS)[number];
 
 const AREA_LABEL: Record<Area, MessageKey> = {
@@ -49,6 +51,7 @@ const AREA_LABEL: Record<Area, MessageKey> = {
   review: "project.review",
   worktrees: "project.worktrees",
   brain: "project.brain",
+  settings: "project.settings",
 };
 
 /** Which agents can actually be launched, from the real environment scan (§14). */
@@ -356,6 +359,21 @@ export function ProjectWorkspace({
       {visited.has("brain") && (
         <div className="workspace__area-body" data-visible={area === "brain" || undefined}>
           <BrainView projectId={project.id} active={area === "brain"} />
+        </div>
+      )}
+
+      {/* Project-scoped settings (§64).
+          Both panels here were already written to take a `projectId` and had
+          nowhere to be given one: `App.tsx` renders global Settings only when
+          no project is open, so it structurally cannot host a project-scoped
+          control. Guardrail policy per project has been implemented and
+          unreachable since §35 for exactly that reason. This is the host. */}
+      {visited.has("settings") && (
+        <div className="workspace__area-body" data-visible={area === "settings" || undefined}>
+          <div className="workspace__settings">
+            <AutonomyPanel projectId={project.id} />
+            <GuardrailPanel projectId={project.id} />
+          </div>
         </div>
       )}
     </div>
