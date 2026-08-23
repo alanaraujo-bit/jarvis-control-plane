@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Mic, MicOff } from "lucide-react";
 import { useT } from "../../app/i18n";
 import { Popover } from "../../design/Popover";
+import { LiveCaption } from "../voice/LiveCaption";
 import { useVoice } from "../voice/useVoice";
 
 interface VoiceButtonProps {
@@ -35,6 +36,8 @@ export function VoiceButton({ projectId, sessionId, locale }: VoiceButtonProps) 
   const micError = useVoice((s) => s.micError);
   const startRecording = useVoice((s) => s.startRecording);
   const stopRecording = useVoice((s) => s.stopRecording);
+  const captionCommitted = useVoice((s) => s.captionCommitted);
+  const captionTail = useVoice((s) => s.captionTail);
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
@@ -64,7 +67,7 @@ export function VoiceButton({ projectId, sessionId, locale }: VoiceButtonProps) 
       return;
     }
     if (micState === "idle") {
-      void startRecording();
+      void startRecording(projectId, locale);
     } else if (micState === "recording") {
       void stopRecording(projectId, sessionId, locale);
     }
@@ -109,6 +112,13 @@ export function VoiceButton({ projectId, sessionId, locale }: VoiceButtonProps) 
           onDownload={() => void downloadModel()}
         />
       </Popover>
+
+      <LiveCaption
+        anchor={anchor}
+        open={micState === "recording"}
+        committed={captionCommitted}
+        tail={captionTail}
+      />
     </div>
   );
 }

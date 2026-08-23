@@ -14,11 +14,21 @@
 //! The trade is a real deployment dependency (`whisper-cli.exe` needs the
 //! VC++ runtime, bundled alongside it in `resources/whisper/`, app-local, not
 //! a system install) and a one-time ~490MB model download.
+//!
+//! While a recording is in progress, `stream` and `server` drive a second,
+//! independent path: a warm `whisper-server.exe` is polled every second or
+//! two over the audio captured so far, and `stream::AgreementState` turns
+//! that into a caption that only ever grows, never rewritten mid-word — see
+//! D30. That path never touches what gets typed; the transcript that lands
+//! in the prompt still comes from the single, complete, unstreamed
+//! `whisper-cli.exe` pass in `commands::voice_stop_recording`, unchanged.
 
 pub mod capture;
 pub mod commands;
 pub mod model;
 pub mod prompt;
+pub mod server;
+pub mod stream;
 pub mod transcribe;
 
 pub use commands::*;
@@ -41,6 +51,8 @@ pub enum VoiceError {
     ModelCorrupt,
     #[error("could not transcribe: {0}")]
     Transcribe(String),
+    #[error("live transcription server error: {0}")]
+    Server(String),
     #[error("{0}")]
     Session(#[from] crate::session::manager::SessionError),
     #[error("io error: {0}")]

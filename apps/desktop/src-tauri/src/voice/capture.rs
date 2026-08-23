@@ -33,10 +33,34 @@ const START_TIMEOUT: Duration = Duration::from_secs(5);
 /// How often the capture thread checks whether it has been asked to stop.
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
 
+/// A cheap, cloneable handle onto a recording's samples while it is still in
+/// progress — what the streaming poll loop (§54 streaming, D30) reads from
+/// without needing to touch `Recording` itself, so a `voice_stop_recording`
+/// or `voice_cancel_recording` call and an in-flight poll never contend for
+/// the same lock.
+#[derive(Clone)]
+pub struct AudioTap {
+    buffer: Arc<Mutex<Vec<f32>>>,
+    channels: u16,
+    sample_rate: u32,
+}
+
+impl AudioTap {
+    /// Everything captured so far, resampled to 16kHz mono. Safe to call
+    /// repeatedly while recording continues — it clones the buffer rather
+    /// than draining it, so nothing about the final `stop()` result changes
+    /// because a poll happened to run first.
+    pub fn snapshot(&self) -> Vec<f32> {
+        let raw = self.buffer.lock().unwrap().clone();
+        resample_mono_16k(&raw, self.channels, self.sample_rate)
+    }
+}
+
 /// A recording in progress. Lives in `AppState` between `start` and `stop`.
 pub struct Recording {
     stop: Arc<AtomicBool>,
-    join: JoinHandle<Vec<f32>>,
+    tap: AudioTap,
+    join: JoinHandle<()>,
 }
 
 impl Recording {
@@ -54,15 +78,25 @@ impl Recording {
 
         let stop = Arc::new(AtomicBool::new(false));
         let stop_thread = stop.clone();
-        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<()>>();
+        let buffer: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
+        let buffer_thread = buffer.clone();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(u16, u32)>>();
 
         let join = std::thread::Builder::new()
             .name("voice-capture".into())
-            .spawn(move || run_capture(stop_thread, ready_tx))
+            .spawn(move || run_capture(stop_thread, buffer_thread, ready_tx))
             .map_err(|e| VoiceError::Device(e.to_string()))?;
 
         match ready_rx.recv_timeout(START_TIMEOUT) {
-            Ok(Ok(())) => Ok(Self { stop, join }),
+            Ok(Ok((channels, sample_rate))) => Ok(Self {
+                stop,
+                tap: AudioTap {
+                    buffer,
+                    channels,
+                    sample_rate,
+                },
+                join,
+            }),
             Ok(Err(e)) => {
                 let _ = join.join();
                 Err(e)
@@ -77,10 +111,17 @@ impl Recording {
         }
     }
 
+    /// A cloneable handle for reading samples while recording continues.
+    pub fn tap(&self) -> AudioTap {
+        self.tap.clone()
+    }
+
     /// Stop capturing and return what was recorded, resampled to 16kHz mono.
     pub fn stop(self) -> Vec<f32> {
+        let samples = self.tap.snapshot();
         self.stop.store(true, Ordering::SeqCst);
-        self.join.join().unwrap_or_default()
+        let _ = self.join.join();
+        samples
     }
 
     /// Stop and discard — for a cancelled recording.
@@ -90,50 +131,50 @@ impl Recording {
     }
 }
 
-fn run_capture(stop: Arc<AtomicBool>, ready: std::sync::mpsc::Sender<Result<()>>) -> Vec<f32> {
+fn run_capture(
+    stop: Arc<AtomicBool>,
+    buffer: Arc<Mutex<Vec<f32>>>,
+    ready: std::sync::mpsc::Sender<Result<(u16, u32)>>,
+) {
     let host = cpal::default_host();
     let device = match host.default_input_device() {
         Some(d) => d,
         None => {
             let _ = ready.send(Err(VoiceError::NoInputDevice));
-            return Vec::new();
+            return;
         }
     };
     let config = match device.default_input_config() {
         Ok(c) => c,
         Err(e) => {
             let _ = ready.send(Err(VoiceError::Device(e.to_string())));
-            return Vec::new();
+            return;
         }
     };
 
     let sample_rate = config.sample_rate().0;
     let channels = config.channels();
     let sample_format = config.sample_format();
-    let buffer: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let stream = build_stream(&device, &config.into(), sample_format, buffer.clone());
+    let stream = build_stream(&device, &config.into(), sample_format, buffer);
     let stream = match stream {
         Ok(s) => s,
         Err(e) => {
             let _ = ready.send(Err(e));
-            return Vec::new();
+            return;
         }
     };
 
     if let Err(e) = stream.play() {
         let _ = ready.send(Err(VoiceError::Device(e.to_string())));
-        return Vec::new();
+        return;
     }
-    let _ = ready.send(Ok(()));
+    let _ = ready.send(Ok((channels, sample_rate)));
 
     while !stop.load(Ordering::SeqCst) {
         std::thread::sleep(POLL_INTERVAL);
     }
     drop(stream);
-
-    let captured = std::mem::take(&mut *buffer.lock().unwrap());
-    resample_mono_16k(&captured, channels, sample_rate)
 }
 
 /// Build the input stream in whatever format the device actually reports.

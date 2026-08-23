@@ -12,6 +12,9 @@ type DownloadEvent =
   | { state: "done" }
   | { state: "error"; message: string };
 
+/** Mirrors `voice::stream::StreamEvent` on the Rust side. */
+type StreamEvent = { state: "partial"; committed: string; tail: string };
+
 export type MicState = "idle" | "recording" | "transcribing" | "error";
 export type DownloadState = "idle" | "downloading" | "verifying" | "error";
 
@@ -27,9 +30,19 @@ interface VoiceState {
   /** The most recently typed transcript, shown briefly then cleared. */
   lastTranscript: string | null;
 
+  /**
+   * Live captions while recording (§54 streaming, D30) — settled text that
+   * will not change, and a volatile tail that may still be rewritten by the
+   * next poll. Both reset to empty whenever a recording starts, stops, or is
+   * cancelled; neither is ever what gets typed into the terminal — that
+   * still comes from `stopRecording`'s own, separate, complete pass.
+   */
+  captionCommitted: string;
+  captionTail: string;
+
   checkModel: () => Promise<void>;
   downloadModel: () => Promise<void>;
-  startRecording: () => Promise<void>;
+  startRecording: (projectId: string, locale: string) => Promise<void>;
   stopRecording: (projectId: string, sessionId: string, locale: string) => Promise<void>;
   cancelRecording: () => Promise<void>;
   clearTranscript: () => void;
@@ -44,6 +57,9 @@ export const useVoice = create<VoiceState>((set, get) => ({
   micState: "idle",
   micError: null,
   lastTranscript: null,
+
+  captionCommitted: "",
+  captionTail: "",
 
   checkModel: async () => {
     if (!isTauri()) {
@@ -79,16 +95,23 @@ export const useVoice = create<VoiceState>((set, get) => ({
     await tauriInvoke("voice_download_model", { channel });
   },
 
-  startRecording: async () => {
+  startRecording: async (projectId, locale) => {
     if (!isTauri()) return;
-    set({ micState: "recording", micError: null });
+    set({ micState: "recording", micError: null, captionCommitted: "", captionTail: "" });
     try {
       // The chime has to finish — and the mic has to still be closed while
       // it plays — before the stream opens, or the recording captures its
       // own start-of-listening cue and whisper transcribes it back.
       await playStartChime();
       await wait(CHIME_DURATION_MS);
-      await tauriInvoke("voice_start_recording");
+
+      const channel = new Channel<StreamEvent>();
+      channel.onmessage = (event) => {
+        if (event.state === "partial") {
+          set({ captionCommitted: event.committed, captionTail: event.tail });
+        }
+      };
+      await tauriInvoke("voice_start_recording", { projectId, locale, channel });
     } catch (err) {
       set({ micState: "error", micError: String(err) });
     }
@@ -97,7 +120,7 @@ export const useVoice = create<VoiceState>((set, get) => ({
   stopRecording: async (projectId, sessionId, locale) => {
     if (!isTauri()) return;
     if (get().micState !== "recording") return;
-    set({ micState: "transcribing" });
+    set({ micState: "transcribing", captionCommitted: "", captionTail: "" });
     try {
       const result = await tauriInvoke<{ text: string }>("voice_stop_recording", {
         projectId,
@@ -116,7 +139,7 @@ export const useVoice = create<VoiceState>((set, get) => ({
   cancelRecording: async () => {
     if (!isTauri()) return;
     if (get().micState !== "recording") return;
-    set({ micState: "idle" });
+    set({ micState: "idle", captionCommitted: "", captionTail: "" });
     try {
       await tauriInvoke("voice_cancel_recording");
     } catch {

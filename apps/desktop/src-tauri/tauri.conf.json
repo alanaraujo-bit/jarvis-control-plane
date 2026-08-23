@@ -45,7 +45,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "resources/whisper/*": "whisper/"
+      "resources/whisper/*": "whisper/",
+      "resources/whisper/server/*": "whisper/server/"
     },
     "copyright": "© 2026 Alan Araujo. All rights reserved.",
     "category": "DeveloperTool",

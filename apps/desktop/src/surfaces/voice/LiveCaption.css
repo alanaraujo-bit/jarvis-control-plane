@@ -1,0 +1,85 @@
+/* Live captions while recording (§54 streaming, D30). Positioned exactly
+   like a Popover (see design/Popover.css) but not built on it — this one
+   must not close on an outside click. */
+.live-caption {
+  position: fixed;
+  z-index: 80;
+  min-width: 220px;
+  max-width: 360px;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+.live-caption__text {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-primary);
+}
+
+/* Each committed word mounts once and never again — see LiveCaption.tsx for
+   why that is what makes this animation play exactly once per word rather
+   than replaying the whole sentence on every poll. */
+.live-caption__word {
+  display: inline-block;
+  animation: caption-word-in 260ms var(--ease-out) both;
+}
+
+@keyframes caption-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The volatile remainder — may be rewritten by the next poll, so it reads
+   as "still forming" rather than "said": softer colour, a gentle breathing
+   opacity instead of the hard entrance the settled words get. */
+.live-caption__tail {
+  color: var(--state-waiting);
+  animation: caption-tail-breathe 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes caption-tail-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.live-caption__listening {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.live-caption__listening-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.live-caption__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--state-waiting);
+  animation: caption-dot-bounce 1.2s var(--ease-in-out) infinite;
+}
+.live-caption__dot:nth-child(2) { animation-delay: 0.15s; }
+.live-caption__dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes caption-dot-bounce {
+  0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-caption__word { animation: none; }
+  .live-caption__tail { animation: none; }
+  .live-caption__dot { animation: none; }
+}

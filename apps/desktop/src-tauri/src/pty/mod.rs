@@ -5,7 +5,7 @@
 //! agent CLIs (§25) — the same mechanism either way, because an agent session
 //! *is* a terminal session that happens to be running an agent.
 
-mod job;
+pub(crate) mod job;
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
