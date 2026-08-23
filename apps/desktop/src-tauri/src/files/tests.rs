@@ -232,6 +232,41 @@ fn says_when_a_file_is_too_large_rather_than_opening_it() {
 }
 
 #[test]
+fn a_write_outcome_serialises_with_the_field_names_the_webview_reads() {
+    // This is D13 again, one layer down. `rename_all` on an enum renames the
+    // **variants**; the fields of a struct variant keep their Rust names unless
+    // `rename_all_fields` is given too. Without it this went out as
+    // `{"status":"written","modified_ms":…}`, the webview read `modifiedMs` as
+    // undefined, and every save after the first one quietly stopped checking
+    // whether the file had changed underneath it.
+    //
+    // Nothing failed. Every test passed. It was found by saving a file in the
+    // real app and watching another writer's line disappear.
+    let json = serde_json::to_string(&WriteOutcome::Written {
+        modified_ms: Some(1_700_000_000_123),
+    })
+    .unwrap();
+    assert_eq!(json, r#"{"status":"written","modifiedMs":1700000000123}"#);
+
+    let json = serde_json::to_string(&WriteOutcome::Stale {
+        modified_ms: Some(7),
+    })
+    .unwrap();
+    assert_eq!(json, r#"{"status":"stale","modifiedMs":7}"#);
+}
+
+#[test]
+fn file_contents_serialises_with_the_field_names_the_webview_reads() {
+    let (_guard, root) = tempdir();
+    std::fs::write(root.join("f.txt"), "hi\n").unwrap();
+
+    let json = serde_json::to_value(read(&root, "f.txt").unwrap()).unwrap();
+    for key in ["modifiedMs", "trailingNewline", "crlf", "size", "text"] {
+        assert!(json.get(key).is_some(), "`{key}` missing from {json}");
+    }
+}
+
+#[test]
 fn a_save_refuses_when_the_file_changed_underneath_it() {
     // The case this exists for: an agent is editing the same file in another
     // tab. Overwriting blind would delete its work with nothing left to show

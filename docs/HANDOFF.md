@@ -57,7 +57,7 @@ These come from the product spec and are not stylistic preferences:
 The loop is: **implement → build → run the real app → screenshot it → look at it
 → fix what is actually wrong → repeat.**
 
-Nine of the most important bugs in this codebase were invisible to tests and
+Ten of the most important bugs in this codebase were invisible to tests and
 only appeared by running the product and looking at a screenshot. Do not skip
 the looking.
 
@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**242 tests** (234 Rust, 8 i18n) · all green.
+**244 tests** (236 Rust, 8 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -231,7 +231,25 @@ Every one of these is real and already cost time.
     diff, which rendered in Review as a row with a blank name. Review asks for
     `--untracked-files=all`.
 
-17. **A driven session is not "attended", even with the terminal open.**
+17. **`#[serde(rename_all = "camelCase")]` on an *enum* renames the variants,
+    not the fields of its struct variants.** `WriteOutcome` went out as
+    `{"status":"written","modified_ms":…}`, the webview read `modifiedMs` as
+    `undefined`, and every save after the first quietly stopped checking
+    whether the file had changed underneath it. Nothing errored and every test
+    passed — it was found by saving a file in the real app and watching another
+    writer's line disappear. `rename_all_fields = "camelCase"` is the missing
+    half, and `a_write_outcome_serialises_with_the_field_names_the_webview_reads`
+    now pins the wire shape. This is D13 one layer down: check the **bytes**,
+    not the Rust type.
+
+18. **The save conflict check is good, not absolute.** It compares the file's
+    modified time, so two writes inside the same filesystem timestamp tick are
+    indistinguishable. Measured on this machine: an external write is visible
+    immediately and lands ~30 ms apart, so the realistic window is tiny — but
+    it is not zero, and the product should never be described as making the
+    race impossible.
+
+19. **A driven session is not "attended", even with the terminal open.**
     Watching is not answering. `Snapshot::can_ask_a_person` requires a view
     *and* no autopilot in the seat; conflating them would park an unattended
     agent on a permission prompt nobody can answer.

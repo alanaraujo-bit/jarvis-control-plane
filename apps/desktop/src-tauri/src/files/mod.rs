@@ -309,7 +309,12 @@ pub fn read(root: &Path, relative: &str) -> Result<FileContents> {
 /// the user's own language (§65), and a serialised error string cannot be
 /// translated. So the outcome is data.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "status")]
+// NOTE: rename_all on an enum renames the VARIANTS. The fields of a
+// struct variant need rename_all_fields as well — without it this
+// serialises as {"status":"written","modified_ms":…} and the webview reads
+// modifiedMs as undefined. Nothing errors; the next save simply stops
+// checking anything. Pinned by a test below.
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "status")]
 pub enum WriteOutcome {
     Written { modified_ms: Option<i64> },
     /// The file on disk is not the one that was opened. Nothing was written.
