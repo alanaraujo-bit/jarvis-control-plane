@@ -104,6 +104,13 @@ export const ptBR: Record<MessageKey, string> = {
   "terminal.empty.title": "Nenhum terminal em execução",
   "terminal.empty.body": "Inicie um shell ou execute um agente neste projeto.",
   "terminal.notInstalled": "{name} não está instalado",
+  "terminal.find.placeholder": "Buscar no histórico",
+  "terminal.find.matchCase": "Diferenciar maiúsculas",
+  "terminal.find.previous": "Ocorrência anterior",
+  "terminal.find.next": "Próxima ocorrência",
+  "terminal.find.close": "Fechar busca",
+  "terminal.find.noResults": "Nenhum resultado",
+  "terminal.find.manyResults": "1000+",
 
 
   "conversation.title": "Conversa",

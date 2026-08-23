@@ -115,6 +115,15 @@ export const en = {
   "terminal.empty.title": "No terminal running",
   "terminal.empty.body": "Start a shell, or launch an agent in this project.",
   "terminal.notInstalled": "{name} is not installed",
+  "terminal.find.placeholder": "Search scrollback",
+  "terminal.find.matchCase": "Match case",
+  "terminal.find.previous": "Previous match",
+  "terminal.find.next": "Next match",
+  "terminal.find.close": "Close search",
+  "terminal.find.noResults": "No results",
+  // xterm stops counting past its highlight limit. Saying "1000+" is honest;
+  // a total that is quietly wrong is not.
+  "terminal.find.manyResults": "1000+",
 
 
   // ---- Conversation (§24) --------------------------------------------------

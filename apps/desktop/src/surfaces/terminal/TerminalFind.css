@@ -1,0 +1,125 @@
+/* Find within the scrollback (§20).
+
+   Top-right, over the terminal rather than over the app: a shell's output is
+   left-aligned and its most recent lines are at the bottom, so this is the
+   corner that hides the least of what you are reading. */
+.tfind {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-5);
+  z-index: 4;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+
+  animation: tfind-enter var(--duration-fast) var(--ease-out);
+}
+
+@keyframes tfind-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tfind { animation: none; }
+}
+
+.tfind__icon {
+  flex: 0 0 auto;
+  color: var(--text-disabled);
+}
+
+.tfind__input {
+  width: 168px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.tfind__input::placeholder {
+  color: var(--text-disabled);
+}
+
+/* Tabular figures so the counter does not jitter the controls sideways as it
+   counts up — the buttons beside it must not move while you are aiming at
+   them. `min-width` holds the space open before the first search. */
+.tfind__status {
+  flex: 0 0 auto;
+  min-width: 34px;
+  text-align: right;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tfind__status[data-empty] {
+  color: var(--state-danger);
+}
+
+.tfind__divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--space-1);
+  background: var(--border-subtle);
+}
+
+.tfind__button,
+.tfind__toggle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-instant) var(--ease-out),
+              color var(--duration-instant) var(--ease-out);
+}
+
+.tfind__button:hover:not(:disabled),
+.tfind__toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tfind__button:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+/* An enabled toggle has to be legible as *on* without colour alone carrying
+   it, so it takes a filled background as well as the accent. */
+.tfind__toggle[data-on] {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.tfind__button:focus-visible,
+.tfind__toggle:focus-visible,
+.tfind__input:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tfind__button,
+  .tfind__toggle { transition: none; }
+}

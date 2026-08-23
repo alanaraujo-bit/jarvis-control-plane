@@ -1,3 +1,15 @@
+/* The pane holds the terminal and anything that floats over it — today the
+   find bar (§20). It exists so xterm keeps sole ownership of the element it
+   was opened on: an overlay rendered *inside* that element would put React and
+   xterm in charge of the same child list. */
+.terminal-pane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
 /* The terminal owns its whole pane; padding lives here rather than inside
    xterm so the scrollbar still reaches the pane edge. */
 .terminal {
