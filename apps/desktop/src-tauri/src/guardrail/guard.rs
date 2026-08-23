@@ -133,7 +133,7 @@ pub fn run(snapshot_path: &str) -> i32 {
                 matched.fragment
             ))),
         ),
-        policy::Decision::Ask if snapshot.attended => (
+        policy::Decision::Ask if snapshot.can_ask_a_person() => (
             "asked",
             policy::reason::ASKED_HUMAN,
             Some(ask(&format!(
@@ -143,10 +143,11 @@ pub fn run(snapshot_path: &str) -> i32 {
                 matched.fragment
             ))),
         ),
-        // Nobody is attached to the terminal, so the provider's own prompt
-        // would wait for an answer that cannot arrive. Refusing and letting
-        // the mission go to Waiting is the §34 behaviour: a run that cannot
-        // proceed says so instead of consuming resources indefinitely.
+        // There is nobody who can answer — either nobody is looking, or an
+        // autopilot is in the seat (§32). Either way the provider's own prompt
+        // would wait for an answer that cannot arrive. Refusing and letting the
+        // mission go to Waiting is the §34 behaviour: a run that cannot proceed
+        // says so instead of consuming resources indefinitely.
         policy::Decision::Ask => (
             "denied",
             policy::reason::NOBODY_TO_ASK,
@@ -275,6 +276,7 @@ mod tests {
             mission_id: None,
             provider: "claude-code".into(),
             attended,
+            driven: false,
             decisions,
             log_path: String::new(),
         }
@@ -300,15 +302,15 @@ mod tests {
     /// The substantive product decision in this module.
     #[test]
     fn ask_becomes_deny_when_no_one_is_attached() {
-        // Attached: the person at the terminal can answer, so the provider's own
-        // prompt is the right place for the question.
+        // Attached and nobody driving: the person at the terminal can answer,
+        // so the provider's own prompt is the right place for the question.
         let attended = snapshot(true, &[(Operation::GitForcePush, policy::Decision::Ask)]);
-        assert!(attended.attended);
+        assert!(attended.can_ask_a_person());
 
         // Unattended (§32): the same prompt would wait forever. §34 says a run
         // that cannot proceed must stop and say so.
         let unattended = snapshot(false, &[(Operation::GitForcePush, policy::Decision::Ask)]);
-        assert!(!unattended.attended);
+        assert!(!unattended.can_ask_a_person());
         assert_eq!(
             unattended.decision_for(Operation::GitForcePush),
             policy::Decision::Ask

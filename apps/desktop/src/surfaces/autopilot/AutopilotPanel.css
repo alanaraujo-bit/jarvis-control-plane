@@ -1,0 +1,131 @@
+/* Amber is the colour of agent work (§6), and an unattended run is the purest
+   case of it — so the live state borrows the accent and the idle state stays
+   near-monochrome. Colour reports state; it never decorates. */
+.autopilot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.autopilot[data-active] {
+  border-color: var(--accent-muted);
+  border-left: 2px solid var(--accent);
+}
+
+.autopilot__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.autopilot__icon {
+  color: var(--text-tertiary);
+}
+
+.autopilot__icon--live {
+  color: var(--accent);
+}
+
+/* The same gentle pulse a working status dot uses, so "an agent is busy" looks
+   the same wherever it appears. */
+@media (prefers-reduced-motion: no-preference) {
+  .autopilot__icon--live {
+    animation: autopilot-pulse 2.4s var(--ease-in-out, ease-in-out) infinite;
+  }
+}
+
+@keyframes autopilot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.autopilot__title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.autopilot__progress {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.autopilot__state {
+  color: var(--text-tertiary);
+}
+
+.autopilot__description {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+.autopilot__refusal {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 68ch;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+}
+
+.autopilot__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.autopilot__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 28px;
+  padding: 0 var(--space-5);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.autopilot__action:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.autopilot__action--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.autopilot__action--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--text-on-accent);
+}
+
+.autopilot__hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  max-width: 52ch;
+  line-height: 1.45;
+}

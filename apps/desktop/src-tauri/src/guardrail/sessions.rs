@@ -64,6 +64,7 @@ pub fn write_snapshot(
     mission_id: Option<&str>,
     provider: &str,
     attended: bool,
+    driven: bool,
 ) -> std::io::Result<PathBuf> {
     let decisions = db
         .with(|conn| Ok(policy::resolve_all(conn, Some(project_id))?))
@@ -79,6 +80,7 @@ pub fn write_snapshot(
         mission_id: mission_id.map(str::to_string),
         provider: provider.to_string(),
         attended,
+        driven,
         decisions,
         log_path: log_dir.join(DECISIONS_FILE).to_string_lossy().to_string(),
     };
@@ -87,6 +89,28 @@ pub fn write_snapshot(
     let path = log_dir.join(SNAPSHOT_FILE);
     std::fs::write(&path, serde_json::to_vec_pretty(&snapshot)?)?;
     Ok(path)
+}
+
+/// Record whether an autopilot is occupying the human's seat (§32).
+///
+/// Separate from `set_attended` because they answer different questions: one is
+/// "is anyone looking", the other is "is the seat free". A driven session very
+/// often has both a viewer and no one able to answer.
+pub fn set_driven(log_dir: &Path, driven: bool) {
+    let path = log_dir.join(SNAPSHOT_FILE);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let Ok(mut snapshot) = serde_json::from_str::<Snapshot>(&text) else {
+        return;
+    };
+    if snapshot.driven == driven {
+        return;
+    }
+    snapshot.driven = driven;
+    if let Ok(bytes) = serde_json::to_vec_pretty(&snapshot) {
+        let _ = std::fs::write(&path, bytes);
+    }
 }
 
 /// Rewrite a snapshot in place, changing only whether a view is attached.
@@ -359,7 +383,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path =
-            write_snapshot(&db, dir.path(), "s1", "p1", None, "claude-code", true).unwrap();
+            write_snapshot(&db, dir.path(), "s1", "p1", None, "claude-code", true, false).unwrap();
 
         let snapshot: Snapshot =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -381,7 +405,7 @@ mod tests {
         // The guard's whole Unattended branch turns on this flag being current.
         let db = db();
         let dir = tempfile::tempdir().unwrap();
-        write_snapshot(&db, dir.path(), "s1", "p1", None, "claude-code", false).unwrap();
+        write_snapshot(&db, dir.path(), "s1", "p1", None, "claude-code", false, false).unwrap();
 
         let read = || -> Snapshot {
             serde_json::from_str(
@@ -398,11 +422,34 @@ mod tests {
         assert!(!read().attended);
     }
 
+    /// Watching an autopilot is not the same as being able to answer it (§32).
+    #[test]
+    fn a_driven_session_reports_that_nobody_can_answer() {
+        let db = db();
+        let dir = tempfile::tempdir().unwrap();
+        write_snapshot(&db, dir.path(), "s1", "p1", None, "claude-code", true, true).unwrap();
+
+        let read = || -> Snapshot {
+            serde_json::from_str(
+                &std::fs::read_to_string(dir.path().join(SNAPSHOT_FILE)).unwrap(),
+            )
+            .unwrap()
+        };
+        // A person is watching, and still cannot answer: the seat is taken.
+        assert!(read().attended);
+        assert!(read().driven);
+        assert!(!read().can_ask_a_person());
+
+        // Handing the seat back makes the question answerable again.
+        set_driven(dir.path(), false);
+        assert!(read().can_ask_a_person());
+    }
+
     #[test]
     fn changing_policy_reaches_a_session_that_is_already_running() {
         let db = db();
         let dir = tempfile::tempdir().unwrap();
-        write_snapshot(&db, dir.path(), "s1", "p1", None, "claude-code", true).unwrap();
+        write_snapshot(&db, dir.path(), "s1", "p1", None, "claude-code", true, false).unwrap();
 
         db.with(|conn| {
             Ok(policy::set(

@@ -288,17 +288,27 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
             }]
         }
 
-        Some("task_complete") => payload
-            .get("error")
-            .and_then(|e| e.get("message"))
-            .and_then(Value::as_str)
-            .map(|message| {
-                vec![ConversationItem::Error {
+        // Codex's equivalent of Claude Code's `end_turn`: the turn is over and
+        // it is waiting for input (§32). An error ends the turn too, so both
+        // are reported — the error first, because it explains the ending.
+        Some("task_complete") => {
+            let mut items = Vec::new();
+            if let Some(message) = payload
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(Value::as_str)
+            {
+                items.push(ConversationItem::Error {
                     message: message.to_string(),
                     ts_ms,
-                }]
-            })
-            .unwrap_or_default(),
+                });
+            }
+            items.push(ConversationItem::TurnEnded {
+                reason: "taskComplete".into(),
+                ts_ms,
+            });
+            items
+        }
 
         _ => Vec::new(),
     }

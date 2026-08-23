@@ -17,7 +17,7 @@
 //! |---|---|
 //! | A command **J.A.R.V.I.S. itself runs** — a mission's verification (§30) | Real enforcement. The command does not run. |
 //! | A **Claude Code** agent session | Real enforcement. Claude Code calls a hook before running a tool and honours a refusal; see `guard`. |
-//! | A **Codex** agent session | Observation only. Codex 0.149.0 offers no pre-execution callback, so a matched operation is recorded after the fact, never prevented. |
+//! | A **Codex** agent session | The same mechanism exists — 0.149.0 has `PreToolUse` hooks with the same wire shape — but Codex will not run a hook until the person has reviewed and trusted it in its own interface. So the file is written and waits; until then the session is observed, not guarded. |
 //! | A **human typing in a terminal** | Nothing, deliberately. Guardrails govern agents. It is the user's machine. |
 //!
 //! `ProviderCapabilities::guardrails` reports which of these applies, so the UI
@@ -28,9 +28,14 @@
 //! Under Guided or Autonomous, "ask" can be answered: someone is looking at the
 //! terminal and the provider's own prompt reaches them. Under Unattended (§32)
 //! nobody is, and a prompt would wait forever — the indefinite resource
-//! consumption §34 exists to forbid. So when a rule says *ask* and no view is
-//! attached, the guard **refuses** and the mission goes to Waiting with a
-//! reason. Stopping and saying why beats hanging quietly.
+//! consumption §34 exists to forbid. So when a rule says *ask* and there is
+//! nobody who can answer, the guard **refuses** and the mission goes to Waiting
+//! with a reason. Stopping and saying why beats hanging quietly.
+//!
+//! "Nobody who can answer" is deliberately not the same as "nobody is looking".
+//! A driven session usually *does* have its terminal open with a person reading
+//! along, and that person is not the one the provider's prompt reaches — the
+//! autopilot is in the seat. See `Snapshot::can_ask_a_person`.
 //!
 //! This is also why guardrails had to land before agents can drive missions
 //! unattended, rather than after.

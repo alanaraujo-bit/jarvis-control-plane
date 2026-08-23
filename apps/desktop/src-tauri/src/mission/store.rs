@@ -327,6 +327,29 @@ pub fn set_status(
     Ok(mission)
 }
 
+/// Set a mission's own autonomy, or clear it so it inherits again (§33).
+///
+/// `None` clears rather than writing a value: "follow the project" is a
+/// different intention from "be Guided here regardless of the project", and
+/// collapsing the two would silently pin a mission the first time anyone
+/// looked at the setting.
+pub fn set_autonomy(
+    db: &Database,
+    mission_id: &str,
+    autonomy: Option<Autonomy>,
+) -> Result<Mission> {
+    let id = mission_id.to_string();
+    let value = autonomy.map(|a| a.as_str().to_string());
+    db.with(move |conn| {
+        conn.execute(
+            "UPDATE missions SET autonomy = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, value, now_ms()],
+        )?;
+        Ok(())
+    })?;
+    Ok(detail(db, mission_id)?.mission)
+}
+
 /// Withdraw a criterion, with a reason.
 ///
 /// Deliberately not a delete (§31). An agent may propose that a requirement no
@@ -788,6 +811,15 @@ pub fn withdraw_mission_criterion(
 }
 
 #[tauri::command]
+pub fn set_mission_autonomy(
+    state: State<'_, AppState>,
+    mission_id: String,
+    autonomy: Option<Autonomy>,
+) -> Result<Mission> {
+    set_autonomy(&state.db, &mission_id, autonomy)
+}
+
+#[tauri::command]
 pub fn set_mission_task_done(
     state: State<'_, AppState>,
     task_id: String,
@@ -1104,6 +1136,35 @@ mod tests {
         let f = fixture();
         let mission = mission_with(&f, vec![]);
         assert!(set_status(&f.db, &mission.id, MissionStatus::Completed, None).is_ok());
+    }
+
+    /// Unattended is unreachable without this, so it is worth pinning (§32).
+    #[test]
+    fn a_missions_autonomy_can_be_set_and_cleared() {
+        let f = fixture();
+        let mission = mission_with(&f, vec![]);
+
+        // The project says Guided; the mission overrides it.
+        f.db.with(|conn| {
+            conn.execute(
+                "UPDATE projects SET autonomy = 'guided' WHERE id = ?1",
+                [&f.project_id],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        set_autonomy(&f.db, &mission.id, Some(Autonomy::Unattended)).unwrap();
+        assert_eq!(
+            detail(&f.db, &mission.id).unwrap().effective_autonomy,
+            Autonomy::Unattended
+        );
+
+        // Cleared, it inherits again rather than being pinned to a default.
+        set_autonomy(&f.db, &mission.id, None).unwrap();
+        let after = detail(&f.db, &mission.id).unwrap();
+        assert!(after.mission.autonomy.is_none());
+        assert_eq!(after.effective_autonomy, Autonomy::Guided);
     }
 
     #[test]

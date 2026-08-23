@@ -114,6 +114,7 @@ interface MissionsState {
     status: MissionStatus,
     reason?: string,
   ) => Promise<string | null>;
+  setAutonomy: (missionId: string, autonomy: Autonomy | null) => Promise<void>;
   confirmCriterion: (criterionId: string, by: string) => Promise<void>;
   setTaskDone: (taskId: string, done: boolean) => Promise<void>;
 }
@@ -195,6 +196,16 @@ export const useMissions = create<MissionsState>((set, get) => ({
       const message = String(cause);
       set({ error: message });
       return message;
+    }
+  },
+
+  /** `null` clears the mission's own setting so it inherits again (§33). */
+  setAutonomy: async (missionId, autonomy) => {
+    try {
+      await invoke("set_mission_autonomy", { missionId, autonomy });
+      await get().refresh();
+    } catch (cause) {
+      set({ error: String(cause) });
     }
   },
 

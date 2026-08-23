@@ -301,3 +301,45 @@
 }
 
 .md__agent-open { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+/* ---- Autonomy (§33) ------------------------------------------------------
+   A segmented control, matching Settings: the same kind of choice should not
+   look like a new mechanism. An inherited value is shown at lower contrast
+   than one chosen here, so the row says *where* the setting came from. */
+.md__facts { align-items: center; }
+
+.md__autonomy {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.md__autonomy-option {
+  height: 22px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.md__autonomy-option:hover:not([data-active]) {
+  color: var(--text-secondary);
+}
+
+.md__autonomy-option[data-active] {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.md__autonomy-option[data-active][data-inherited] {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  box-shadow: none;
+}

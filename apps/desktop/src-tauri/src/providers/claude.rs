@@ -233,8 +233,20 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
     }
     if kind == "file-history-snapshot" {
         // A snapshot is a checkpoint; only its tracked files carry information.
-        return value
-            .get("snapshot")
+        //
+        // Its timestamp lives *inside* `snapshot`, not at the top level like
+        // every other entry — so the outer lookup above finds nothing and the
+        // change would be stamped 0, putting it at the epoch in the timeline
+        // (§39). Found by parsing every transcript on this machine, not by
+        // reading the format description.
+        let snapshot = value.get("snapshot");
+        let ts_ms = snapshot
+            .and_then(|s| s.get("timestamp"))
+            .and_then(Value::as_str)
+            .and_then(parse_timestamp)
+            .unwrap_or(ts_ms);
+
+        return snapshot
             .and_then(|s| s.get("trackedFileBackups"))
             .and_then(Value::as_object)
             .map(|files| {
@@ -291,6 +303,15 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
 
         "assistant" => {
             let usage = parse_usage(message);
+
+            // Whether the agent is done or still mid-tool-loop. `tool_use`
+            // means more is coming; `end_turn` and `stop_sequence` mean it has
+            // handed control back. Emitted after the message below so the
+            // conversation reads in the order it happened.
+            let stop_reason = message
+                .get("stop_reason")
+                .and_then(Value::as_str)
+                .map(str::to_string);
 
             if let Some(blocks) = message.get("content").and_then(Value::as_array) {
                 for block in blocks {
@@ -352,6 +373,18 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
                     });
                 }
             }
+
+            // Last, so the conversation reads in the order it happened: the
+            // agent speaks, then hands control back.
+            //
+            // `tool_use` is deliberately excluded — it means the agent is still
+            // working and will be back. Treating it as the end of a turn would
+            // make an autopilot interrupt an agent mid-tool-loop.
+            if let Some(reason) = stop_reason {
+                if reason != "tool_use" {
+                    items.push(ConversationItem::TurnEnded { reason, ts_ms });
+                }
+            }
         }
 
         _ => {}
@@ -397,10 +430,54 @@ mod tests {
         }
     }
 
+    /// A snapshot keeps its timestamp inside `snapshot`, unlike every other
+    /// entry, so reading only the top level stamps the change at the epoch and
+    /// drops it at the start of the timeline (§39). Found by parsing every
+    /// transcript on this machine.
+    #[test]
+    fn a_file_history_snapshot_takes_its_timestamp_from_inside_itself() {
+        let line = r#"{"type":"file-history-snapshot","messageId":"m1","snapshot":{"messageId":"m1","timestamp":"2026-08-22T21:57:03.100Z","trackedFileBackups":{"src/logic.ts":{}}},"isSnapshotUpdate":false}"#;
+        let items = parse_line(line);
+        assert_eq!(items.len(), 1);
+        match &items[0] {
+            ConversationItem::FileChange { path, ts_ms } => {
+                assert_eq!(path, "src/logic.ts");
+                assert!(
+                    *ts_ms > 1_500_000_000_000,
+                    "a file change stamped 0 lands at the epoch in the timeline"
+                );
+            }
+            other => panic!("expected a file change, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_finished_turn_is_reported_and_a_tool_loop_is_not() {
+        // The autopilot's entire stopping condition (§32). `tool_use` means the
+        // agent is still working; reporting it as finished would have an
+        // autopilot interrupt an agent mid-tool-loop.
+        let ended = parse_line(REAL_ASSISTANT);
+        assert!(
+            ended
+                .iter()
+                .any(|i| matches!(i, ConversationItem::TurnEnded { reason, .. } if reason == "end_turn")),
+            "a turn that ended must say so"
+        );
+
+        let mid_loop = REAL_ASSISTANT.replace(r#""stop_reason":"end_turn""#, r#""stop_reason":"tool_use""#);
+        assert!(
+            !parse_line(&mid_loop)
+                .iter()
+                .any(|i| matches!(i, ConversationItem::TurnEnded { .. })),
+            "an agent still running tools has not finished its turn"
+        );
+    }
+
     #[test]
     fn parses_a_real_assistant_turn_with_official_usage() {
         let items = parse_line(REAL_ASSISTANT);
-        assert_eq!(items.len(), 1);
+        // The spoken turn, then the turn boundary the provider reported.
+        assert_eq!(items.len(), 2);
         match &items[0] {
             ConversationItem::Message { role, text, usage, .. } => {
                 assert_eq!(*role, Role::Assistant);
@@ -536,11 +613,92 @@ mod tests {
         assert!(with_usage > 0, "no official usage recovered from real transcripts");
     }
 
+    /// The autopilot's stopping condition, checked against reality (§32).
+    ///
+    /// The whole loop turns on `TurnEnded` being recovered from what the
+    /// provider actually writes. A fixture proves the parser handles the shape I
+    /// believe in; this proves it handles the shape on disk — and that
+    /// `tool_use` is never mistaken for a finished turn, which would have an
+    /// autopilot interrupt an agent mid-tool-loop.
+    ///
+    ///   cargo test --lib -- --ignored --nocapture
+    #[test]
+    #[ignore = "reads the local Claude Code transcript store"]
+    fn recovers_turn_boundaries_from_every_local_transcript() {
+        let Some(root) = home().map(|h| h.join(".claude").join("projects")) else {
+            return;
+        };
+        let Ok(dirs) = std::fs::read_dir(&root) else {
+            return;
+        };
+
+        let mut transcripts = 0usize;
+        let mut with_a_boundary = 0usize;
+        let mut boundaries = 0usize;
+        let mut reasons: std::collections::BTreeMap<String, usize> = Default::default();
+
+        for dir in dirs.flatten() {
+            let Ok(entries) = std::fs::read_dir(dir.path()) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                transcripts += 1;
+
+                let found: Vec<String> = parse_transcript(&text)
+                    .into_iter()
+                    .filter_map(|item| match item {
+                        ConversationItem::TurnEnded { reason, .. } => Some(reason),
+                        _ => None,
+                    })
+                    .collect();
+
+                if !found.is_empty() {
+                    with_a_boundary += 1;
+                }
+                boundaries += found.len();
+                for reason in found {
+                    assert_ne!(
+                        reason, "tool_use",
+                        "an agent still running tools must never be reported as finished"
+                    );
+                    *reasons.entry(reason).or_default() += 1;
+                }
+            }
+        }
+
+        println!(
+            "{transcripts} transcripts -> {boundaries} turn boundaries in {with_a_boundary}; {reasons:?}"
+        );
+        assert!(transcripts > 0, "expected at least one local transcript");
+        assert!(
+            boundaries > 0,
+            "no turn boundaries recovered — the autopilot would never act"
+        );
+        // Most sessions end a turn at some point. A tiny number legitimately do
+        // not (killed mid-tool-loop), so this is a majority check, not all.
+        assert!(
+            with_a_boundary * 2 > transcripts,
+            "only {with_a_boundary} of {transcripts} transcripts had a turn boundary"
+        );
+    }
+
     #[test]
     fn parses_a_whole_transcript_in_order() {
         let text = format!("{REAL_QUEUE_OP}\n{REAL_ATTACHMENT}\n{REAL_USER}\n{REAL_ASSISTANT}\n");
         let items = parse_transcript(&text);
-        assert_eq!(items.len(), 2, "only the two real turns survive");
+        // Two real turns, plus the end-of-turn marker that closes the second.
+        let spoken: Vec<_> = items
+            .iter()
+            .filter(|i| !matches!(i, ConversationItem::TurnEnded { .. }))
+            .collect();
+        assert_eq!(spoken.len(), 2, "only the two real turns survive");
         assert!(items[0].ts_ms() <= items[1].ts_ms());
     }
 }

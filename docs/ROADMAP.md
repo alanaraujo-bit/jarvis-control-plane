@@ -58,7 +58,7 @@ inspection (§76).
 - [x] Blocked always reachable, and must explain itself (§34)
 - [x] Mission Control home, sections that disappear when empty (§18)
 - [x] Missions linked to the agents working on them (§86)
-- [ ] Agents driving missions automatically under Unattended (§32)
+- [x] Agents driving missions automatically under Unattended (§32)
 - [x] Guardrails for sensitive operations (§35)
 **Verified in the installed app:** created a mission, was refused completion,
 ran verification, did the work, verified, completed — then deleted the artifact
@@ -70,6 +70,18 @@ run, answered the approval, and saw the mission leave Waiting. Separately, the
 guard was run against real Claude Code 2.1.240: a force push was refused before
 it executed, and under Unattended an `rm -rf` was stopped with the directory
 still there afterwards.
+
+### Unattended, as built
+- The autopilot takes the human's seat: after every turn it verifies, then
+  either sends the next instruction or stops with a reason.
+- **The provider says when a turn ended; we never infer it.** Claude Code
+  reports `stop_reason: "end_turn"` (`"tool_use"` means it is still working);
+  Codex emits `event_msg/task_complete`. Checked against all 88 transcripts on
+  this machine — 664 turn boundaries, none of them a `tool_use`.
+- Three endings, never "keep going and hope" (§34): Completed with evidence,
+  Waiting/Blocked for a person, or Failed on the turn budget or a stall.
+- A driven session reports `driven: true` to guardrails, so a rule set to *ask*
+  refuses instead of parking the agent on a prompt the autopilot cannot answer.
 
 ### Guardrails, as built
 - Eight operation classes, matched by a tokenising classifier that respects
@@ -124,13 +136,13 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ---
 
 ## Current milestone
-**M5 — Missions.** Guardrails landed, which was the missing prerequisite for
-agents driving missions unattended: without them, Unattended meant an agent
-doing irreversible things with nobody able to object.
+**M5 — Missions: complete.** Guardrails, then agents driving missions
+unattended — in that order, because Unattended without guardrails means an
+agent doing irreversible things with nobody able to object.
+
+Next is **M6 — Code surfaces**: Files, Editor, Diff/Review.
 
 ## Next steps
-1. Agents driving missions under Unattended (§32) — guardrails were its
-   prerequisite and are now in place
-2. Files, Editor and Diff/Review (§41–§43)
-3. Project Brain (§36) and Notes (§40)
-4. Finish localising the remaining evidence summaries (§65)
+1. Files, Editor and Diff/Review (§41–§43) — the largest remaining surface
+2. Project Brain (§36) and Notes (§40)
+3. Finish localising the remaining evidence summaries (§65)

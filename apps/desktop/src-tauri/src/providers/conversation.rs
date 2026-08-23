@@ -107,6 +107,24 @@ pub enum ConversationItem {
     /// throw away the answer to "what did this agent actually change?" (§39).
     #[serde(rename_all = "camelCase")]
     FileChange { path: String, ts_ms: i64 },
+    /// The agent finished a turn and is waiting for input (§32).
+    ///
+    /// **The provider says so; we do not infer it.** Claude Code reports
+    /// `stop_reason: "end_turn"` (as against `"tool_use"`, which means it is
+    /// still working), and Codex emits `event_msg/task_complete`. Verified
+    /// across all 87 Claude Code transcripts on this machine: 26,928 assistant
+    /// messages carry a stop reason, and 607 of them are `end_turn`.
+    ///
+    /// This exists because the alternative — treating a quiet terminal as a
+    /// finished turn — is a guess that is wrong exactly when it is expensive:
+    /// a long compile looks identical to a finished turn from the outside.
+    #[serde(rename_all = "camelCase")]
+    TurnEnded {
+        /// The reason the provider gave, kept verbatim so a new one is visible
+        /// rather than silently folded into an existing case.
+        reason: String,
+        ts_ms: i64,
+    },
 }
 
 impl ConversationItem {
@@ -117,6 +135,7 @@ impl ConversationItem {
             | Self::ToolCall { ts_ms, .. }
             | Self::ToolResult { ts_ms, .. }
             | Self::FileChange { ts_ms, .. }
+            | Self::TurnEnded { ts_ms, .. }
             | Self::Error { ts_ms, .. } => *ts_ms,
         }
     }

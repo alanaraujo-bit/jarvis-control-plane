@@ -293,6 +293,39 @@ export const en = {
   // ---- Evidence, worded here rather than in Rust (§65) ----------------------
   "evidence.guardrailRefused": "Not checked: a guardrail refused {operation}",
 
+
+  // ---- Autopilot (§32) -----------------------------------------------------
+  "autopilot.title": "Run unattended",
+  "autopilot.description":
+    "J.A.R.V.I.S. takes the seat in front of the agent: after every turn it verifies the criteria and either sends the next instruction or stops and tells you why.",
+  "autopilot.start": "Run until done",
+  "autopilot.stop": "Take over",
+  "autopilot.running": "Running unattended",
+  "autopilot.turn": "Turn {turns} of {budget}",
+  "autopilot.state.working": "Agent is working",
+  "autopilot.state.deciding": "Verifying",
+  "autopilot.state.finished": "Finished",
+  "autopilot.requiresUnattended":
+    "Set this mission's autonomy to Unattended first. Running it unsupervised is your decision to make, not ours.",
+  "autopilot.alreadyRunning": "This mission is already being driven.",
+  "autopilot.alreadyFinished": "This mission has already finished.",
+  "autopilot.outOfTurns":
+    "Stopped after the turn budget ran out. It was not converging on the criteria.",
+  "autopilot.needsManualCheck": "Everything left can only be confirmed by a person.",
+  "autopilot.awaitingApproval": "A guardrail needs your decision before it can continue.",
+  "autopilot.notConverging":
+    "Stopped: the same criteria kept failing with no progress between attempts.",
+  "autopilot.missionBlocked": "The mission is blocked and needs you.",
+  "autopilot.completed": "Finished unattended, with every required criterion verified.",
+
+  "activity.kind.autopilot.turn": "Autopilot sent an instruction",
+  "activity.kind.autopilot.completed": "Mission finished unattended",
+  "activity.kind.autopilot.outOfTurns": "Autopilot ran out of turns",
+  "activity.kind.autopilot.notConverging": "Autopilot stopped, not converging",
+  "activity.kind.autopilot.needsManualCheck": "Autopilot needs a person",
+  "activity.kind.autopilot.awaitingApproval": "Autopilot is waiting on approval",
+  "activity.kind.autopilot.missionBlocked": "Autopilot stopped, mission blocked",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

@@ -279,6 +279,38 @@ export const ptBR: Record<MessageKey, string> = {
 
   "evidence.guardrailRefused": "Não verificado: uma proteção recusou {operation}",
 
+
+  "autopilot.title": "Executar sem supervisão",
+  "autopilot.description":
+    "O J.A.R.V.I.S. assume o lugar na frente do agente: a cada turno ele verifica os critérios e ou envia a próxima instrução ou para e diz por quê.",
+  "autopilot.start": "Executar até concluir",
+  "autopilot.stop": "Assumir",
+  "autopilot.running": "Executando sem supervisão",
+  "autopilot.turn": "Turno {turns} de {budget}",
+  "autopilot.state.working": "O agente está trabalhando",
+  "autopilot.state.deciding": "Verificando",
+  "autopilot.state.finished": "Encerrado",
+  "autopilot.requiresUnattended":
+    "Defina a autonomia desta missão como Sem supervisão primeiro. Rodar sem acompanhamento é uma decisão sua, não nossa.",
+  "autopilot.alreadyRunning": "Esta missão já está sendo conduzida.",
+  "autopilot.alreadyFinished": "Esta missão já foi encerrada.",
+  "autopilot.outOfTurns":
+    "Parou depois de esgotar o orçamento de turnos. Não estava convergindo para os critérios.",
+  "autopilot.needsManualCheck": "Tudo o que resta só pode ser confirmado por uma pessoa.",
+  "autopilot.awaitingApproval": "Uma proteção precisa da sua decisão para continuar.",
+  "autopilot.notConverging":
+    "Parou: os mesmos critérios continuaram falhando sem progresso entre as tentativas.",
+  "autopilot.missionBlocked": "A missão está bloqueada e precisa de você.",
+  "autopilot.completed": "Concluída sem supervisão, com todos os critérios obrigatórios verificados.",
+
+  "activity.kind.autopilot.turn": "O piloto automático enviou uma instrução",
+  "activity.kind.autopilot.completed": "Missão concluída sem supervisão",
+  "activity.kind.autopilot.outOfTurns": "O piloto automático esgotou os turnos",
+  "activity.kind.autopilot.notConverging": "O piloto automático parou, sem convergir",
+  "activity.kind.autopilot.needsManualCheck": "O piloto automático precisa de uma pessoa",
+  "activity.kind.autopilot.awaitingApproval": "O piloto automático aguarda aprovação",
+  "activity.kind.autopilot.missionBlocked": "O piloto automático parou, missão bloqueada",
+
   "common.cancel": "Cancelar",
   "common.confirm": "Confirmar",
   "common.retry": "Tentar novamente",

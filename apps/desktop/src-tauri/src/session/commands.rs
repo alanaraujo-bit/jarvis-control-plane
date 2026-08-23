@@ -121,6 +121,38 @@ fn command_for(
     }
 }
 
+/// A session that has just been started, plus the handle to drive it.
+///
+/// `session_start` returns only what the UI needs; the autopilot needs the live
+/// session itself (§32), so the launch returns both and each caller takes what
+/// it can use.
+pub struct AgentLaunch {
+    pub id: String,
+    pub info: SessionInfo,
+    pub session: std::sync::Arc<crate::session::manager::LiveSession>,
+}
+
+/// Start an agent session that an autopilot will drive (§32).
+///
+/// `driven` is the important argument, and it is not the same as "unattended".
+/// A driven session usually **does** have its terminal open with a person
+/// reading along — and that person is not the one a provider's permission
+/// prompt reaches. Passing it through means a guardrail set to *ask* correctly
+/// refuses instead of parking the agent on a question the autopilot cannot
+/// answer (§35, and see `Snapshot::can_ask_a_person`).
+pub fn start_agent_session(
+    state: &State<'_, AppState>,
+    project_id: &str,
+    kind: SessionKind,
+    mission_id: Option<String>,
+    driven: bool,
+) -> Result<AgentLaunch> {
+    // A driven session has no view of its own to size it, so it gets a
+    // reasonable terminal rather than a degenerate one: agent CLIs lay out
+    // their output against the width they are told.
+    launch(state, project_id.to_string(), kind, None, 120, 30, mission_id, driven)
+}
+
 #[tauri::command]
 pub fn session_start(
     state: State<'_, AppState>,
@@ -134,6 +166,21 @@ pub fn session_start(
     // Evidence into one thread instead of five unrelated things (§86).
     mission_id: Option<String>,
 ) -> Result<SessionInfo> {
+    // Started by a person, so the seat in front of it is theirs.
+    launch(&state, project_id, kind, cwd, cols, rows, mission_id, false).map(|l| l.info)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn launch(
+    state: &State<'_, AppState>,
+    project_id: String,
+    kind: SessionKind,
+    cwd: Option<String>,
+    cols: u16,
+    rows: u16,
+    mission_id: Option<String>,
+    driven: bool,
+) -> Result<AgentLaunch> {
     // The working directory defaults to the project folder.
     let project_path: String = state.db.with(|conn| {
         conn.query_row(
@@ -164,6 +211,7 @@ pub fn session_start(
                 mission_id.as_deref(),
                 kind.provider_id(),
                 false,
+                driven,
             )
             .ok()
         })
@@ -277,15 +325,19 @@ pub fn session_start(
         mission_id.as_deref(),
     );
 
-    Ok(SessionInfo {
-        id,
-        project_id,
-        provider: kind.provider_id().to_string(),
-        title: None,
-        cwd,
-        state: session.state(),
-        created_at,
-        live: true,
+    Ok(AgentLaunch {
+        id: id.clone(),
+        info: SessionInfo {
+            id,
+            project_id,
+            provider: kind.provider_id().to_string(),
+            title: None,
+            cwd,
+            state: session.state(),
+            created_at,
+            live: true,
+        },
+        session,
     })
 }
 

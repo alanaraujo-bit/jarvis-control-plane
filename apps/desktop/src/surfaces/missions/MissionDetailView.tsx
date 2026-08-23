@@ -4,6 +4,8 @@ import { useT } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
 import { missionSessions, type SessionInfo } from "../../app/sessions";
 import { StatusDot } from "../../design/StatusDot";
+import { AutopilotPanel } from "../autopilot/AutopilotPanel";
+import { useAutopilot } from "../autopilot/useAutopilot";
 import { GuardrailHistory, PendingApprovals } from "../guardrails/PendingApprovals";
 import { useGuardrails } from "../guardrails/useGuardrails";
 import {
@@ -73,7 +75,8 @@ export function MissionDetailView({
   onOpenSession?: (projectId: string, sessionId: string) => void;
 }) {
   const t = useT();
-  const { detail, verify, setStatus, confirmCriterion, setTaskDone } = useMissions();
+  const { detail, verify, setStatus, setAutonomy, confirmCriterion, setTaskDone } =
+    useMissions();
   const {
     pending,
     events: guardrailEvents,
@@ -81,9 +84,16 @@ export function MissionDetailView({
     loadEvents,
     decide,
   } = useGuardrails();
+  const {
+    runs,
+    refresh: refreshRun,
+    start: startRun,
+    stop: stopRun,
+  } = useAutopilot();
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [autopilotRefusal, setAutopilotRefusal] = useState<string | null>(null);
   const [agents, setAgents] = useState<SessionInfo[]>([]);
 
   const load = async () => {
@@ -91,13 +101,30 @@ export function MissionDetailView({
     setAgents(await missionSessions(missionId));
     // Guardrails are part of this mission's state, not a separate concern:
     // a held approval is why it is not progressing (§34, §35).
-    await Promise.all([loadPending(missionId), loadEvents(undefined, missionId)]);
+    await Promise.all([
+      loadPending(missionId),
+      loadEvents(undefined, missionId),
+      refreshRun(missionId),
+    ]);
   };
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionId]);
+
+  const run = runs[missionId] ?? null;
+  const driving = run !== null && run.state !== "finished";
+
+  // While an agent is driving, the mission changes without anyone touching it:
+  // criteria get verified, guardrails hold things, the run ends. Polling only
+  // while that is true keeps an idle mission surface completely quiet.
+  useEffect(() => {
+    if (!driving) return;
+    const timer = window.setInterval(() => void load(), 3000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driving, missionId]);
 
   if (!mission) return <div className="md" />;
 
@@ -141,13 +168,37 @@ export function MissionDetailView({
           </div>
           {mission.goal && <p className="md__goal">{mission.goal}</p>}
 
+          {/* Autonomy is set here because it is a property of this mission, and
+              because Unattended (§32) is otherwise unreachable: an autopilot
+              refuses to run a mission the user has not said may run alone. */}
           <div className="md__facts">
-            <span className="md__fact">
-              {t("mission.autonomy")}: {t(`mission.autonomy.${mission.effectiveAutonomy}` as never)}
-              {mission.autonomy === null && (
-                <span className="md__inherited"> · {t("mission.autonomy.inherited")}</span>
-              )}
-            </span>
+            <span className="md__fact">{t("mission.autonomy")}</span>
+            <div
+              className="md__autonomy"
+              role="radiogroup"
+              aria-label={t("mission.autonomy")}
+            >
+              {(["guided", "autonomous", "unattended"] as const).map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  role="radio"
+                  aria-checked={mission.effectiveAutonomy === level}
+                  data-active={mission.effectiveAutonomy === level || undefined}
+                  data-inherited={mission.autonomy === null || undefined}
+                  className="md__autonomy-option"
+                  onClick={async () => {
+                    await setAutonomy(missionId, level);
+                    await load();
+                  }}
+                >
+                  {t(`mission.autonomy.${level}` as never)}
+                </button>
+              ))}
+            </div>
+            {mission.autonomy === null && (
+              <span className="md__inherited">{t("mission.autonomy.inherited")}</span>
+            )}
           </div>
         </header>
 
@@ -205,6 +256,28 @@ export function MissionDetailView({
             {t("mission.notVerified", { count: openRequired.length })}
           </p>
         )}
+
+        {/* Running it unattended (§32). Directly under the actions, because
+            "run until done" belongs beside "verify" and "mark complete" — they
+            are the three things you can do to a mission. */}
+        <AutopilotPanel
+          unattended={mission.effectiveAutonomy === "unattended"}
+          run={run}
+          refusal={autopilotRefusal}
+          onStart={() => {
+            void (async () => {
+              const error = await startRun(missionId);
+              setAutopilotRefusal(error);
+              if (!error) await load();
+            })();
+          }}
+          onStop={() => {
+            void (async () => {
+              await stopRun(missionId);
+              await load();
+            })();
+          }}
+        />
 
         {/* Held approvals sit directly under the actions that produced them:
             pressing Verify is what puts a decision here, so the answer belongs

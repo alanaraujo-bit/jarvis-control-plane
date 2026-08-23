@@ -40,6 +40,12 @@ fn kind_for(item: &ConversationItem) -> EventKind {
             EventKind::Usage
         }
         ConversationItem::Message { .. } | ConversationItem::Thinking { .. } => EventKind::Message,
+        // A finished turn is a message frame on purpose, not a lifecycle one.
+        //
+        // The autopilot reads it from the conversation projection (§32), and
+        // Conversation View can render it as the turn boundary it is. Filing it
+        // under lifecycle would put it in a stream nothing structured reads.
+        ConversationItem::TurnEnded { .. } => EventKind::Message,
         ConversationItem::ToolCall { .. } => EventKind::ToolCall,
         ConversationItem::ToolResult { .. } => EventKind::ToolResult,
         ConversationItem::FileChange { .. } => EventKind::FileChange,

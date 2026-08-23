@@ -151,6 +151,37 @@ pattern. The negative cases are the load-bearing ones: `--force-with-lease` and
 `echo "rm -rf x"` must not match, or the guardrail is the first thing switched
 off.
 
+## Unattended runs (§32)
+
+Guided and Autonomous assume someone is at the keyboard. Unattended is the mode
+where nobody is, so the autopilot takes that seat:
+
+```
+  agent session started (driven: true)
+        │
+        ├─ opening instruction ──► the agent, typed in paced chunks
+        │
+        ▼
+  provider says the turn ended ──► verify the mission (§30, real checks)
+        │
+        ├─ every required criterion verified ──────► Completed
+        ├─ blocked, or a guardrail holds something ► Waiting, with a reason
+        ├─ turn budget spent, or the same failures ► Failed, with a reason
+        └─ otherwise ──► next instruction, naming what does not pass yet
+```
+
+The stopping condition comes from the **provider**, never from a quiet terminal
+(D14): Claude Code's `stop_reason: "end_turn"` and Codex's
+`event_msg/task_complete`, both projected as `ConversationItem::TurnEnded`.
+
+`autopilot::plan` is a pure function of mission state — what to say and when to
+stop is the part that must never be subtly wrong, so it is testable in
+isolation. `autopilot::driver` is the only part that touches processes, the
+database and the clock.
+
+Stopping a run does **not** kill the agent. Someone taking over usually wants to
+type the next thing themselves, and killing it would throw away its context.
+
 ## Distribution (§12, §62)
 
 The product is delivered as a Windows NSIS installer built by Tauri, carrying

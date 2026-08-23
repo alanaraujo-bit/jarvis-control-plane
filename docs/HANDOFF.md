@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-10 commits · **176 tests** (168 Rust, 8 i18n) · all green.
+12 commits · **205 tests** (197 Rust, 8 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -97,6 +97,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | Analytics | tokens by provider/model/project/day, **human leverage (§53)** |
 | Installer + updater | NSIS, per-user, minisign-verified, uninstall preserves data |
 | **Guardrails (§35)** | policy per operation and project; real pre-execution enforcement for Claude Code and for our own verification commands |
+| **Unattended runs (§32)** | an agent driven turn by turn until the mission is verified, blocked, or out of budget |
 
 **The full loop has been executed end to end**: mission created → completion
 refused → agent launched from the mission → Claude Code created a real file →
@@ -106,8 +107,8 @@ re-verification ran, and completion was **revoked**.
 ### Not built — deliberately absent, not stubbed
 
 Project Brain (§36–39), Notes (§40), Files/Editor/Diff (§41–43), Preview (§46),
-Global Search (§51), onboarding (§13), agents driving missions under Unattended
-(§32), mobile PWA (§55), cloud (§59), voice (§54).
+Global Search (§51), onboarding (§13), mobile PWA (§55), cloud (§59),
+voice (§54).
 
 ---
 
@@ -159,6 +160,19 @@ Every one of these is real and already cost time.
     stays silent and the tool call proceeds, because a guard that fails closed
     turns any bug in it into an agent that cannot work at all.
 
+11. **Typing into an agent CLI is not one write.** Sending a whole instruction
+    in a single write loses characters — the line editor re-renders on every
+    keystroke and a burst outruns it (observed: "so tere is no"). And the
+    submit key must be a **separate write after a pause**, or the editor
+    swallows it and the instruction sits in the prompt unsent. That one is
+    vicious: the terminal looks completely correct while the agent has been
+    told nothing. See `autopilot::driver::send`.
+
+12. **A driven session is not "attended", even with the terminal open.**
+    Watching is not answering. `Snapshot::can_ask_a_person` requires a view
+    *and* no autopilot in the seat; conflating them would park an unattended
+    agent on a permission prompt nobody can answer.
+
 ---
 
 ## 6. Commands
@@ -209,16 +223,12 @@ folder for agent tests — **never run test agents in Alan's real projects.**
 
 ## 7. Suggested next steps, in priority order
 
-1. **Agents driving missions under Unattended (§32)** — guardrails were the
-   thing that had to exist first, and now do. An unattended agent that reaches
-   for something sensitive is refused with a reason and the mission goes to
-   Waiting, rather than hanging on a prompt nobody can answer.
-2. **Files, Editor, Diff/Review (§41–43)** — the largest remaining surface.
+1. **Files, Editor, Diff/Review (§41–43)** — the largest remaining surface.
    Monaco is the intended editor, behind a `packages/editor` boundary.
-3. **Project Brain (§36–39) and Notes (§40)** — the memory layer.
-4. **Onboarding (§13)** — first-run experience; the environment scan already
+2. **Project Brain (§36–39) and Notes (§40)** — the memory layer.
+3. **Onboarding (§13)** — first-run experience; the environment scan already
    provides its data.
-5. **Finish localising evidence summaries (§65)** — the mechanism now exists
+4. **Finish localising evidence summaries (§65)** — the mechanism now exists
    (`evidence.code` + `code_args`, rendered through the catalogue) and the
    guardrail refusal uses it. The command/file summaries still need converting.
 

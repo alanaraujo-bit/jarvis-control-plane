@@ -155,6 +155,60 @@ rendered eight raw message keys — found by looking at a screenshot, which is t
 fourth time in this codebase that has been the only thing that would have caught
 a bug. `an_operation_serialises_as_the_id_used_everywhere_else` now pins it.
 
+## D14 — A turn ends when the provider says so, never when the terminal goes quiet
+**Date:** 2026-08-23
+**Why:** The autopilot (§32) has to know when the agent has finished a turn, and
+the tempting signal — the terminal going quiet — is a guess that is wrong
+exactly when it is expensive. A long compile and a finished turn look identical
+from outside; interrupting the first is worse than waiting for the second.
+
+Both providers state it outright. Claude Code reports `stop_reason: "end_turn"`,
+where `"tool_use"` means it is still mid-loop and will be back; Codex emits
+`event_msg/task_complete`.
+
+**Verified before designing anything:** across all 88 Claude Code transcripts on
+this machine, 26,928 assistant messages carry a stop reason and 664 turn
+boundaries were recovered, in 82 of 88 sessions, none of them a `tool_use`. The
+parsers turn both providers' signals into `ConversationItem::TurnEnded` and the
+autopilot reacts to that and nothing else.
+
+**Consequence:** it also fixed a real bug found the same way — a
+`file-history-snapshot` keeps its timestamp *inside* `snapshot`, unlike every
+other entry, so file changes were being stamped at the epoch in the timeline.
+
+## D15 — A driven session has nobody to ask, even with someone watching
+**Date:** 2026-08-23
+**Why:** The guardrail snapshot originally treated "a view is attached" as
+"there is a human to ask". That is wrong, and wrong in the direction that hangs.
+
+A driven session usually **does** have its terminal open with a person reading
+along — and that person is not who the provider's permission prompt reaches.
+The autopilot is in the seat. The agent would sit on a prompt the autopilot
+cannot answer, which is exactly the indefinite consumption §34 forbids, and it
+would look from outside like the agent had simply gone quiet.
+
+**Decision:** `Snapshot::can_ask_a_person()` requires a view attached **and** no
+autopilot driving. A driven session sets `driven: true`, so a rule set to *ask*
+refuses with a reason and the mission goes to Waiting.
+
+## D16 — The autopilot types; it does not paste
+**Date:** 2026-08-23
+**Why:** Found by driving a real agent and reading the session log — twice, in
+two different ways, neither of which any test would have caught.
+
+First, a freshly started agent has never spoken, so there is no turn end to
+react to. Without an opening instruction the run sits at "turn 0" with a working
+agent doing nothing at all.
+
+Second, sending the instruction as one write **loses characters** (observed on
+screen: "so tere is no"), and appending the carriage return to the text leaves
+the instruction sitting in the prompt **unsent** — the line editor is still
+catching up and swallows it. That failure is the nastiest of the three, because
+the terminal shows the words perfectly while the agent has been told nothing.
+
+**Decision:** wait for the prompt to be drawn, write the instruction in small
+paced chunks, then send the submit key as a separate write after a pause.
+
 ## D9 — The main binary is named `jarvis-desktop`, not `jarvis`
 **Date:** 2026-08-22
 **Why:** Found by running the real installer on a real machine, not by reading

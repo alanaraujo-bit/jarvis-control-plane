@@ -207,11 +207,24 @@ pub struct Snapshot {
     pub provider: String,
     /// Whether a terminal view is attached right now.
     ///
-    /// This is the difference between "ask the human" and "there is no human to
-    /// ask". Under Unattended (§32) nobody is looking at the terminal, so a
-    /// provider's own permission prompt would wait forever — which is exactly
-    /// the indefinite consumption §34 forbids.
+    /// Necessary for there to be someone to ask, but **not sufficient** — see
+    /// `driven`.
     pub attended: bool,
+    /// Whether an autopilot is occupying the human's seat (§32).
+    ///
+    /// This is the distinction that matters, and it was nearly got wrong.
+    /// "Attended" was originally taken to mean "a view is attached", but
+    /// watching is not answering: a driven session usually **does** have its
+    /// terminal open, with a person reading along — and that person is not the
+    /// one the provider's permission prompt reaches. The agent would sit on a
+    /// prompt the autopilot cannot answer, which is precisely the indefinite
+    /// consumption §34 forbids, and it would look like the agent had simply
+    /// gone quiet.
+    ///
+    /// So a question can only be put to a person when a view is attached **and**
+    /// nothing is driving the session.
+    #[serde(default)]
+    pub driven: bool,
     /// Operation id to decision, already resolved through the chain.
     pub decisions: std::collections::BTreeMap<String, String>,
     /// Where the guard appends what it decided.
@@ -221,6 +234,14 @@ pub struct Snapshot {
 pub const SNAPSHOT_VERSION: u32 = 1;
 
 impl Snapshot {
+    /// Whether there is a person who can actually answer a question right now.
+    ///
+    /// Both halves are required: somebody has to be looking, and the seat in
+    /// front of the agent has to be theirs rather than an autopilot's.
+    pub fn can_ask_a_person(&self) -> bool {
+        self.attended && !self.driven
+    }
+
     pub fn decision_for(&self, operation: Operation) -> Decision {
         self.decisions
             .get(operation.as_str())
@@ -385,10 +406,37 @@ mod tests {
             mission_id: None,
             provider: "claude-code".into(),
             attended: true,
+            driven: false,
             decisions: Default::default(),
             log_path: "x".into(),
         };
         assert_eq!(snapshot.decision_for(GitForcePush), Decision::Ask);
+    }
+
+    /// Watching is not answering (§32).
+    #[test]
+    fn a_driven_session_has_nobody_to_ask_even_with_a_view_attached() {
+        let mut snapshot = Snapshot {
+            version: SNAPSHOT_VERSION,
+            session_id: "s".into(),
+            project_id: "p".into(),
+            mission_id: None,
+            provider: "claude-code".into(),
+            attended: true,
+            driven: false,
+            decisions: Default::default(),
+            log_path: "x".into(),
+        };
+        assert!(snapshot.can_ask_a_person());
+
+        // An autopilot is in the seat. The person reading along is not the one
+        // the provider's prompt reaches, so the agent would wait forever.
+        snapshot.driven = true;
+        assert!(!snapshot.can_ask_a_person());
+
+        // And with nobody looking at all, plainly not.
+        snapshot.attended = false;
+        assert!(!snapshot.can_ask_a_person());
     }
 
     #[test]

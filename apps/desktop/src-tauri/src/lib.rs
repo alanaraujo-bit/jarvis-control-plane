@@ -6,6 +6,7 @@
 
 mod activity;
 mod analytics;
+mod autopilot;
 mod db;
 mod envscan;
 mod git;
@@ -42,6 +43,8 @@ pub struct AppState {
     pub db: Arc<Database>,
     /// Every live session in the application.
     pub sessions: SessionManager,
+    /// Missions being driven by an agent right now (§32).
+    pub autopilots: autopilot::driver::Autopilots,
     /// Root for session logs and other bulk local data.
     pub data_dir: PathBuf,
 }
@@ -92,6 +95,7 @@ pub fn run() {
                 db: Arc::new(db),
                 data_dir,
                 sessions: SessionManager::default(),
+                autopilots: autopilot::driver::Autopilots::default(),
             });
             Ok(())
         })
@@ -127,12 +131,16 @@ pub fn run() {
             mission::store::confirm_criterion,
             mission::store::withdraw_mission_criterion,
             mission::store::set_mission_task_done,
+            mission::store::set_mission_autonomy,
             guardrail::commands::guardrail_policies,
             guardrail::commands::set_guardrail_policy,
             guardrail::commands::guardrail_events,
             guardrail::commands::guardrail_pending,
             guardrail::commands::decide_guardrail,
             guardrail::commands::guardrail_classify,
+            autopilot::commands::autopilot_status,
+            autopilot::commands::autopilot_start,
+            autopilot::commands::autopilot_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");
