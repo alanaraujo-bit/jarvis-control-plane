@@ -31,11 +31,15 @@ Working and verified against real agents on a real machine:
 | Mission → Agent → Terminal → Conversation → Evidence thread | Working |
 | Activity log — what happened, filterable | Working |
 | Analytics — tokens, runtime, and human leverage (§53) | Working |
+| Guardrails — sensitive operations held for a decision, per project | Working |
+| Unattended runs — an agent driven turn by turn to a verified mission | Working |
+| Files, Editor (Monaco), Diff/Review, Git write ops, Worktrees | Working |
+| Project Brain, project history, Notes | Working |
+| Global Search — knowledge, notes, missions, activity, conversations | Working |
 | Windows installer + updater | Working (unsigned — see `docs/BLOCKERS.md`) |
 
 Not built yet — deliberately absent rather than stubbed (§81):
-Project Brain, Notes, Files/Editor/Diff, Preview, Global Search, onboarding,
-guardrails, mobile companion, cloud sync, voice.
+Preview, onboarding, mobile companion, cloud sync, voice.
 
 **Picking this up in a new session? Start with [`docs/HANDOFF.md`](docs/HANDOFF.md).**
 

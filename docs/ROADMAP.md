@@ -198,14 +198,15 @@ the palette while the editor has focus) or exempting the terminal's DOM subtree
 from the capture handler. The second is the one worth building if he wants it
 back.
 
-## M7 — Knowledge  ~
+## M7 — Knowledge  ✅
 - [x] Activity log (§48) — recorded at the moments worth knowing, filterable
 - [x] Analytics (§52) — tokens by provider/model/project/day, confidence-aware
 - [x] Human leverage (§53) — measured from real interaction, not inferred
 - [x] Project Brain (§36–§38) — knowledge, briefed to every agent that starts
 - [x] Project history (§39) — the project's own story, not the global feed
 - [x] Notes (§40) — working memory, never sent anywhere
-- [ ] Global Search (§51)
+- [x] Global Search (§51) — knowledge, notes, missions, activity and
+      conversation content, across every project, from Ctrl+Shift+F
 
 ### The memory layer, as built
 - **Knowledge is briefed; a note is not** (D21). One question decides which a
@@ -240,6 +241,39 @@ notes list. Both themes, both languages.
   `autopilot_start` now refuses rather than starting something that cannot
   proceed (§34).
 
+### Global Search, as built (§51)
+- **`session_events` had no writer since migration 1** (D25) — HANDOFF's own
+  claim that it "exists exactly for this" was checked before building on it and
+  found false. Extended additively rather than recreated, and wired into the
+  transcript tailer that already mirrors usage and file changes.
+- **A standalone FTS5 index**, not `content=session_events`: the table is
+  `WITHOUT ROWID` with a composite key, which external-content mode cannot key
+  against. Knowledge, notes, missions and activity stay on plain `LIKE` —
+  small tables, the same choice `activity::list` already makes.
+- **Every project, always** — the question is "where did I see that", and
+  scoping to whichever project is open would silently hide the answer whenever
+  it lives elsewhere.
+- **A past session gets a read-only tab it never started** (D25). Global
+  Search is the first thing that can open a session's conversation after the
+  session ended and its tab was closed; the tab is never `startSession`-ed and
+  never `closeSession`-ed, because nothing here was ever attached to it.
+- **Usage and searchable text are independent, not alternatives** (D26). Found
+  by running a real Claude Code turn and searching for its own reply: only the
+  question came back. A reply's usage and its own text used to be routed by
+  one `match`, so a message carrying both — the ordinary shape of a reply —
+  took the usage arm and its text was never indexed.
+
+**Verified in the installed app:** searched "guardrail" from Mission Control
+and landed on a real mission and its activity, translated and timestamped;
+searched a real Brain entry's own words and it opened straight into that
+project's Memória tab; started a real Claude Code turn in a scratch project,
+searched for its reply and found only the question — fixed the usage/text bug,
+rebuilt, same probe again, and both sides of the exchange came back labelled
+**Você** and **Agente**. Closed the session and searched a third time: Global
+Search opened it back up as a read-only conversation tab, model name and token
+counts intact, and closing that tab touched nothing on the backend. Both
+themes, both languages.
+
 ### Notes on the analytics design
 Bars use one hue because each row is already named beside it: the bar carries
 magnitude, the label carries identity. Colouring by rank would double-encode
@@ -263,19 +297,18 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ---
 
 ## Current milestone
-**M7 — Knowledge.** Activity, Analytics, human leverage and the memory layer
-(Project Brain, history and Notes) are done. **Global Search (§51)** is what
-remains.
-
-M6 is complete: Files, the editor, Review, Git write operations and worktrees.
+**M6 and M7 are both complete.** Files, the editor, Review, Git write
+operations, worktrees, the memory layer and Global Search are all built and
+verified against real data and a real agent.
 
 ## Next steps
-1. Global Search (§51) — finishes M7. The one place the product cannot yet
-   answer "where did I see that?"
-2. Onboarding (§13) — the environment scan already provides its data
-3. Let an agent write to the Brain. The column and the provenance exist
+1. Let an agent write to the Brain. The column and the provenance exist
    (`source = 'agent'`, `session_id`), and nothing produces such a row yet:
    what is missing is the moment worth writing one, most likely at the end of
    a verified mission.
-4. Finish localising the remaining evidence summaries (§65)
-5. The rest of M2: split panes (§20), scrollback search, image paste (§22)
+2. Onboarding (§13) — the environment scan already provides its data
+3. Finish localising the remaining evidence summaries (§65)
+4. The rest of M2: split panes (§20), scrollback search, image paste (§22)
+5. Global Search does not backfill (D25) — it finds everything said from this
+   build onward, forward-only. A one-time backfill over every session log was
+   deliberately left out of this pass; see HANDOFF §7.

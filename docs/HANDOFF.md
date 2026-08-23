@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**333 tests** (324 Rust, 9 i18n) · all green.
+**349 tests** (340 Rust, 9 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -106,6 +106,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Project Brain (§36–§38)** | what is known about a project, **briefed to every agent that starts here** (D21/D23) |
 | **Project history (§39)** | the project's own story, and what the record shows — derived, never stored (D22) |
 | **Notes (§40)** | working memory, never sent to an agent; promotable into knowledge |
+| **Global Search (§51)** | knowledge, notes, missions, activity and conversation content, across **every** project, from one shortcut (D25/D26) |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -158,10 +159,24 @@ the panel reported, and `git status` in the project was empty: nothing of ours
 in the user's repository. Promoted a note into knowledge and watched it leave
 the notes list and the count fall. Both themes, both languages.
 
+*Global Search (§51), in the installed app.* `session_events` turned out to
+have no writer since migration 1 — HANDOFF said otherwise; that was wrong.
+Wired it into the same transcript tailer that already mirrors usage and file
+changes, then ran a real Claude Code turn in a scratch project and searched
+for its own reply: only the question came back. The reply carried real usage
+alongside its own text, and `mirror`'s routing had one arm pick usage over
+text whenever both were present — which is the ordinary shape of a reply, not
+an edge case (D26). Fixed, rebuilt, same probe again: both sides of the
+exchange found, labelled **Você** and **Agente**, snippet and timestamp
+correct, from Mission Control with nothing open. Closed the session and
+searched again — Global Search opened it back up as a read-only conversation
+tab it had never started, with the model name and token counts still shown,
+and closing that tab called nothing on the backend because nothing had ever
+been attached.
+
 ### Not built — deliberately absent, not stubbed
 
-Preview (§46), Global Search (§51), onboarding (§13), mobile PWA (§55),
-cloud (§59), voice (§54).
+Preview (§46), onboarding (§13), mobile PWA (§55), cloud (§59), voice (§54).
 
 Also absent by choice: **push and pull**. Review commits but does not talk to a
 remote — see section 7.
@@ -359,6 +374,36 @@ Every one of these is real and already cost time.
     it has to agree with, separately from its arguments, because guessing which
     argument decides the plural is not the interface's job. Found on screen.
 
+29. **A table with a comment describing its purpose can still have no writer.**
+    `session_events` was declared in migration 1 as "a searchable mirror... for
+    §51", and nothing ever inserted into it — a repo-wide check of every
+    `INSERT` site confirmed zero rows on every installation this product has
+    ever run on. The earlier version of this file said `session_events`
+    "exists exactly for this"; it did not. Comments describe intent, not
+    behaviour — the same lesson as item 24, one layer earlier: read the
+    schema's writers, not its doc comment, before building on top of it.
+
+30. **A `Message` with real text and real usage together is the ordinary shape
+    of a reply, not an edge case.** `mirror`'s first pass routed on one
+    `match`: a message carrying non-empty usage took the "record usage" arm
+    and never reached "record searchable text". Every substantive reply an
+    agent ever gave carried both, so every substantive reply was silently
+    absent from search — only a plain user-typed message, which never carries
+    usage, was ever indexed. Found by running a real Claude Code turn and
+    searching for its own answer: only the question came back. See D26.
+
+31. **`cargo build --release` does not produce the binary this product
+    ships.** It compiles `jarvis.exe` — the crate's own name — and Tauri's own
+    build step is what copies it to `jarvis-desktop.exe` afterward (D9).
+    Launching the plain-cargo binary directly showed a window that never
+    became visible: correct size, correct title, `IsWindowVisible = false` —
+    the frontend's `window_ready` reveal never fired. `pnpm tauri build
+    --no-bundle` produces the same binary the installer would, in about the
+    same time as a plain `cargo build`, skipping only NSIS — which is worth
+    knowing separately, because NSIS is currently the part that hangs (see
+    `docs/BLOCKERS.md` B5). Use `--no-bundle` to verify a change against the
+    real app; a bare `cargo build` is not that.
+
 ## 6. Commands
 
 ```bash
@@ -422,25 +467,31 @@ selected in the listing, and typing over it silently produces
 
 ## 7. Suggested next steps, in priority order
 
-**M6 is finished** (Files, editor, Review, Git, worktrees) and **M7 is nearly
-finished** — the memory layer is built and verified against a real agent.
+**M6 and M7 are both finished.** Files, editor, Review, Git, worktrees, the
+memory layer and Global Search are all built and verified against real data
+and a real agent.
 
-1. **Global Search (§51)** — the last of M7, and the one question the product
-   cannot yet answer: *"where did I see that?"* Everything it would search is
-   already in one place (D2): `session_events` exists for exactly this, and the
-   Brain, missions and activity are all queryable rows.
-2. **Let an agent write to the Brain.** The whole path is in place —
+1. **Let an agent write to the Brain.** The whole path is in place —
    `add_knowledge` takes `Source::Agent`, `session_id` and `mission_id`, the
    surface renders "an agent recorded this" in amber, and no code produces such
    a row. What is missing is the *moment*: most plausibly at the end of a
    verified mission, asking the agent what it learned that should outlive the
    session. Worth thinking about carefully — an agent that writes freely into
    a project's memory will fill it with restatements of its own last task.
-3. **Onboarding (§13)** — the environment scan already provides its data.
-4. **Finish localising evidence summaries (§65)** — the mechanism exists
+2. **Onboarding (§13)** — the environment scan already provides its data.
+3. **Finish localising evidence summaries (§65)** — the mechanism exists
    (`evidence.code` + `code_args`); the command/file summaries still need it.
-5. **The rest of M2** — split panes (§20), scrollback search, image paste (§22).
+4. **The rest of M2** — split panes (§20), scrollback search, image paste (§22).
    The terminal is the hero surface and these are what it still lacks.
+5. **Global Search does not backfill.** It has found everything said in a
+   session from this build onward, forward-only (D25) — a session recorded
+   before today has nothing in `session_events` and simply will not surface in
+   the Conversas group, which looks identical to "no match" rather than
+   "too old to search". A one-time backfill walking `SessionLogReader::read_from(0)`
+   over every session directory would close the gap, but was deliberately left
+   out of this pass: it is a migration-time scan over unbounded on-disk data,
+   on a machine with dozens of transcripts, and earlier bugs here (rule 9) came
+   from exactly that kind of operation running inside a schema migration.
 
 ### Things left on the table, deliberately
 
@@ -468,3 +519,6 @@ finished** — the memory layer is built and verified against a real agent.
   checks fail honestly rather than pretending to be up to date.
 - **B3** Vercel connector needs an interactive OAuth sign-in. Blocks cloud and
   mobile only; nothing local depends on it.
+- **B5** `pnpm tauri build`'s NSIS step hangs on this machine — no `makensis`
+  process ever appears, zero CPU, for 25+ minutes. `--no-bundle` works fine and
+  is what this session used throughout. Not urgent, but real.

@@ -459,3 +459,72 @@ happened in this project yet" over a project where something had just happened.
 a mounted-and-hidden component has instead of a mount. Note the shape of this
 bug: the comment was right and the code was wrong, so reading the code alone
 would have confirmed the intention rather than the behaviour.
+
+## D25 — session_events becomes a real mirror, and Global Search stays cross-project
+**Date:** 2026-08-23
+**Why:** §51 needed the one place D2 promised: `session_events`. Checking
+before building found it had no writer since migration 1 — a repo-wide search
+of every `INSERT` site turned up nothing. It existed, with zero rows, on every
+installation the product has ever run on. HANDOFF's own §7 said otherwise;
+HANDOFF was wrong.
+
+**session_events is extended, not recreated.** The table had no reader either,
+so nothing depends on the shape migration 1 gave it — but rule 2 at the top of
+`migrations.rs` says additive, so migration 9 adds three columns (`project_id`,
+`label`, `text`) rather than dropping and recreating the table. `kind` is
+repurposed to carry `ConversationItem`'s own tag (message | thinking | toolCall
+| toolResult | error) rather than the coarser session-log `EventKind`, which
+collapses message, thinking, turnEnded and error together — exactly the
+distinction search needs to tell what an agent said from what it only thought.
+
+**The FTS5 index is standalone, not `content=session_events`.** External-content
+mode keys against an integer rowid, and `session_events` is `WITHOUT ROWID` with
+a composite `(session_id, seq)` key. A second small copy of the handful of
+columns a result needs (`session_events_fts`) sidesteps that entirely, at a
+cost this table's size will never notice — verified available in the `bundled`
+rusqlite feature already in use, with no new Cargo dependency.
+
+**Everything else uses `LIKE`, not FTS.** Knowledge, notes, missions and
+activity are small tables — a few hundred rows even for a heavy user — so a
+plain parameterised `LIKE '%…%'` is the same choice `activity::list` already
+makes. Adding FTS machinery there would be infrastructure this product does
+not need yet, the same restraint D22 applies to derived facts.
+
+**Global Search spans every project, not the open one.** The question it
+answers — "where did I see that" — has no reason to assume the answer lives in
+whatever happens to be open, and scoping to one project would silently hide the
+times it does not.
+
+**A past session's conversation had no way to be reopened.**
+`session_conversation` already worked for an ended session — `ConversationView`'s
+own `live` prop anticipates exactly this — but `ProjectWorkspace` only ever
+built a tab for a session it started or found still running (`adopt` filters to
+`live`). A conversation match from Global Search had nowhere to go.
+`TerminalTab.historical` is the fix: a tab that renders only `ConversationView`,
+was never `startSession`-ed, and is never `closeSession`-ed either — closing it
+ends nothing, because nothing here was ever attached to begin with.
+
+**Verified against a real Claude Code turn, not just unit tests**, which is the
+only reason the next decision exists.
+
+## D26 — usage and searchable text are recorded independently, not as alternatives
+**Date:** 2026-08-23
+**Why:** Found by running a real Claude Code turn in a scratch project and
+searching for its own reply: only the question came back. `mirror`'s first pass
+routed on a single `match` — a `Message` carrying non-empty usage took the
+"record usage" arm, and a `Message` without it fell through to "record
+searchable text". A real assistant reply almost always carries **both** its own
+text and the usage the provider billed for producing it, so the ordinary case —
+not an edge case — took the usage arm and its text was silently never indexed.
+Only a plain user-typed message, which never carries usage, was ever
+searchable; the replies were not.
+
+**Decision:** the two inserts are independent statements, not exclusive match
+arms. A `Message` with usage writes to `usage_samples`; the same item, if its
+text is non-empty, also writes to `session_events` — regardless of what the
+usage check decided. `a_reply_with_both_text_and_usage_is_recorded_both_ways`
+pins the contract, and
+`a_real_claude_code_reply_survives_the_full_pipeline_into_search` runs the
+actual line captured from the failing turn through the real parser, not a
+hand-built `ConversationItem`, so the whole pipeline is pinned rather than just
+`mirror`'s contract in isolation.
