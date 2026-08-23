@@ -233,9 +233,14 @@ back.
       conversation content, across every project, from Ctrl+Shift+F
 - [x] An agent writes to its own Brain (§36–§38, D27) — once, at the end of
       an Unattended run, asked one narrow question it can decline to answer
-- [x] Global Search finds sessions recorded **before** it existed (D30) — a
+- [~] Global Search finds sessions recorded **before** it existed (D30) — a
       one-time backfill, a background task with a bookmark rather than a
-      migration, idempotent across a crash halfway through
+      migration, idempotent across a crash halfway through. The walk itself is
+      verified against this machine's real recorded sessions; what is **not**
+      yet verified is the eight lines in `setup()` that start it, which have
+      never run on an actual launch. Items 23 and 33 in HANDOFF §5 are both
+      "the code was right and the wiring never ran", so this stays `[~]` until
+      a real build logs `search backfill complete` with a nonzero row count.
 
 ### The memory layer, as built
 - **Knowledge is briefed; a note is not** (D21). One question decides which a

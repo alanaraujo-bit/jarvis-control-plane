@@ -254,6 +254,17 @@ fn clear(db: &Database, session_id: &str) -> crate::db::Result<()> {
 }
 
 /// Write one chunk, both to the table and to the index that search reads.
+///
+/// Both statements are plain `INSERT`, and the table's was briefly
+/// `INSERT OR REPLACE` — which is the trap this codebase keeps meeting (item
+/// 17, D26): the two writes have to agree, and only one of them *can* absorb a
+/// conflict. `session_events` has a primary key and `session_events_fts` has
+/// none, so `OR REPLACE` on the first would overwrite the row while the second
+/// happily appended a duplicate, and search would return the same line twice
+/// with nothing anywhere reporting a problem. `clear()` is what actually makes
+/// a retry safe; `OR REPLACE` would only have hidden the case where it did
+/// not. Removed and the idempotence test still passes, which is the evidence
+/// that it was masking rather than guarding.
 fn flush(
     db: &Database,
     session_id: &str,
@@ -264,7 +275,7 @@ fn flush(
         let tx = conn.unchecked_transaction()?;
         {
             let mut insert = tx.prepare_cached(
-                "INSERT OR REPLACE INTO session_events
+                "INSERT INTO session_events
                      (session_id, seq, ts_ms, project_id, kind, label, text, payload)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?;

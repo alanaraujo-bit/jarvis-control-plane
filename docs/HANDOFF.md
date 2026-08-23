@@ -761,7 +761,7 @@ and a substantial feature request from that same session:
    with a hover preview of the pasted image — reinforced explicitly, make sure
    it lands with the rest rather than as a bare paste). The terminal is the
    hero surface and these are what it still lacks.
-3. ~~**Global Search does not backfill.**~~ **Done** — see D30 and section 4.
+3. ~~**Global Search does not backfill.**~~ **Built and verified as a walk; the startup wiring is not yet verified** — see D30 and section 4.
    It is a background task with a bookmark, deliberately *not* a migration:
    migration 10 adds `sessions.events_backfilled_at` and nothing else, and
    `search::backfill` does the walk five seconds after launch, chunked so the
