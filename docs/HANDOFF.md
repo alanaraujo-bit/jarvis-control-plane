@@ -113,6 +113,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Onboarding (§13)** | shown once per install, reuses the environment scan and `openFolder` as-is, gates the window reveal so there is no flash of the wrong screen |
 | **Voice dictation (§54)** | fully local speech-to-text, primed with the project's own vocabulary, typed into the prompt — never auto-submitted (D29) |
 | **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
+| **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -290,6 +291,36 @@ A real human voice through a real microphone was verified once (see
 above); a **repeat** pass confirming the sound fixes and testing the
 now-fixed Claude Code path with real speech has not happened yet — see next
 steps.
+
+*Real-time streaming transcription (§54, D31), in the installed app.* Built
+in the same conversation that asked for it: a warm `whisper-server.exe`,
+polled every second or so, folded through a LocalAgreement-style commit/tail
+split (`voice::stream::AgreementState`) so the caption only ever grows and
+never rewrites a word a person already read. Verified against real
+infrastructure at every layer before it was considered done — the HTTP
+contract (`multipart/form-data`, `response_format=json`, per-request
+`prompt`/`language`) was reverse-engineered against the real binary with
+`curl.exe` before any Rust was written; an `#[ignore]`d integration test
+spawns the real `whisper-server.exe` against the real downloaded model and
+posts real audio over HTTP; and — since this machine still has no
+microphone — the full command → poll-thread → `Channel` → caption path was
+driven through the **installed app** with a temporary, fully-reverted
+synthetic-audio generator standing in for `cpal` (same shape as D29's own
+silence bypass). It worked on screen: `whisper-server` hallucinated
+`[Música]` on the synthetic tone, two consecutive polls agreeing on it
+committed it in the settled colour, a third poll's differently-capitalised
+guess correctly rendered as a *new* uncommitted tail instead of overwriting
+the settled word, and stopping still typed the terminal's transcript from
+the separate, complete, unstreamed pass — unsubmitted, exactly as without
+streaming. That live pass caught a real bug: `whisper-server.exe` survived a
+`taskkill` of the whole app, because it had never been placed in a Windows
+job object the way `pty::spawn` already contains agent children (see
+`pty::job`). Fixed by giving `ServerHandle` its own job and reverified by
+force-killing the app again — see D31 for the full account, including why
+the `b4938` release tag turned out not to mean one fixed set of bytes.
+**Not yet verified with a real human voice** — this feature did not exist
+when D29's own ear-test debt was recorded, so both are now owed together;
+see next steps.
 
 ### Not built — deliberately absent, not stubbed
 
@@ -616,6 +647,23 @@ Every one of these is real and already cost time.
     Conversation View, Analytics and Global Search all read. Flagged here so
     it is a decision someone makes rather than a surprise someone discovers.
 
+39. **A process kept alive for a whole app session needs its own job
+    object — one scoped to a single PTY does not cover it.** `pty::spawn`
+    already contains every agent CLI child so a `taskkill` of J.A.R.V.I.S.
+    never orphans one (see `pty::job`, next to D6/D7), but that containment
+    is created fresh per PTY session. `voice::server::ServerHandle` (§54
+    streaming, D31) is deliberately *not* scoped to one PTY — it is spawned
+    once and kept warm for the app's whole lifetime — and the first version
+    simply spawned `whisper-server.exe` as a plain child with none of that
+    containment. Found live, not in a test: force-killing the app left
+    `whisper-server.exe` running on its own, unowned, exactly the shape rule
+    8's job objects exist to prevent. Fixed by giving `ServerHandle` its own
+    `pty::job::ProcessJob` (now `pub(crate)` so `voice` can reuse it) and
+    reverified by force-killing the app a second time and watching the
+    server die with it. The lesson generalises: containment scoped to "this
+    session" is not containment scoped to "this app run" — check which one a
+    new long-lived child process actually needs.
+
 ---
 
 ## 6. Commands
@@ -703,14 +751,18 @@ Ninja on this machine via `winget` — none of them are needed by the shipped
 architecture, so there was nothing to revert, but a future session should
 know they are here and why.
 
-`whisper.cpp` release `b4938`'s Windows x64 zip (`whisper-bin-x64.zip`, at
-`https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-x64.zip`,
-confirmed via the GitHub releases API) also ships `whisper-server.exe`,
-`whisper-stream.exe` and their own DLLs alongside `whisper-cli.exe` — none
-of those are in `resources/whisper/` yet. `whisper-server.exe` is what
-real-time streaming (section 7, item 1) would spawn instead of `-cli`;
-`whisper-stream.exe` needs SDL2 for its own microphone capture and is not
-a fit for this codebase, which already owns capture via `cpal`.
+`whisper-server.exe` (§54 streaming, D31) is bundled too now, in
+`resources/whisper/server/`, deliberately **not** the same directory as
+`whisper-cli.exe`. Re-fetching the `b4938` tag for this pass pulled a
+materially different build than the one already committed for
+`whisper-cli.exe` — different `whisper.dll`/`ggml*.dll` bytes, CPU-dispatch
+variants (`ggml-cpu-alderlake.dll` and eight siblings) instead of one
+`ggml-cpu.dll`, and it does not need `llama.dll`, `parakeet.dll` or
+`SDL2.dll` from that same zip — confirmed by removing them and checking
+`whisper-server.exe --help` still ran, not assumed from the file list. See
+D31 for the full account. `whisper-stream.exe` (the zip's third binary)
+still needs SDL2 for its own microphone capture and remains not a fit — this
+codebase owns capture via `cpal`.
 
 ---
 
@@ -721,42 +773,20 @@ memory layer, Global Search, an agent writing to its own Brain, Onboarding
 and voice dictation are all built and verified against real data and a real
 agent. Voice dictation has now been tested with a real microphone once (see
 section 4) and two real bugs it surfaced are fixed (items 35–36 in section
-5) — what is open is a **second** live pass confirming those fixes by ear,
-and a substantial feature request from that same session:
+5). Real-time streaming transcription — the substantial feature request
+from that same session — is now also built and verified (D31, section 4,
+item 39 in section 5). What is open is one **combined** live ear test
+covering everything voice-related that has shipped since the last one:
 
-1. **Real-time streaming transcription (Alan's explicit request,
-   2026-08-23).** Today §54 is push-to-talk: record the whole utterance,
-   stop, transcribe, then type the full result in one go. Alan wants it to
-   work like VS Code / Cursor's own dictation — text appears incrementally
-   *while speaking*, so a person can see it land and optimizes their own
-   pacing around it, then stops the same way (click to stop) as today.
-   Explicitly asked for this to be done to the same premium/elegant bar as
-   the rest of §54, "com animação na transcrição" — some kind of pleasant,
-   considered visual treatment for text arriving live, not a bare text
-   dump. Investigated but not yet built: whisper.cpp's official release
-   (`b4938`, confirmed via the GitHub API) ships `whisper-server.exe`
-   alongside `whisper-cli.exe` — an HTTP server that loads the model once
-   and stays warm, with `/inference` accepting a `prompt` and `language`
-   field per request, which is what makes a request cheap enough to repeat
-   every second or two rather than paying the full model-load cost per
-   utterance the way `whisper-cli` does today. The bundled binary is
-   currently only `whisper-cli.exe` — `whisper-server.exe` and its
-   dependency DLLs are not yet in `resources/whisper/`. Whisper.cpp's own
-   `stream` example needs SDL2 and is not a fit; the server approach (poll
-   a short rolling audio window against the warm server every second or
-   so, and diff/replace the visible text as later windows supersede
-   earlier partial ones) is the shape worth prototyping first. This is a
-   real architecture change — capture needs to feed a rolling buffer
-   instead of accumulating until stop, and the UI needs a live-updating
-   caption surface instead of a single post-hoc type. Budget real design
-   time for the animation Alan asked for; do not ship a bare text swap.
-2. **Re-verify voice dictation's sound cues and both bug fixes, by ear, on
-   a real microphone.** The start/finish chimes (`surfaces/voice/sound.ts`)
-   and the PSReadLine-bell and UTF-8-chunking fixes (items 35–36 in section
-   5) were built and proven mechanically this session, but nobody has
-   listened to the chimes yet, and the fixed build has not been driven
-   through a live headset dictation pass end to end. Do this before or
-   alongside item 1 — it is small and closes a real gap.
+1. **Re-verify voice dictation end to end, by ear, on a real microphone —
+   the sound cues, both earlier bug fixes, and now streaming too.** The
+   start/finish chimes (`surfaces/voice/sound.ts`), the PSReadLine-bell and
+   UTF-8-chunking fixes (items 35–36 in section 5), and the live-caption
+   streaming path (D31) have each been proven mechanically or through a
+   synthetic-audio bypass, but nobody has listened to the chimes yet, and no
+   build has been driven through a live headset dictation pass — captions
+   included — end to end. One pass now covers all of it rather than two
+   separate ones.
 3. **The rest of M2** — split panes (§20), scrollback search, image paste (§22,
    with a hover preview of the pasted image — reinforced explicitly, make sure
    it lands with the rest rather than as a bare paste). The terminal is the

@@ -938,3 +938,131 @@ not have to finish a large log first.
 It does not backfill `usage_samples` or `file_changes`. Those have had
 writers since long before D25 and are not missing anything; `session_events`
 was the one table with no writer at all (HANDOFF §5 item 29).
+
+---
+
+## D31 — Live captions replay a warm HTTP server, not whisper.cpp's own streaming example, and never touch what gets typed
+
+Alan's ask, from the same conversation that closed D29's addendum: dictation
+should look like VS Code/Cursor's — text appearing while speaking, not the
+record-the-whole-utterance-then-type-once flow §54 shipped with — "com
+animação na transcrição", to the same premium bar as the rest of the feature.
+
+**Whisper is not a streaming model.** Every call re-reads its audio from the
+start and can revise words it produced on an earlier call once more context
+arrives. That single fact drove every choice below.
+
+**What the caption shows is not what gets typed — deliberately, and this is
+the load-bearing decision.** Two designs were on the table: (a) a
+J.A.R.V.I.S.-owned caption surface that previews live, with the terminal
+receiving one complete transcript on stop, exactly as today; or (b) typing
+committed segments into the terminal progressively, append-only. (b) reads
+closer to Alan's own description, but it means sending corrections —
+backspaces, or worse, silently-wrong text nobody asked to revise — into a
+live agent CLI's own line editor, which is precisely the class of bug D16 and
+item 11 in HANDOFF exist to prevent. (a) was chosen: `voice_stop_recording`
+is untouched, still one call to the complete, unstreamed `whisper-cli.exe`
+pass, still typed once, still never submitted. Streaming only ever feeds a
+preview surface that has no path to the terminal at all. A caption can be
+wrong for a second without cost; a terminal cannot.
+
+**A warm `whisper-server.exe`, polled, beats `whisper-cli.exe` run
+repeatedly.** `whisper-cli` pays the full model-load cost — measured at
+several seconds against `ggml-small.bin` — on every invocation, which rules
+out calling it every second or two. `whisper-server.exe` ships in the same
+`b4938` release already bundled for `whisper-cli`, loads the model once, and
+answers over HTTP for as long as it stays up. It is spawned lazily on first
+dictation and kept alive for the whole app session rather than per-recording,
+so only the very first utterance in a session pays the cold-start cost.
+
+**The b4938 release tag is not one fixed artifact.** Re-downloading it for
+this pass produced a materially different build from the one already
+committed for `whisper-cli.exe` — a newer `whisper.dll`/`ggml*.dll` set,
+CPU-dispatch variants (`ggml-cpu-alderlake.dll` and friends) in place of one
+`ggml-cpu.dll`, and new dependencies (`llama.dll`, `parakeet.dll`) that a
+direct test proved `whisper-server.exe` does not actually need — removing
+them and confirming `--help` still ran was the empirical check, not an
+assumption from the file list. The two builds' same-named DLLs are not
+interchangeable, so `whisper-server.exe` and its own matched set live in
+`resources/whisper/server/`, never merged into `resources/whisper/` where
+`whisper-cli.exe` already lives. Worth knowing before assuming a version tag
+pins bytes.
+
+**The actual HTTP contract was reverse-engineered against the real binary,
+not recalled from memory.** `whisper-server.exe --help`, run for real,
+supplied the flags (`--host`, `--port`, `--model`); the request shape
+(`multipart/form-data`, a `file` field, `response_format`, `language`,
+`prompt`) was confirmed by starting the server against the real downloaded
+model and posting a synthesized pt-BR sentence through `curl.exe`, reading
+back real segment/word timestamps and a `detected_language_probability`
+before any Rust was written. `response_format=json` (plain `{"text": "..."}`)
+was chosen over `verbose_json` deliberately: the word arrays `verbose_json`
+adds are whisper's own **sub-word tokens** — the sample response split
+"falo" across two word entries — which is the wrong granularity for anything
+comparing words across polls. The assembled top-level `text` field is
+already correctly spaced and punctuated, so whitespace-splitting it is safe
+where splitting the word array would not be.
+
+**Full buffer, adaptive cadence — not a trailing window.** Every poll sends
+everything captured so far, from the start, and the next poll fires only
+after the previous one returns (with a floor sleep so an empty buffer does
+not spin). A trailing window was the other real option, and was rejected for
+v1: whisper's own hypothesis for a window boundary shifts as the boundary
+itself slides, which breaks simple prefix comparison between polls and
+demands tracking audio-time offsets to realign words across windows. Full
+buffer keeps every hypothesis anchored at sample zero, so two consecutive
+polls' word lists are directly comparable. The honest cost: latency grows
+with utterance length, since whisper re-reads from the start every time —
+measured at roughly 0.56x realtime for `ggml-small.bin` on this machine's
+CPU, so a 20s utterance costs an ~11s poll. Adaptive cadence means that never
+compounds into a backlog; a long dictation just updates less often, which is
+a graceful degradation for the realistic case here (a sentence or two spoken
+into an agent prompt, not continuous long-form dictation).
+
+**Committing text needs two polls to agree, not one, and never retracts.**
+`voice::stream::AgreementState` is a simplified LocalAgreement policy: a word
+enters the committed caption only once it sits in the common prefix of the
+current hypothesis *and* the previous one, and once committed it is never
+removed even if a later poll disagrees. One poll's guess is not evidence; two
+consecutive polls landing on the same words is. Never retracting is the same
+philosophy as the terminal-typing decision one level up — a caption a person
+already read must not un-say itself, even at the cost of an occasional
+committed word that turns out to have been wrong (harmless here, since the
+final typed text never reads from this state at all).
+
+**The entrance animation needed no state of its own.** `committed` only ever
+grows, so `LiveCaption` renders it as one `<span>` per word keyed by array
+index — React mounts a fresh span only for a newly-agreed word and leaves
+every earlier one alone, which is what makes the CSS entrance animation play
+exactly once, on the word that just settled, with no manual "what changed"
+tracking anywhere in the component.
+
+**Verified live, not only in unit tests — and it caught a real bug.** This
+development machine still has no microphone (see D29), so the full
+command → poll-thread → `Channel` → `LiveCaption` path was driven through
+the real, installed app with a temporary synthetic-audio generator standing
+in for `cpal`'s device stream — same shape as D29's own silence bypass,
+fully reverted afterward, never gated on anything a real install would set.
+It worked: a real commit/tail split rendered on screen (`whisper-server`
+hallucinated `[Música]` on the synthetic tone; two consecutive matching
+polls committed it, and a third poll's slightly different capitalisation
+showed up correctly as a *new*, uncommitted tail rather than overwriting the
+settled word), and the final `whisper-cli` pass still typed its own,
+separate result into the terminal on stop, unsubmitted, exactly as without
+streaming. That same pass caught a real bug before it shipped:
+`whisper-server.exe` survived a `taskkill` of the whole app. Unlike the
+agent-CLI children `pty::spawn` contains (see `pty::job`, next to D6/D7),
+`ServerHandle` had never been assigned to a Windows job object with
+`KILL_ON_JOB_CLOSE` — it was kept alive for a whole app session, not scoped
+to one PTY, and nothing carried the same guarantee. Fixed by giving
+`ServerHandle` its own job, exactly the mechanism `pty::spawn` already
+trusts, and reverified by force-killing the app again and watching
+`whisper-server.exe` die with it. `pty::job` moved from `pty`-private to
+`pub(crate)` to make that reuse possible — a one-word visibility change, not
+a rewrite of anything D6/D7 depends on.
+
+**What is still open:** a repeat verification with a real human voice
+through a real microphone has not happened on this build — the ear test D29
+already owed (see HANDOFF §7) covers the sound cues and the two dictation
+bug fixes, not this feature, since it did not exist when that debt was
+recorded. Both are now owed together.

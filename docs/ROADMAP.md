@@ -379,20 +379,27 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
       (see HANDOFF §5 items 35–36)
 - [x] Pleasant start/finish sound cues — soft two-note Web Audio chimes,
       not yet re-verified by ear against the latest rebuild
-- [ ] **Real-time streaming transcription** (Alan's explicit follow-up
-      request, 2026-08-23) — text should appear incrementally while
-      speaking, VS Code/Cursor-style, with a considered visual treatment
-      ("animação na transcrição"), not today's record-then-type-once flow.
-      Architecture investigated (`whisper-server.exe` from the same
-      whisper.cpp release, kept warm, polled on a rolling audio window)
-      but not yet built — see HANDOFF §7 item 1.
-**Verified on this machine, including a real microphone once.** The model
-downloads and hash-verifies through the app's own UI; the whole
-capture → transcribe → type pipeline was run for real end to end, first
-with a temporary synthetic-audio bypass and then with a real headset; a
-missing microphone is reported honestly rather than hanging. What remains
-is streaming transcription itself, plus one more live pass confirming the
-sound-cue and bug fixes together by ear.
+- [x] **Real-time streaming transcription** (Alan's explicit follow-up
+      request, 2026-08-23) — live captions while speaking, VS Code/Cursor-
+      style, with an animated treatment (each word's own entrance, a
+      breathing volatile tail), not the record-then-type-once flow this
+      started as. A warm `whisper-server.exe` polled every second or so,
+      folded through a LocalAgreement-style commit/tail split so the
+      caption only ever grows and never rewrites a settled word. What
+      actually gets typed is untouched — still one complete, unstreamed
+      pass on stop. See D31.
+**Verified on this machine, including a real microphone once and a full
+synthetic-audio pass through streaming.** The model downloads and
+hash-verifies through the app's own UI; the whole capture → transcribe →
+type pipeline was run for real end to end, first with a temporary
+synthetic-audio bypass and then with a real headset; a missing microphone
+is reported honestly rather than hanging. Streaming's own command → poll →
+caption path was driven live through the installed app the same
+bypass way (this machine still has no microphone) and caught a real bug —
+`whisper-server.exe` outliving a `taskkill`'d app, fixed with the same
+Windows job-object containment `pty::spawn` already trusts. What remains is
+one live pass confirming the sound cues, both earlier bug fixes, *and*
+streaming's captions together, by ear, on a real microphone.
 
 ---
 
@@ -401,29 +408,30 @@ sound-cue and bug fixes together by ear.
 operations, worktrees, the memory layer, Global Search, and an agent writing
 to its own Brain are all built and verified against real data and a real
 agent. Onboarding (§13) is also built and verified; Settings (§64) is what
-remains of M9. Voice dictation (§54, M12) has been tested with a real
-microphone once — it works, and two real bugs it surfaced (an irritating
-PSReadLine bell, and dictated accents garbling specifically inside Claude
-Code's TUI) are fixed and proven. Open on M12: real-time streaming
-transcription, a substantial follow-up feature request, plus a second live
-pass confirming the new sound cues and both fixes together by ear.
+remains of M9. Voice dictation (§54, M12), including real-time streaming
+transcription, is now fully built: tested with a real microphone once, two
+real bugs that pass surfaced are fixed and proven (an irritating PSReadLine
+bell, and dictated accents garbling specifically inside Claude Code's TUI),
+and streaming's own command → poll → caption path is proven through the
+installed app via a synthetic-audio bypass (D31) — including a real
+orphaned-process bug the same live pass caught and fixed. Open on M12: one
+combined live ear-test pass confirming the sound cues, both bug fixes, and
+streaming's captions together on a real microphone.
 
 ## Next steps
-1. Build real-time streaming transcription for voice dictation (§54) — text
-   appearing incrementally while speaking, with a considered animated
-   treatment, matching VS Code/Cursor's own dictation UX. See HANDOFF §7
-   item 1 for the investigated architecture (`whisper-server.exe`, kept
-   warm, polled on a rolling window) and what is not yet built.
-2. Re-verify voice dictation's sound cues and both bug fixes by ear on a
-   real microphone — small, but not yet done against the latest rebuild.
-   See HANDOFF §7 item 2.
-3. The rest of M2: split panes (§20), scrollback search, image paste (§22,
-   with a hover preview of the pasted image)
-4. ~~Global Search does not backfill~~ — **done** (D30). `search::backfill`
+1. Re-verify voice dictation end to end by ear on a real microphone — the
+   sound cues, both earlier bug fixes, and now streaming's live captions
+   too. One pass now covers everything voice-related that has shipped
+   since the last one. See HANDOFF §7 item 1.
+2. The rest of M2: split panes (§20), image paste (§22, with a hover
+   preview of the pasted image) — scrollback search (§20, terminal find
+   bar) is built but not yet marked done; it hasn't had its own on-screen
+   verification pass yet.
+3. ~~Global Search does not backfill~~ — **done** (D30). `search::backfill`
    walks every session log once, off the startup path, one session per
    transaction, resumable and idempotent. Verified against this machine's own
    recorded sessions: 55 rows out of 10 real logs, and a Portuguese word from
    a real Claude Code run came back as a Conversation hit attributed to the
    session it was said in.
-5. A manually completed mission is never asked what it learned (D27) — the
+4. A manually completed mission is never asked what it learned (D27) — the
    reflection only fires at the end of an Unattended run, deliberately.
