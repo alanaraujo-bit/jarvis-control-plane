@@ -664,6 +664,50 @@ Every one of these is real and already cost time.
     session" is not containment scoped to "this app run" — check which one a
     new long-lived child process actually needs.
 
+39. **An embedded browser answers shortcuts you did not take.** Ctrl+F for the
+    terminal's scrollback search (§20) was handled inside xterm's
+    `attachCustomKeyEventHandler`, which runs only while the terminal literally
+    holds DOM focus. Come back from the command palette, or click the tab
+    strip, and the key never reached xterm — at which point **WebView2 answered
+    it with its own built-in find-in-page**: a Chromium widget floating over
+    the app, styled like nothing else in the product, searching the DOM rather
+    than the scrollback. This is item 13 a second time with a different
+    villain. A shortcut the product owns has to be taken on `window` in the
+    **capture** phase, before any widget *or the host browser* gets an opinion;
+    `preventDefault` there is what stops WebView2. Guard it on which surface is
+    actually visible, or several mounted terminals all answer at once — and
+    Ctrl+F must still reach Monaco's own find when the editor is on screen.
+
+40. **`event.key` is `"F"`, not `"f"`, whenever Shift or CapsLock is down.**
+    A case-sensitive comparison means a shortcut that silently stops working
+    for anyone with CapsLock on. `App.tsx` already spells its own shortcuts
+    with `toLowerCase()`; the terminal's did not, and Ctrl+F went to the shell
+    as `^F` while nothing opened. This machine had CapsLock on, which is the
+    only reason it was found at all.
+
+41. **`max-width` measures the border box, so padding eats the measure.**
+    A sentence aligned under a control with `padding-left: 196px` and
+    `max-width: 62ch` gets 62ch *minus the padding* to wrap in — it wrapped
+    after about thirty characters, a two-line stub beside half a screen of
+    empty space. `margin-left` is the alignment that does not steal from the
+    measure.
+
+42. **Do not judge a colour from a screenshot; sample the pixels.** A capture
+    of the terminal in light theme read as clearly dark to the eye, and a whole
+    line of investigation started into a theme bug that did not exist —
+    `GetPixel` said `#FFFFFF`. Rendered captures can misread badly. When the
+    claim is about colour, `System.Drawing.Bitmap::GetPixel` settles it in one
+    command and costs nothing:
+
+    ```powershell
+    Add-Type -AssemblyName System.Drawing
+    $b = [System.Drawing.Bitmap]::FromFile('shot.png')
+    $c = $b.GetPixel(700, 600); '#{0:X2}{1:X2}{2:X2}' -f $c.R, $c.G, $c.B
+    ```
+
+    Sample a **background**, not a glyph — the first sample landed on amber
+    terminal text inside a blue highlight and read as amber.
+
 ---
 
 ## 6. Commands

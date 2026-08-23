@@ -31,7 +31,14 @@ inspection (§76).
 - [x] Raw-byte IPC channel, coalesced at 16ms
 - [x] xterm.js integration, scrollback, per-theme palettes, tabs
 - [ ] Split panes and layout presets (§20)
-- [ ] Search within scrollback
+- [x] Search within scrollback (§20) — Ctrl+F, a panel over the terminal
+      rather than a dialog over the app, match-case, live counter, and an
+      overview ruler shown only while searching so there is no empty gutter
+      the rest of the time. Matches are blue, never amber (§6).
+      **Verified in a real build**, both themes and both languages, and it
+      took four fixes that the suite could not see — the worst being Ctrl+F
+      falling through to **WebView2's own find-in-page** whenever the terminal
+      did not literally hold DOM focus. See HANDOFF §5 item 39.
 - [ ] Image paste as first-class attachment (§22) — pasted into the terminal,
       with a hover preview of the image rather than a bare filename/placeholder
       (Alan's own requirement, 2026-08-23; not yet scoped further)
@@ -233,14 +240,19 @@ back.
       conversation content, across every project, from Ctrl+Shift+F
 - [x] An agent writes to its own Brain (§36–§38, D27) — once, at the end of
       an Unattended run, asked one narrow question it can decline to answer
-- [~] Global Search finds sessions recorded **before** it existed (D30) — a
+- [x] Global Search finds sessions recorded **before** it existed (D30) — a
       one-time backfill, a background task with a bookmark rather than a
-      migration, idempotent across a crash halfway through. The walk itself is
-      verified against this machine's real recorded sessions; what is **not**
-      yet verified is the eight lines in `setup()` that start it, which have
-      never run on an actual launch. Items 23 and 33 in HANDOFF §5 are both
-      "the code was right and the wiring never ran", so this stays `[~]` until
-      a real build logs `search backfill complete` with a nonzero row count.
+      migration, idempotent across a crash halfway through.
+      **Verified twice over:** the walk against this machine's real recorded
+      sessions (55 rows out of 10 real logs, and a Portuguese word from a real
+      Claude Code run came back attributed to the session it was said in), and
+      the *wiring* against a real launch — `search backfill finished` appears
+      in the log exactly 5.000s after startup, which is `STARTUP_GRACE`. The
+      wiring was checked separately and deliberately: items 23 and 33 in
+      HANDOFF §5 are both "the code was right and the wiring never ran". The
+      log line is now unconditional for that reason — a background task that
+      is silent in its steady state cannot be told apart from one that never
+      started.
 
 ### The memory layer, as built
 - **Knowledge is briefed; a note is not** (D21). One question decides which a
