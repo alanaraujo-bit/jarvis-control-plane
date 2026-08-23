@@ -1,0 +1,220 @@
+/* Files + Editor (§41/§42).
+   A fixed tree beside a flexible editor. The tree keeps the width the rest of
+   the product uses for a sidebar so the eye lands in the same place. */
+.files {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.files__tree {
+  overflow: auto;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  padding: var(--space-3) 0 var(--space-8);
+}
+
+.files__editor {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-base);
+}
+
+/* ---- Tree ---------------------------------------------------------------- */
+.filetree__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  height: 23px;
+  padding-right: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color var(--duration-instant) var(--ease-out),
+              color var(--duration-instant) var(--ease-out);
+}
+.filetree__row:hover { background: var(--bg-hover); color: var(--text-primary); }
+.filetree__row[data-dir] { color: var(--text-primary); }
+
+.filetree__row[data-selected] {
+  background: var(--bg-selected);
+  color: var(--text-primary);
+}
+
+/* Ignored by Git: present, but not competing for attention. */
+.filetree__row[data-ignored] { color: var(--text-disabled); }
+.filetree__row[data-ignored]:hover { color: var(--text-tertiary); }
+
+.filetree__twisty {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+}
+
+.filetree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filetree__note,
+.filetree__error {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+}
+.filetree__error { color: var(--state-danger); }
+
+/* ---- Editor tabs ---------------------------------------------------------
+   Deliberately not the session tab strip: these are documents inside a
+   project view, and two identical-looking strips one above the other would
+   read as the same control. Squarer, quieter, no state dot. */
+.files__tabs {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  height: 30px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.files__tabs::-webkit-scrollbar { display: none; }
+
+.files__tab {
+  display: flex;
+  align-items: center;
+  position: relative;
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.files__tab:hover { color: var(--text-secondary); }
+
+.files__tab[data-active] {
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+/* The active document is marked at the top edge, where a tab meets its
+   content — the accent says "this is the one you are working in". */
+.files__tab[data-active]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.files__tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 100%;
+  padding: 0 var(--space-3) 0 var(--space-5);
+  font-size: var(--text-sm);
+  color: inherit;
+  white-space: nowrap;
+}
+
+.files__tab-dirty {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+
+.files__tab-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: var(--space-3);
+  border-radius: var(--radius-xs);
+  color: var(--text-disabled);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.files__tab:hover .files__tab-close,
+.files__tab[data-active] .files__tab-close { opacity: 1; }
+.files__tab-close:hover { background: var(--bg-active); color: var(--text-primary); }
+
+.files__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  padding: 0 var(--space-4);
+}
+
+.files__path {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+  direction: rtl; /* keep the filename visible when the path is clipped */
+  text-align: left;
+}
+
+.files__action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.files__action:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.files__action:disabled { color: var(--text-disabled); }
+.files__action[data-primary]:not(:disabled) { color: var(--accent); }
+
+.files__surface { position: relative; flex: 1 1 auto; min-height: 0; }
+
+.files__loading {
+  padding: var(--space-7);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.files__error {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--state-danger);
+  background: var(--state-danger-bg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.files__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: var(--space-8);
+}
+.files__empty-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+.files__empty-body {
+  margin-top: var(--space-3);
+  max-width: 42ch;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+}

@@ -12,7 +12,10 @@
 //! Every call is non-interactive: a Git subprocess that opens a credential
 //! prompt or a pager would hang the caller with no UI to resolve it.
 
-use std::path::Path;
+pub mod diff;
+pub mod status;
+
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -64,6 +67,58 @@ pub fn run(cwd: &Path, args: &[&str]) -> Result<String> {
         });
     }
     Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
+/// Where a project sits inside its repository.
+///
+/// These two facts have to travel together, because Git and J.A.R.V.I.S. do not
+/// agree on what a path is relative to. `git status --porcelain` reports paths
+/// from the **repository root** no matter which directory it was run in
+/// (verified against Git 2.55), while every path in the product is relative to
+/// the **project folder**. When a project *is* the repository root — the usual
+/// case — `prefix` is empty and the two coincide. When the project is a
+/// subdirectory of a larger repository they do not, and a surface that assumed
+/// they did would show changes from outside the project and fail to match any
+/// of them to a file in the tree.
+#[derive(Debug, Clone)]
+pub struct RepoLocation {
+    /// Absolute path of the repository root.
+    pub root: PathBuf,
+    /// The project's path within the repository, forward slashes, ending in
+    /// `/` unless empty.
+    pub prefix: String,
+}
+
+impl RepoLocation {
+    /// Repository-relative path for a project-relative one.
+    pub fn to_repo(&self, project_relative: &str) -> String {
+        format!("{}{}", self.prefix, project_relative)
+    }
+
+    /// Project-relative path for a repository-relative one, or `None` when the
+    /// path lies outside the project.
+    pub fn to_project(&self, repo_relative: &str) -> Option<String> {
+        if self.prefix.is_empty() {
+            return Some(repo_relative.to_string());
+        }
+        repo_relative
+            .strip_prefix(&self.prefix)
+            .map(|rest| rest.to_string())
+    }
+}
+
+/// Locate the repository containing `path`.
+pub fn locate(path: &Path) -> Option<RepoLocation> {
+    let root = run(path, &["rev-parse", "--show-toplevel"]).ok()?;
+    if root.is_empty() {
+        return None;
+    }
+    // `--show-prefix` is empty at the root and `sub/dir/` below it.
+    let prefix = run(path, &["rev-parse", "--show-prefix"]).unwrap_or_default();
+    Some(RepoLocation {
+        root: PathBuf::from(root.replace('/', std::path::MAIN_SEPARATOR_STR)),
+        prefix: prefix.trim().to_string(),
+    })
 }
 
 /// Describe the repository containing `path`, if there is one.

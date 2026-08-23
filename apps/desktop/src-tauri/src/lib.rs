@@ -9,12 +9,14 @@ mod analytics;
 mod autopilot;
 mod db;
 mod envscan;
+mod files;
 mod git;
 mod guardrail;
 mod mission;
 mod project;
 mod providers;
 mod pty;
+mod review;
 mod session;
 mod window;
 
@@ -119,6 +121,11 @@ pub fn run() {
             session::commands::session_list,
             session::commands::session_conversation,
             session::commands::mission_sessions,
+            files::list_files,
+            files::read_file,
+            files::write_file,
+            review::review_report,
+            review::review_file_diff,
             providers::list_providers,
             activity::list_activity,
             analytics::analytics_report,

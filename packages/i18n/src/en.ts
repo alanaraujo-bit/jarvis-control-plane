@@ -113,6 +113,64 @@ export const en = {
   "view.terminal": "Terminal",
   "view.conversation": "Conversation",
 
+  // ---- Project areas (§19/§85) ---------------------------------------------
+  // Project-scoped, so they live inside a project rather than on the rail.
+  "project.sessions": "Sessions",
+  "project.files": "Files",
+  "project.review": "Review",
+
+  // ---- Files and the editor (§41/§42) --------------------------------------
+  "files.loading": "Reading…",
+  "files.emptyFolder": "Empty folder",
+  "files.close": "Close file",
+  "files.save": "Save",
+  "files.reload": "Reload from disk",
+  "files.editorLoading": "Opening the editor…",
+  "files.empty.title": "No file open",
+  "files.empty.body": "Choose a file from the tree to read or edit it.",
+  "files.binary.title": "Not a text file",
+  "files.binary.body":
+    "This file contains binary data. Showing it as text would be misleading, so it is not shown.",
+  "files.tooLarge.title": "Too large to open",
+  "files.tooLarge.body": "This file is {size}, past the editor's limit of 2 MB.",
+
+  // ---- Diff / Review (§43) -------------------------------------------------
+  "review.changedFiles": "{count} changed files",
+  "review.changedFiles_one": "{count} changed file",
+  "review.refresh": "Re-read the working tree",
+  "review.against": "Against {branch}",
+  "review.clean": "Nothing has changed since the last commit.",
+  "review.noCommits":
+    "This repository has no commits yet, so there is nothing to compare against.",
+  "review.notARepo.title": "Not a Git repository",
+  "review.notARepo.body":
+    "Review shows what changed since the last commit. This project folder is not under Git, so there is nothing to compare against.",
+  "review.empty.title": "Nothing selected",
+  "review.empty.body": "Choose a file to see what changed in it.",
+  "review.loadingDiff": "Reading the diff…",
+  "review.binary": "A binary file changed. There is no text diff to show.",
+  "review.binaryShort": "binary",
+  "review.noTextChange": "No line changed — only the file's mode or metadata.",
+  "review.truncated": "The rest of this diff was left out; it is longer than {count} lines.",
+  "review.andOthers": "+{count} more sessions",
+  "review.andOthers_one": "+{count} more session",
+  // The letter is a code, so the word travels with it as a tooltip and as the
+  // accessible name — an interface that has to be learned before it can be
+  // read is not finished.
+  "review.kindFull.added": "Added",
+  "review.kindFull.modified": "Modified",
+  "review.kindFull.deleted": "Deleted",
+  "review.kindFull.renamed": "Renamed",
+  "review.kindFull.untracked": "New, not yet tracked by Git",
+  "review.kindFull.conflicted": "Conflicted",
+  // One letter per row: the list is long and the word would crowd it.
+  "review.kind.added": "A",
+  "review.kind.modified": "M",
+  "review.kind.deleted": "D",
+  "review.kind.renamed": "R",
+  "review.kind.untracked": "N",
+  "review.kind.conflicted": "!",
+
 
   // ---- Updates (§62) -------------------------------------------------------
   "update.title": "Updates",

@@ -91,15 +91,29 @@ export function App() {
 
   const togglePalette = useCallback(() => setPaletteOpen((open) => !open), []);
 
+  /**
+   * Ctrl/Cmd+K opens the command palette (§50), from anywhere.
+   *
+   * Registered in the **capture** phase, and it stops the event there. A
+   * bubble-phase listener is not enough: Monaco treats Ctrl+K as a chord prefix
+   * and calls `stopPropagation`, so the event never reaches `window` and the
+   * palette silently stopped opening whenever the editor had focus — while the
+   * titlebar went on advertising the shortcut. Found by pressing it in the real
+   * app and watching "claro" get typed into a source file.
+   *
+   * A shortcut the whole product advertises has to be resolved before any
+   * widget gets an opinion about it.
+   */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        event.stopPropagation();
         togglePalette();
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [togglePalette]);
 
   const commands = useMemo<Command[]>(() => {

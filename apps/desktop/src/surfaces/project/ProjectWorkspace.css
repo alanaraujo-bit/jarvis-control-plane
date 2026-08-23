@@ -1,4 +1,7 @@
 .workspace {
+  --workspace-header: 38px;
+
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -11,9 +14,76 @@
   align-items: center;
   gap: var(--space-5);
   flex: 0 0 auto;
-  height: 38px;
+  height: var(--workspace-header);
   padding: 0 var(--space-6) 0 var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+/* ---- Project areas (§19) -------------------------------------------------
+   Underlined navigation, not a segmented pill. The Terminal/Conversation
+   switch further down *is* a pill, and two pills stacked one above the other
+   read as two halves of the same control rather than as two different kinds
+   of choice. This one changes the destination; that one changes the rendering. */
+.workspace__areas {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: var(--space-2);
+  margin-left: var(--space-4);
+}
+
+.workspace__area {
+  position: relative;
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.workspace__area:hover { color: var(--text-secondary); }
+.workspace__area[data-active] { color: var(--text-primary); }
+
+/* The indicator sits on the header's own bottom border, so the active area
+   reads as attached to what is below it. */
+.workspace__area[data-active]::after {
+  content: "";
+  position: absolute;
+  inset: auto var(--space-3) -1px var(--space-3);
+  height: 1.5px;
+  background: var(--accent);
+}
+
+/* One area is shown at a time; the others keep their layout so a terminal
+   never has to be rebuilt and a scroll position is never lost. */
+.workspace__area-body {
+  position: absolute;
+  inset: var(--workspace-header) 0 0 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.workspace__area-body[data-visible] { visibility: visible; pointer-events: auto; }
+
+/* Hiding the sessions area is not enough on its own.
+ *
+ * The pane and projection rules below re-assert `visibility: visible` and
+ * `pointer-events: auto` on the active session, and a declaration on the child
+ * beats an inherited `hidden` from its parent. The result was a live terminal
+ * still painted and still swallowing every click while Files was on screen —
+ * the file tree rendered perfectly and simply did not respond, which is the
+ * shape of bug that only appears once a session is actually running. Found by
+ * clicking a row in the real app and watching nothing happen.
+ *
+ * So an area that is not on screen puts its own children back to hidden.
+ * `visibility` rather than `display: none`, because the terminal must keep its
+ * measured size: dropping it out of layout would force xterm to refit, and a
+ * refit is how scrollback gets reflowed. */
+.workspace__area-body:not([data-visible]) .workspace__pane,
+.workspace__area-body:not([data-visible]) .workspace__projection {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .workspace__back {

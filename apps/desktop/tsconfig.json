@@ -16,6 +16,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },

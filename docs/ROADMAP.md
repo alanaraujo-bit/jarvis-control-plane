@@ -99,11 +99,62 @@ still there afterwards.
   `code`/`code_args` columns and the rendering path exist; the remaining
   summaries need converting one at a time (§65).
 
-## M6 — Code surfaces
-- [ ] Files explorer (§41)
-- [ ] Editor, Monaco (§42)
-- [ ] Diff / Review (§43)
-- [ ] Git + worktrees (§44/§45)
+## M6 — Code surfaces  ~
+- [x] Files explorer (§41)
+- [x] Editor, Monaco (§42)
+- [x] Diff / Review (§43)
+- [ ] Git + worktrees (§44/§45) — **deliberately deferred, see below**
+
+Files, the editor and Review live **inside a project**, not on the rail: they
+are project-scoped tools and the rail stays six destinations (§85/§87). The
+project header carries an underlined **Sessions · Files · Review** navigation,
+visually distinct from the Terminal/Conversation pill so that two segmented
+controls never stack.
+
+**Verified in the installed app:** browsed the tree with `node_modules` and
+`build.log` dimmed as Git-ignored and `.git` absent; opened a file in Monaco,
+edited it, saved with Ctrl+S and confirmed on disk that the content changed and
+the LF line endings were **not** rewritten; ran a real Claude Code agent in a
+scratch repository, watched it create a file, and saw Review put that file at
+the top of the list attributed to **Claude Code**; renamed a file and saw the
+diff render as one changed line rather than as a new file. Both themes
+screenshotted.
+
+### As built
+- **Path confinement is the security boundary.** The webview only ever names
+  paths relative to the project root, and the root itself is read from the
+  database rather than accepted from the caller. Two independent checks: no
+  `..`, root or drive components in the request, then the resolved path
+  re-checked against the filesystem so a symlink pointing out of the project is
+  caught. Tested against a real temporary directory, including Windows verbatim
+  (`\\?\`) paths and case folding.
+- **Git decides what changed, always** (D5). `status --porcelain=v1 -z` for the
+  list, `diff -M HEAD` for the hunks. We parse; we never compute a diff
+  ourselves and hope it agrees with the user's own `git`.
+- **Attribution is a join, not an invention.** `file_changes` already records
+  what each session touched, so Review answers "what did this agent change?"
+  from the same append-only log everything else reads (D2).
+- **Monaco is loaded on demand and ships without its language services** (D17).
+  +1.04 MB installed, measured on the real installer rather than estimated.
+
+### Deliberately not in M6
+- **Git + worktrees (§44/§45).** Review is **read-only**. Staging, discarding
+  and restoring are destructive Git operations run on the user's behalf, and by
+  D11 those have to go through the guardrail rather than sit behind a plain
+  button. That is Git's own milestone, not a diff viewer's. §81 applies: the
+  actions are absent, not disabled decoration.
+- **Language intelligence.** Monaco's own TypeScript/CSS/HTML/JSON workers are
+  excluded because they would be confidently wrong without project context
+  (D17). Real diagnostics arrive with the LSP client D4 left room for.
+
+### One behaviour change worth knowing
+**Ctrl+K is now resolved globally, before any widget sees it.** Monaco treats it
+as a chord prefix and called `stopPropagation`, so the command palette silently
+stopped opening whenever the editor had focus — while the titlebar went on
+advertising the shortcut. It is now handled in the capture phase. The side
+effect is that Ctrl+K no longer reaches a shell as readline's
+kill-to-end-of-line, which is the same trade VS Code and Cursor make. Say so if
+you would rather the terminal kept it.
 
 ## M7 — Knowledge  ~
 - [x] Activity log (§48) — recorded at the moments worth knowing, filterable
@@ -136,13 +187,13 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ---
 
 ## Current milestone
-**M5 — Missions: complete.** Guardrails, then agents driving missions
-unattended — in that order, because Unattended without guardrails means an
-agent doing irreversible things with nobody able to object.
-
-Next is **M6 — Code surfaces**: Files, Editor, Diff/Review.
+**M6 — Code surfaces: §41–§43 complete.** Files, the editor and Diff/Review are
+built and verified in the installed app. Git and worktrees (§44/§45) are the
+remaining half of the milestone and were left deliberately: Review reads, and
+anything that *writes* through Git has to go through the guardrail first.
 
 ## Next steps
-1. Files, Editor and Diff/Review (§41–§43) — the largest remaining surface
-2. Project Brain (§36) and Notes (§40)
+1. Git + worktrees (§44/§45) — finishes M6. Stage, discard and restore routed
+   through the guardrail (D11), then worktrees on top of the CLI (D5).
+2. Project Brain (§36) and Notes (§40) — the memory layer
 3. Finish localising the remaining evidence summaries (§65)

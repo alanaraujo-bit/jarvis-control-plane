@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-13 commits · **205 tests** (197 Rust, 8 i18n) · all green.
+**238 tests** (230 Rust, 8 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -98,6 +98,9 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | Installer + updater | NSIS, per-user, minisign-verified, uninstall preserves data |
 | **Guardrails (§35)** | policy per operation and project; real pre-execution enforcement for Claude Code and for our own verification commands |
 | **Unattended runs (§32)** | an agent driven turn by turn until the mission is verified, blocked, or out of budget |
+| **Files (§41)** | lazy tree, Git-ignored entries dimmed rather than hidden, every path confined to the project |
+| **Editor (§42)** | Monaco behind `packages/editor`, loaded on demand, themed from the tokens, line endings preserved on save |
+| **Diff / Review (§43)** | what changed since `HEAD`, and **which agent changed it** — read-only |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -116,11 +119,24 @@ executed. With nobody able to answer, `rm -rf` was refused, the agent reported
 it was blocked, explicitly declined to find another way, and the directory was
 still there afterwards.
 
+*Files, Editor and Review, in the installed app.* Browsed a real repository with
+`node_modules` dimmed as ignored and `.git` absent; opened a file in Monaco,
+edited it, saved with Ctrl+S, and checked on disk that the bytes changed and the
+LF line endings were not rewritten. Then a **real Claude Code agent** was run in
+a scratch repository, created a file, and Review put that file at the top of the
+list attributed to Claude Code — the attribution path only works because the
+session's `cwd` is folded into the recorded path, which is the kind of thing
+that matches nothing and looks like an empty state when you get it wrong.
+
 ### Not built — deliberately absent, not stubbed
 
-Project Brain (§36–39), Notes (§40), Files/Editor/Diff (§41–43), Preview (§46),
-Global Search (§51), onboarding (§13), mobile PWA (§55), cloud (§59),
-voice (§54).
+Project Brain (§36–39), Notes (§40), **Git write operations and worktrees
+(§44/§45)**, Preview (§46), Global Search (§51), onboarding (§13),
+mobile PWA (§55), cloud (§59), voice (§54).
+
+Review deliberately reads and does not write: stage, discard and restore are
+destructive Git operations, and D11 says those go through the guardrail rather
+than behind a plain button. See ROADMAP M6.
 
 ---
 
@@ -180,7 +196,36 @@ Every one of these is real and already cost time.
     vicious: the terminal looks completely correct while the agent has been
     told nothing. See `autopilot::driver::send`.
 
-12. **A driven session is not "attended", even with the terminal open.**
+12. **Monaco's `bracketPairColorization` editor option does nothing.** It
+    exists, it type-checks, and in the standalone ESM build nothing reads it —
+    it is wired through VS Code's configuration service, which is not here. The
+    switch that works is on the **model**, and it drops a word:
+    `model.updateOptions({ bracketColorizationOptions: { enabled: false } })`.
+    The theme also paints all six depths as plain punctuation, so the worst
+    case is never gold brackets competing with the amber that means agent work.
+
+13. **A global shortcut has to be captured, not awaited.** Monaco treats Ctrl+K
+    as a chord prefix and calls `stopPropagation`, so a bubble-phase listener on
+    `window` never fires and the command palette silently stopped opening
+    whenever the editor had focus. `App.tsx` now handles it in the **capture**
+    phase. Consequence, stated plainly: Ctrl+K no longer reaches a shell as
+    readline's kill-to-end-of-line.
+
+14. **`visibility: hidden` on a container does not hide a child that sets
+    `visibility: visible`.** The project areas hide each other that way, and
+    `.workspace__pane[data-visible]` re-asserted it — leaving a live terminal
+    painted and swallowing every click while Files was on screen. The tree
+    rendered perfectly and simply did not respond, and only with a session
+    actually running. `.workspace__area-body:not([data-visible])` now puts its
+    own children back.
+
+15. **A one-sided pathspec defeats Git's rename detection.**
+    `git diff -M HEAD -- new.txt` reports `new file` with every line added,
+    because `-M` has nothing to pair against. Both names must be on the command
+    line. A moved file would otherwise be reported to a reviewer as one the
+    agent rewrote from scratch.
+
+16. **A driven session is not "attended", even with the terminal open.**
     Watching is not answering. `Snapshot::can_ask_a_person` requires a view
     *and* no autopilot in the seat; conflating them would park an unattended
     agent on a permission prompt nobody can answer.
@@ -241,26 +286,33 @@ this, so the app's project list may already show a `demo-project` pointing at a
 previous session's temp folder — a path that no longer exists. Add yours as a
 new project rather than assuming the existing entry is live.
 
+Driving the folder picker: click **Abrir pasta**, click the `Pasta:` field, then
+`^a` and `{DEL}` **before** typing the path. The field pre-fills with whatever is
+selected in the listing, and typing over it silently produces
+`testsC:\Users\...` and an "invalid folder name" box.
+
 ---
 
 ## 7. Suggested next steps, in priority order
 
-1. **Files, Editor, Diff/Review (§41–43)** — the largest remaining surface, and
-   the current milestone (**M6**). Monaco is the intended editor, behind a
-   `packages/editor` boundary (D4), so an LSP client can land later without
-   touching surfaces.
+1. **Git + worktrees (§44/§45)** — the other half of **M6**, and the reason
+   Review currently only reads.
 
-   Worth deciding early, before writing much: these are project-scoped tools, so
-   they belong **inside a project** rather than on the global rail (§85/§87) —
-   the rail is deliberately six destinations. The session log already records
-   which files a session touched (`FileChange`, mirrored into `file_changes`),
-   so Diff/Review has a real source for "what did this agent change?" without
-   inventing one. Git goes through the `git` executable, never a library (D5).
+   Every write here is a destructive operation run on the user's behalf —
+   staging, discarding a change, restoring a file, and later pushing. D11 draws
+   the line clearly: where J.A.R.V.I.S. owns the process, the guardrail is
+   *unconditional*, so these must route through it rather than sit behind a
+   plain button. `guardrail::classify` already knows the sensitive Git
+   operations; the missing part is the surface asking it before acting, plus the
+   confirmation for the ones a person should see first.
 
-   The §81 rule applies as it has all along: a surface that is not built is
-   absent, not a "coming soon" screen. Monaco is a large dependency — check what
-   it does to the 7.3 MB install footprint before committing to it, and say so
-   if it is a problem rather than discovering it at release.
+   Worktrees (§45) are the reason D5 chose the `git` executable over libgit2 in
+   the first place, so that part should be straightforward.
+
+   The pieces M6 leaves ready: `git::locate` gives the repo root and the
+   project's prefix inside it, `git::status` parses porcelain `-z` (including
+   both rename orderings, which differ between `status` and `diff --numstat`),
+   and `git::diff` turns a patch into numbered hunks.
 2. **Project Brain (§36–39) and Notes (§40)** — the memory layer.
 3. **Onboarding (§13)** — first-run experience; the environment scan already
    provides its data.

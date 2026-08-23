@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, GitBranch, Plus, X } from "lucide-react";
 import { ConversationView } from "../conversation/ConversationView";
 import { Popover } from "../../design/Popover";
+import { FilesView } from "../files/FilesView";
+import { ReviewView } from "../review/ReviewView";
 import { useT } from "../../app/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
 import { useEnvironment } from "../environment/useEnvironment";
@@ -14,6 +16,23 @@ interface ProjectWorkspaceProps {
   project: Project;
   onBack: () => void;
 }
+
+/**
+ * Areas inside a project (§19).
+ *
+ * These are project-scoped tools, so they live **inside** the project rather
+ * than on the global rail — the rail is six destinations and stays six (§85/§87).
+ * The list is the same kind of thing `App.tsx` keeps for the rail: an area that
+ * is not built is absent from it, never a "coming soon" screen (§81).
+ */
+const AREAS = ["sessions", "files", "review"] as const;
+type Area = (typeof AREAS)[number];
+
+const AREA_LABEL: Record<Area, "project.sessions" | "project.files" | "project.review"> = {
+  sessions: "project.sessions",
+  files: "project.files",
+  review: "project.review",
+};
 
 /** Which agents can actually be launched, from the real environment scan (§14). */
 const AGENT_TOOL_ID: Record<Exclude<SessionKind, "shell">, string> = {
@@ -37,6 +56,17 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLButtonElement | null>(null);
   const [view, setView] = useState<"terminal" | "conversation">("terminal");
+  const [area, setArea] = useState<Area>("sessions");
+  // Files and Review are mounted the first time they are opened and stay
+  // mounted after that, so returning to one keeps its open files, its scroll
+  // position and its selected diff. Sessions is always mounted: unmounting it
+  // would tear down every terminal in the project.
+  const [visited, setVisited] = useState<Set<Area>>(() => new Set<Area>(["sessions"]));
+
+  const goToArea = (next: Area) => {
+    setVisited((seen) => (seen.has(next) ? seen : new Set(seen).add(next)));
+    setArea(next);
+  };
 
   const activeTab_ = projectTabs.find((tab) => tab.sessionId === active);
 
@@ -72,12 +102,32 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
           )}
         </div>
 
+        {/* Areas of the project. Deliberately *not* a segmented pill: the
+            Terminal/Conversation switch below is one, and two pills stacked
+            read as the same kind of control. This is navigation — it changes
+            what you are looking at — so it is rendered as navigation. */}
+        <nav className="workspace__areas" aria-label={project.name}>
+          {AREAS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="workspace__area"
+              data-active={area === id || undefined}
+              aria-current={area === id ? "page" : undefined}
+              onClick={() => goToArea(id)}
+            >
+              {t(AREA_LABEL[id])}
+            </button>
+          ))}
+        </nav>
+
         <span className="workspace__path selectable" title={project.path}>
           {project.path}
         </span>
       </header>
 
-      <div className="workspace__tabs">
+      <div className="workspace__area-body" data-visible={area === "sessions" || undefined}>
+        <div className="workspace__tabs">
         {projectTabs.map((tab) => (
           <div
             key={tab.sessionId}
@@ -172,9 +222,9 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
             ))}
           </div>
         )}
-      </div>
+        </div>
 
-      <div className="workspace__body">
+        <div className="workspace__body">
         {error && <p className="workspace__error">{error}</p>}
 
         {projectTabs.length === 0 ? (
@@ -200,7 +250,11 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
               <div className="workspace__projection" data-visible={view === "terminal" || undefined}>
                 <TerminalView
                   sessionId={tab.sessionId}
-                  autoFocus={tab.sessionId === active && view === "terminal"}
+                  // Also gated on the area: a terminal that is off screen
+                  // behind Files or Review must not hold the keyboard.
+                  autoFocus={
+                    area === "sessions" && tab.sessionId === active && view === "terminal"
+                  }
                 />
               </div>
               {view === "conversation" && (
@@ -211,7 +265,20 @@ export function ProjectWorkspace({ project, onBack }: ProjectWorkspaceProps) {
             </div>
           ))
         )}
+        </div>
       </div>
+
+      {visited.has("files") && (
+        <div className="workspace__area-body" data-visible={area === "files" || undefined}>
+          <FilesView projectId={project.id} />
+        </div>
+      )}
+
+      {visited.has("review") && (
+        <div className="workspace__area-body" data-visible={area === "review" || undefined}>
+          <ReviewView projectId={project.id} />
+        </div>
+      )}
     </div>
   );
 }

@@ -127,8 +127,25 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
       termRef.current = null;
     };
     // `resolved` is deliberately excluded — see the theme effect below.
+    //
+    // `autoFocus` is excluded too, and that one matters: it changes whenever
+    // the user switches tab or leaves the Sessions area, and rebuilding the
+    // terminal for it would kill the process and throw away the scrollback.
+    // Focus is a separate effect for exactly that reason.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, autoFocus]);
+  }, [sessionId]);
+
+  /**
+   * Take the keyboard back when this terminal becomes the active one.
+   *
+   * Focusing only at start-up is not enough once a project has more than one
+   * place to be: coming back from Files left the terminal on screen, alive and
+   * scrolled where it was, and silently ignoring everything typed at it. Found
+   * by switching away and back in the real app and typing.
+   */
+  useEffect(() => {
+    if (autoFocus) termRef.current?.focus();
+  }, [autoFocus]);
 
   // Apply theme changes without recreating the terminal.
   useEffect(() => {

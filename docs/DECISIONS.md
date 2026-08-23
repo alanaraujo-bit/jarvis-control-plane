@@ -209,6 +209,53 @@ the terminal shows the words perfectly while the agent has been told nothing.
 **Decision:** wait for the prompt to be drawn, write the instruction in small
 paced chunks, then send the submit key as a separate write after a pause.
 
+## D17 — Monaco ships without its language services, and is loaded on demand
+**Date:** 2026-08-23
+**Why:** D4 chose Monaco for the editor (§42) and left the cost unmeasured. The
+handoff asked for that number **before** committing, so it was measured rather
+than estimated — and the estimate would have been wrong by a factor of four.
+
+Three builds, all real:
+
+| Configuration | `dist` on disk |
+|---|---|
+| `import * as monaco from "monaco-editor"` — every grammar, every worker | **14.0 MB** |
+| Editor core + 21 named grammars + the JSON service | 4.5 MB |
+| **Editor core + 21 named grammars, no language services** (shipped) | **4.1 MB** |
+
+What that actually costs the product is smaller than any of those, because
+Tauri compresses the frontend into the binary. Measured on the installed
+application, not inferred:
+
+| | Before M6 | With Monaco |
+|---|---|---|
+| `%LOCALAPPDATA%\J.A.R.V.I.S` | 7.49 MB | **8.53 MB** |
+| `…_x64-setup.exe` | 3.1 MB | 4.13 MB |
+
+**+1.04 MB installed for a full code editor.** That is not a problem, and it is
+worth writing down that the 4.1 MB figure from a scratch Vite build is a
+ceiling, not an answer — extrapolating from it would have overstated the cost
+by 4×.
+
+**The TypeScript, CSS, HTML and JSON language services are excluded**, and not
+only for weight. Monaco's TypeScript worker knows nothing about the project's
+`tsconfig.json` or its `node_modules`, so it reports missing imports and
+phantom errors on code that is perfectly correct. Confidently wrong diagnostics
+are worse than none — the same principle §28 applies to numbers. Real
+intelligence arrives with the LSP client D4 left room for, which does know those
+things. That the worker is also 7 MB on its own, larger than the entire
+installed product, settles it.
+
+**Loaded on demand.** The editor is a 3.7 MB chunk and most sessions never open
+a file, so it is dynamically imported behind `packages/editor`. Verified in the
+release bundle: the eager entry chunk contains no occurrence of `monaco`.
+
+**Also found by looking, as usual.** Monaco's bracket pair colourisation is on
+by default and paints nested brackets in saturated gold, pink and blue. It is
+decoration — the colour encodes nesting depth, which nobody reads — and the gold
+is close enough to the product's amber to read as a state signal (§6). It is
+off. Caught in the first screenshot of the real editor, not by any test.
+
 ## D9 — The main binary is named `jarvis-desktop`, not `jarvis`
 **Date:** 2026-08-22
 **Why:** Found by running the real installer on a real machine, not by reading
