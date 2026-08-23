@@ -18,6 +18,7 @@ mod project;
 mod providers;
 mod pty;
 mod review;
+mod search;
 mod session;
 mod window;
 mod worktrees;
@@ -165,6 +166,7 @@ pub fn run() {
             autopilot::commands::autopilot_status,
             autopilot::commands::autopilot_start,
             autopilot::commands::autopilot_stop,
+            search::global_search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");

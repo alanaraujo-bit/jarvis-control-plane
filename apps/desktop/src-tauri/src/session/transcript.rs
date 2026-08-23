@@ -153,7 +153,230 @@ fn locate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::providers::conversation::Role;
+    use crate::providers::conversation::{Role, TokenUsage};
+
+    /// A database with the one project and session `mirror` needs to satisfy
+    /// the foreign keys on `session_events`.
+    fn seeded_db() -> Database {
+        let db = Database::open_in_memory().unwrap();
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO projects (id, name, path, created_at, last_opened_at)
+                 VALUES ('p1', 'demo', 'C:/demo', 0, 0)",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO sessions (id, project_id, provider, cwd, state, log_dir, created_at)
+                 VALUES ('s1', 'p1', 'claude-code', 'C:/demo', 'idle', 'C:/logs', 0)",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        db
+    }
+
+    fn event_row(db: &Database) -> (String, Option<String>, String) {
+        db.with(|conn| {
+            conn.query_row(
+                "SELECT kind, label, text FROM session_events WHERE session_id = 's1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+        })
+        .unwrap()
+    }
+
+    fn event_count(db: &Database) -> i64 {
+        db.with(|conn| conn.query_row("SELECT COUNT(*) FROM session_events", [], |r| r.get(0)))
+            .unwrap()
+    }
+
+    /// The one thing this write path exists for: what an agent said has to
+    /// actually be findable afterwards, through the same FTS5 index Global
+    /// Search queries (§51).
+    #[test]
+    fn a_message_is_mirrored_and_findable_through_the_fts_index() {
+        let db = seeded_db();
+        let message = ConversationItem::Message {
+            role: Role::Assistant,
+            text: "the tree is clean".into(),
+            ts_ms: 1000,
+            usage: None,
+        };
+
+        mirror(&db, "s1", "p1", "claude-code", &message);
+
+        let (kind, label, text) = event_row(&db);
+        assert_eq!(kind, "message");
+        assert_eq!(label.as_deref(), Some("assistant"));
+        assert_eq!(text, "the tree is clean");
+
+        let hits: i64 = db
+            .with(|conn| {
+                conn.query_row(
+                    "SELECT COUNT(*) FROM session_events_fts WHERE session_events_fts MATCH 'clean'",
+                    [],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(hits, 1, "the mirrored text must reach the search index, not just the row");
+    }
+
+    /// A turn that carries only usage numbers is a usage sample (§28), not
+    /// something for a person to search for — indexing an empty string would
+    /// put a blank, unfindable row in the table for every such turn.
+    #[test]
+    fn a_usage_only_message_is_not_mirrored_as_searchable_text() {
+        let db = seeded_db();
+        let usage = TokenUsage { input: Some(120), ..TokenUsage::default() };
+        let message = ConversationItem::Message {
+            role: Role::Assistant,
+            text: String::new(),
+            ts_ms: 1,
+            usage: Some(usage),
+        };
+
+        mirror(&db, "s1", "p1", "claude-code", &message);
+
+        assert_eq!(event_count(&db), 0);
+        let usage_rows: i64 = db
+            .with(|conn| {
+                conn.query_row("SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'", [], |r| {
+                    r.get(0)
+                })
+            })
+            .unwrap();
+        assert_eq!(usage_rows, 1);
+    }
+
+    /// Found by running a real Claude Code turn and searching for its own
+    /// reply: it was not there. A real assistant turn almost always carries
+    /// **both** real text and usage — the two concerns are not exclusive, and
+    /// routing on `match` picked one arm and silently dropped the other. Every
+    /// substantive reply an agent ever gives was going missing from search.
+    #[test]
+    fn a_reply_with_both_text_and_usage_is_recorded_both_ways() {
+        let db = seeded_db();
+        let usage = TokenUsage { input: Some(120), output: Some(40), ..TokenUsage::default() };
+        let message = ConversationItem::Message {
+            role: Role::Assistant,
+            text: "jarvis-search-probe-9d3f".into(),
+            ts_ms: 1,
+            usage: Some(usage),
+        };
+
+        mirror(&db, "s1", "p1", "claude-code", &message);
+
+        assert_eq!(event_count(&db), 1, "the reply's own text must reach the search index");
+        let (kind, label, text) = event_row(&db);
+        assert_eq!(kind, "message");
+        assert_eq!(label.as_deref(), Some("assistant"));
+        assert_eq!(text, "jarvis-search-probe-9d3f");
+
+        let usage_rows: i64 = db
+            .with(|conn| {
+                conn.query_row("SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'", [], |r| {
+                    r.get(0)
+                })
+            })
+            .unwrap();
+        assert_eq!(usage_rows, 1, "the usage figures still belong to Analytics too");
+    }
+
+    /// Thinking is what a person might search for later ("why did it decide
+    /// to..."); a turn boundary carries no text of its own and must not leave
+    /// an empty row behind.
+    #[test]
+    fn thinking_is_indexed_and_a_turn_boundary_is_not() {
+        let db = seeded_db();
+        mirror(
+            &db,
+            "s1",
+            "p1",
+            "claude-code",
+            &ConversationItem::Thinking { text: "weighing the tradeoffs".into(), ts_ms: 1 },
+        );
+        mirror(
+            &db,
+            "s1",
+            "p1",
+            "claude-code",
+            &ConversationItem::TurnEnded { reason: "end_turn".into(), ts_ms: 2 },
+        );
+
+        assert_eq!(event_count(&db), 1, "only the thinking item carries text worth finding");
+        let (kind, label, text) = event_row(&db);
+        assert_eq!(kind, "thinking");
+        assert!(label.is_none());
+        assert_eq!(text, "weighing the tradeoffs");
+    }
+
+    /// A tool's own name has to be searchable alongside its summary, or
+    /// looking for "Bash" would never find the calls that ran it.
+    #[test]
+    fn a_tool_call_is_indexed_under_its_own_name() {
+        let db = seeded_db();
+        mirror(
+            &db,
+            "s1",
+            "p1",
+            "claude-code",
+            &ConversationItem::ToolCall {
+                id: "t1".into(),
+                name: "Bash".into(),
+                summary: "git status".into(),
+                ts_ms: 1,
+            },
+        );
+
+        let (kind, label, text) = event_row(&db);
+        assert_eq!(kind, "toolCall");
+        assert_eq!(label.as_deref(), Some("Bash"));
+        assert!(text.contains("Bash"));
+        assert!(text.contains("git status"));
+    }
+
+    /// Captured verbatim (cwd genericised) from the real Claude Code turn that
+    /// exposed the bug fixed above: a real reply's own `Message` line, straight
+    /// from `claude::parse_line`, carrying both text and real usage numbers
+    /// together — which is the ordinary shape, not an edge case. Run through
+    /// the actual parser rather than a hand-built `ConversationItem`, so this
+    /// pins the whole pipeline the app runs, not just `mirror`'s contract.
+    #[test]
+    fn a_real_claude_code_reply_survives_the_full_pipeline_into_search() {
+        let line = r#"{"parentUuid":"90326252-19f4-45cd-9c72-dfabcb910997","isSidechain":false,"message":{"model":"claude-sonnet-5","id":"msg_011CeKrYjxgqzrAPfN2jSs6z","type":"message","role":"assistant","content":[{"type":"text","text":"jarvis-search-dbg-55e3"}],"stop_reason":"end_turn","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":17709,"cache_read_input_tokens":33226,"output_tokens":16,"output_tokens_details":{"thinking_tokens":0},"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard"},"diagnostics":null},"requestId":"req_011CeKrYhe3Jo4cNf37UpPeq","type":"assistant","uuid":"143054d7-7d38-4637-92eb-a5d40035b662","timestamp":"2026-08-23T14:41:24.000Z","session_id":"01a02f11-903f-7731-ab39-41dac1350593","userType":"external","entrypoint":"cli","cwd":"/scratch/brain-demo","sessionId":"01a02f11-903f-7731-ab39-41dac1350593","version":"2.1.241","gitBranch":"main"}"#;
+
+        let items = claude::parse_line(line);
+        let message = items
+            .iter()
+            .find(|item| matches!(item, ConversationItem::Message { role: Role::Assistant, .. }))
+            .expect("a real assistant turn must parse into a Message item");
+
+        let db = seeded_db();
+        mirror(&db, "s1", "p1", "claude-code", message);
+
+        let hits: i64 = db
+            .with(|conn| {
+                conn.query_row(
+                    "SELECT COUNT(*) FROM session_events_fts WHERE session_events_fts MATCH 'dbg'",
+                    [],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(hits, 1, "a real assistant reply, usage and all, must land in the search index");
+
+        let usage_rows: i64 = db
+            .with(|conn| {
+                conn.query_row("SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'", [], |r| {
+                    r.get(0)
+                })
+            })
+            .unwrap();
+        assert_eq!(usage_rows, 1, "and Analytics must still get its tokens");
+    }
 
     #[test]
     fn items_map_to_the_frame_kind_that_carries_them() {
@@ -212,6 +435,14 @@ mod tests {
 ///
 /// Failures are logged and swallowed. This is a derived index; losing a row
 /// costs a number in a chart, and must never disturb the session it describes.
+///
+/// The two things below are independent, not alternatives picked by a
+/// `match`: a real assistant turn almost always carries **both** its own text
+/// and the usage the provider reported for producing it. An earlier version
+/// of this function used one `match` to route between "record usage" and
+/// "record searchable text", so a normal reply — text and usage together —
+/// took the usage arm and its text was never indexed. Found by running a real
+/// Claude Code turn and searching for its own reply: it was not there.
 fn mirror(
     db: &Database,
     session_id: &str,
@@ -219,9 +450,9 @@ fn mirror(
     provider: &str,
     item: &ConversationItem,
 ) {
-    let outcome = match item {
-        ConversationItem::Message { usage: Some(usage), ts_ms, .. } if !usage.is_empty() => {
-            db.with(|conn| {
+    if let ConversationItem::Message { usage: Some(usage), ts_ms, .. } = item {
+        if !usage.is_empty() {
+            let outcome = db.with(|conn| {
                 conn.execute(
                     "INSERT INTO usage_samples
                          (session_id, project_id, provider, model, ts_ms,
@@ -248,22 +479,111 @@ fn mirror(
                     ],
                 )?;
                 Ok(())
-            })
+            });
+            if let Err(e) = outcome {
+                tracing::warn!(error = %e, session = session_id, "could not mirror usage");
+            }
         }
+    }
 
-        ConversationItem::FileChange { path, ts_ms } => db.with(|conn| {
+    if let ConversationItem::FileChange { path, ts_ms } = item {
+        let outcome = db.with(|conn| {
             conn.execute(
                 "INSERT INTO file_changes (session_id, project_id, path, ts_ms)
                  VALUES (?1, ?2, ?3, ?4)",
                 params![session_id, project_id, path, ts_ms],
             )?;
             Ok(())
-        }),
-
-        _ => return,
-    };
-
-    if let Err(e) = outcome {
-        tracing::warn!(error = %e, session = session_id, "could not mirror a session event");
+        });
+        if let Err(e) = outcome {
+            tracing::warn!(error = %e, session = session_id, "could not mirror a file change");
+        }
+        // Nothing further: `search_event` has no case for `FileChange` either.
+        return;
     }
+
+    // Everything Global Search (§51) can find later: what was said, thought,
+    // run, and got back — regardless of whether the same item also carried
+    // usage above. `TurnEnded` carries no text worth indexing.
+    if let Some((kind, label, text)) = search_event(item) {
+        if !text.trim().is_empty() {
+            let outcome =
+                insert_search_event(db, session_id, project_id, item.ts_ms(), kind, label, &text, item);
+            if let Err(e) = outcome {
+                tracing::warn!(error = %e, session = session_id, "could not mirror a session event");
+            }
+        }
+    }
+}
+
+/// The plain-text shape of an item worth finding later, if it has one.
+///
+/// Returns the `ConversationItem`'s own tag (never the coarser `EventKind` —
+/// see the migration 9 comment), an optional label naming who or what, and the
+/// text itself. A `usage`-only `Message` still reaches here with empty text
+/// and is dropped by the empty check at the call site, same as an empty
+/// `ToolResult` summary.
+fn search_event(item: &ConversationItem) -> Option<(&'static str, Option<String>, String)> {
+    match item {
+        ConversationItem::Message { role, text, .. } => {
+            let role = serde_json::to_string(role).unwrap_or_default();
+            Some(("message", Some(role.trim_matches('"').to_string()), text.clone()))
+        }
+        ConversationItem::Thinking { text, .. } => Some(("thinking", None, text.clone())),
+        // The tool's own name is folded into the indexed text, not left only
+        // in `label`: a search for "Bash" has to find the calls that ran it,
+        // and `label` is not a column search touches.
+        ConversationItem::ToolCall { name, summary, .. } => {
+            let text = if summary.trim().is_empty() {
+                name.clone()
+            } else {
+                format!("{name}: {summary}")
+            };
+            Some(("toolCall", Some(name.clone()), text))
+        }
+        ConversationItem::ToolResult { ok, summary, .. } => Some((
+            "toolResult",
+            Some(if *ok { "ok" } else { "error" }.into()),
+            summary.clone(),
+        )),
+        ConversationItem::Error { message, .. } => Some(("error", None, message.clone())),
+        ConversationItem::FileChange { .. } | ConversationItem::TurnEnded { .. } => None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn insert_search_event(
+    db: &Database,
+    session_id: &str,
+    project_id: &str,
+    ts_ms: i64,
+    kind: &str,
+    label: Option<String>,
+    text: &str,
+    item: &ConversationItem,
+) -> crate::db::Result<()> {
+    let payload = serde_json::to_string(item).unwrap_or_default();
+    db.with(|conn| {
+        // `seq` keeps the composite primary key migration 1 declared; nothing
+        // downstream reads it as anything but a per-session tiebreaker; there
+        // is exactly one writer per session (this tailer thread), so a plain
+        // count cannot race with itself.
+        let seq: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM session_events WHERE session_id = ?1",
+            [session_id],
+            |row| row.get(0),
+        )?;
+        conn.execute(
+            "INSERT INTO session_events
+                 (session_id, seq, ts_ms, project_id, kind, label, text, payload)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![session_id, seq, ts_ms, project_id, kind, label, text, payload],
+        )?;
+        conn.execute(
+            "INSERT INTO session_events_fts (session_id, ts_ms, project_id, kind, label, text)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![session_id, ts_ms, project_id, kind, label, text],
+        )?;
+        Ok(())
+    })
 }

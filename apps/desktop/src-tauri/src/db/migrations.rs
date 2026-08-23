@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 9;
 
 struct Migration {
     version: u32,
@@ -391,6 +391,48 @@ const MIGRATIONS: &[Migration] = &[Migration {
     );
     CREATE INDEX idx_notes_project ON project_notes (project_id, pinned DESC, updated_at DESC);
 "#,
+    },
+    Migration {
+        version: 9,
+        sql: r#"
+    -- ---- Global Search (§51) ------------------------------------------------
+    --
+    -- `session_events` has had no writer since migration 1 -- a repo-wide check
+    -- of every `INSERT` site confirms it. It exists, with zero rows, on every
+    -- installation. The columns below are additive, per rule 2 at the top of
+    -- this file, and give conversation content -- what an agent said, thought,
+    -- ran, and got back -- somewhere to live so it can be found later (§39).
+    --
+    -- `kind` is repurposed here: nothing ever wrote the shape the original
+    -- comment described, so nothing depends on that meaning. It now carries
+    -- `ConversationItem`'s own tag (message | thinking | toolCall | toolResult |
+    -- error) rather than the coarser session-log `EventKind`, which collapses
+    -- message, thinking, turnEnded and error together -- exactly the distinction
+    -- search needs to tell what the agent said from what it was only thinking.
+    ALTER TABLE session_events ADD COLUMN project_id TEXT REFERENCES projects (id) ON DELETE CASCADE;
+    -- Who or what, when a kind needs to say: the speaking role for a message,
+    -- the tool name for a call, ok/error for a result. NULL where there is only
+    -- one thing it could be.
+    ALTER TABLE session_events ADD COLUMN label TEXT;
+    -- The plain text search actually matches. `payload` stays the full JSON
+    -- item for anything that needs the structured shape back.
+    ALTER TABLE session_events ADD COLUMN text TEXT;
+    CREATE INDEX idx_events_project_time ON session_events (project_id, ts_ms DESC);
+
+    -- A standalone FTS5 index, not `content=session_events`: that mode keys
+    -- against an integer rowid, and session_events is `WITHOUT ROWID` with a
+    -- composite (session_id, seq) key. Keeping its own copy of the handful of
+    -- columns a result needs costs nothing at this table's size and keeps the
+    -- index decoupled from session_events' key shape.
+    CREATE VIRTUAL TABLE session_events_fts USING fts5(
+        session_id UNINDEXED,
+        ts_ms UNINDEXED,
+        project_id UNINDEXED,
+        kind UNINDEXED,
+        label UNINDEXED,
+        text
+    );
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -497,6 +539,7 @@ mod tests {
             (6, 0x1851_a45c_4cbe_3881),
             (7, 0x119d_80b1_fc88_9edc),
             (8, 0x93ed_a072_1ac5_8f63),
+            (9, 0x5843_2197_f138_27bd),
         ];
 
         for migration in MIGRATIONS {
@@ -563,7 +606,14 @@ mod tests {
             let fresh = Connection::open_in_memory().unwrap();
             run(&fresh).unwrap();
 
-            for table in ["evidence", "guardrail_events", "missions", "sessions", "projects"] {
+            for table in [
+                "evidence",
+                "guardrail_events",
+                "missions",
+                "sessions",
+                "projects",
+                "session_events",
+            ] {
                 assert_eq!(
                     columns(&stepped, table),
                     columns(&fresh, table),
