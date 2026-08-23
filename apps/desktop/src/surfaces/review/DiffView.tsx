@@ -21,6 +21,12 @@ export function DiffView({ diff }: DiffViewProps) {
     return <p className="diff__note">{t("review.binary")}</p>;
   }
 
+  // Checked before the empty-hunks case below, which would otherwise claim
+  // that no line changed in a file that is entirely new.
+  if (diff.tooLarge) {
+    return <p className="diff__note">{t("review.tooLarge")}</p>;
+  }
+
   if (diff.hunks.length === 0) {
     return <p className="diff__note">{t("review.noTextChange")}</p>;
   }

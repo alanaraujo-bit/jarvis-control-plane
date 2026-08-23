@@ -29,6 +29,7 @@ export interface ReviewFile {
   insertions: number;
   deletions: number;
   binary: boolean;
+  tooLarge: boolean;
   sessions: Attribution[];
 }
 
@@ -61,6 +62,7 @@ export interface FileDiff {
   fromPath: string | null;
   kind: ChangeKind;
   binary: boolean;
+  tooLarge: boolean;
   insertions: number;
   deletions: number;
   hunks: Hunk[];

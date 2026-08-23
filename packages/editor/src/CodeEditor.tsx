@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { loadMonaco, type Monaco, type MonacoApi } from "./monaco.ts";
+import { isMonacoLoaded, loadMonaco, type Monaco, type MonacoApi } from "./monaco.ts";
 import { languageForPath } from "./languages.ts";
 import { defineThemes, themeName } from "./theme.ts";
 
@@ -29,7 +29,6 @@ export interface CodeEditorProps {
   path: string;
   value: string;
   theme: "dark" | "light";
-  readOnly?: boolean;
   onChange?: (value: string) => void;
   /** Ctrl/Cmd+S inside the editor. */
   onSave?: () => void;
@@ -52,7 +51,7 @@ function modelUri(monaco: MonacoApi, scope: string, path: string) {
  * renders nothing until it arrives. The parent decides what to show meanwhile;
  * a spinner belongs to the surface, not to the boundary.
  */
-export function CodeEditor({ scope, path, value, theme, readOnly, onChange, onSave }: CodeEditorProps) {
+export function CodeEditor({ scope, path, value, theme, onChange, onSave }: CodeEditorProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const editor = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const [monaco, setMonaco] = useState<MonacoApi | null>(null);
@@ -197,10 +196,6 @@ export function CodeEditor({ scope, path, value, theme, readOnly, onChange, onSa
     if (monaco) monaco.editor.setTheme(themeName(theme));
   }, [monaco, theme]);
 
-  useEffect(() => {
-    editor.current?.updateOptions({ readOnly: readOnly ?? false });
-  }, [readOnly]);
-
   return <div ref={host} className="jarvis-editor" style={{ width: "100%", height: "100%" }} />;
 }
 
@@ -210,8 +205,14 @@ export function CodeEditor({ scope, path, value, theme, readOnly, onChange, onSa
  * Closing a tab should not leave its model — and its undo history — alive for
  * the rest of the session. Called by the surface that owns the tabs, because
  * only it knows when a file is really closed rather than merely hidden.
+ *
+ * Returns immediately if Monaco was never loaded. A tab can be opened and
+ * closed without the editor ever rendering — a binary file, or one too large to
+ * open — and downloading 3.7 MB to dispose a model that cannot exist would make
+ * closing that tab the most expensive thing in the surface.
  */
 export async function disposeModel(scope: string, path: string): Promise<void> {
+  if (!isMonacoLoaded()) return;
   const monaco = await loadMonaco();
   monaco.editor.getModel(modelUri(monaco, scope, path))?.dispose();
 }

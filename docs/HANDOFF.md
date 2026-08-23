@@ -57,7 +57,7 @@ These come from the product spec and are not stylistic preferences:
 The loop is: **implement → build → run the real app → screenshot it → look at it
 → fix what is actually wrong → repeat.**
 
-Four of the most important bugs in this codebase were invisible to tests and
+Nine of the most important bugs in this codebase were invisible to tests and
 only appeared by running the product and looking at a screenshot. Do not skip
 the looking.
 
@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**238 tests** (230 Rust, 8 i18n) · all green.
+**239 tests** (231 Rust, 8 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -225,7 +225,13 @@ Every one of these is real and already cost time.
     line. A moved file would otherwise be reported to a reviewer as one the
     agent rewrote from scratch.
 
-16. **A driven session is not "attended", even with the terminal open.**
+16. **`git status` collapses a wholly untracked directory into one entry.**
+    The default `--untracked-files=normal` reports `assets/` rather than the
+    files inside it — a record with no filename, no line count and nothing to
+    diff, which rendered in Review as a row with a blank name. Review asks for
+    `--untracked-files=all`.
+
+17. **A driven session is not "attended", even with the terminal open.**
     Watching is not answering. `Snapshot::can_ask_a_person` requires a view
     *and* no autopilot in the seat; conflating them would park an unattended
     agent on a permission prompt nobody can answer.

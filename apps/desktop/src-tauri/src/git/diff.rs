@@ -62,6 +62,9 @@ pub struct FileDiff {
     pub from_path: Option<String>,
     pub kind: ChangeKind,
     pub binary: bool,
+    /// We declined to read the file at all. Only an untracked file can be in
+    /// this state — Git happily diffs a large tracked file and we truncate it.
+    pub too_large: bool,
     pub insertions: u32,
     pub deletions: u32,
     pub hunks: Vec<Hunk>,
@@ -240,6 +243,7 @@ pub fn added_file(path: &str, text: &str) -> FileDiff {
         from_path: None,
         kind: ChangeKind::Untracked,
         binary: false,
+        too_large: false,
         insertions,
         deletions: 0,
         hunks,

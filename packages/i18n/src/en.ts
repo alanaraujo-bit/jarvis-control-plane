@@ -150,6 +150,9 @@ export const en = {
   "review.loadingDiff": "Reading the diff…",
   "review.binary": "A binary file changed. There is no text diff to show.",
   "review.binaryShort": "binary",
+  "review.tooLarge":
+    "This new file is larger than the 2 MB the editor will read, so its contents are not shown.",
+  "review.tooLargeShort": "too large",
   "review.noTextChange": "No line changed — only the file's mode or metadata.",
   "review.truncated": "The rest of this diff was left out; it is longer than {count} lines.",
   "review.andOthers": "+{count} more sessions",

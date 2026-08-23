@@ -56,6 +56,9 @@ pub struct ReviewFile {
     pub insertions: u32,
     pub deletions: u32,
     pub binary: bool,
+    /// We declined to read this new file to count its lines. Distinct from
+    /// binary, and very distinct from "nothing changed".
+    pub too_large: bool,
     /// Sessions that touched this file, most recent first. Empty means nobody
     /// we were watching did — a change made outside J.A.R.V.I.S., which is a
     /// fact worth showing rather than hiding.
@@ -127,7 +130,20 @@ fn parse_numstat(out: &str) -> HashMap<String, (u32, u32, bool)> {
 /// against Git's forward-slash paths matches nothing at all and looks exactly
 /// like "no agent touched this file", so the session's `cwd` is folded back in
 /// here.
-fn attributions(state: &AppState, project_id: &str, root: &Path) -> Result<HashMap<String, Vec<Attribution>>> {
+fn attributions(
+    state: &AppState,
+    project_id: &str,
+    root: &Path,
+    wanted: &std::collections::HashSet<String>,
+) -> Result<HashMap<String, Vec<Attribution>>> {
+    // Nothing changed, so there is nobody to attribute it to. Worth an early
+    // return rather than a query: this table grows with every file an agent
+    // touches, forever, and the common case on a clean tree is to need none of
+    // it.
+    if wanted.is_empty() {
+        return Ok(HashMap::new());
+    }
+
     let rows: Vec<(String, String, Option<String>, Option<String>, Option<String>, String, String, i64)> =
         state.db.with(|conn| {
             let mut stmt = conn.prepare(
@@ -161,6 +177,12 @@ fn attributions(state: &AppState, project_id: &str, root: &Path) -> Result<HashM
         let Some(key) = project_relative(root, Path::new(&cwd), &path) else {
             continue;
         };
+        // Only files that actually differ are ever displayed, so the map never
+        // grows past the size of the change set no matter how long the project
+        // has been worked on.
+        if !wanted.contains(&key) {
+            continue;
+        }
         let entry = map.entry(key).or_default();
         // One row per session per file; the query already grouped them.
         if entry.iter().any(|a| a.session_id == session_id) {
@@ -192,24 +214,45 @@ fn project_relative(root: &Path, cwd: &Path, recorded: &str) -> Option<String> {
     Some(relative.to_string_lossy().replace('\\', "/"))
 }
 
-/// Count the lines of a file Git has never seen, for the summary row.
-fn untracked_counts(root: &Path, project_path: &str) -> (u32, bool) {
+/// Line count of a file Git has never seen, for the summary row.
+///
+/// Both "no count" cases have to be told apart, not merged. A new file we
+/// declined to read is not a file with no changes in it: reporting zero for a
+/// two-megabyte addition, with nothing on the row to say why, is exactly the
+/// kind of silent blank §81 exists to forbid.
+struct UntrackedCounts {
+    lines: u32,
+    binary: bool,
+    too_large: bool,
+}
+
+fn untracked_counts(root: &Path, project_path: &str) -> UntrackedCounts {
+    let none = |binary, too_large| UntrackedCounts {
+        lines: 0,
+        binary,
+        too_large,
+    };
+
     match files::read(root, project_path) {
         Ok(contents) => match contents.text {
             Some(text) => {
                 let body = text.strip_suffix('\n').unwrap_or(&text);
-                let lines = if body.is_empty() {
-                    0
-                } else {
-                    body.split('\n').count() as u32
-                };
-                (lines, false)
+                UntrackedCounts {
+                    lines: if body.is_empty() {
+                        0
+                    } else {
+                        body.split('\n').count() as u32
+                    },
+                    binary: false,
+                    too_large: false,
+                }
             }
-            // Binary, or too large to read — either way there is no line count
-            // to report and claiming zero would be a lie.
-            None => (0, contents.unreadable == Some(files::Unreadable::Binary)),
+            None => none(
+                contents.unreadable == Some(files::Unreadable::Binary),
+                contents.unreadable == Some(files::Unreadable::TooLarge),
+            ),
         },
-        Err(_) => (0, false),
+        Err(_) => none(false, false),
     }
 }
 
@@ -240,10 +283,17 @@ pub fn report(state: &AppState, project_id: &str) -> Result<ReviewReport> {
         HashMap::new()
     };
 
-    let touched = attributions(state, project_id, &root)?;
+    // The change set first: it decides which attributions are worth loading.
+    let changes = git::status::changed_files(&location.root);
+    let wanted: std::collections::HashSet<String> = changes
+        .iter()
+        .filter_map(|c| location.to_project(&c.path))
+        .collect();
+
+    let touched = attributions(state, project_id, &root, &wanted)?;
     let mut files_out = Vec::new();
 
-    for change in git::status::changed_files(&location.root) {
+    for change in changes {
         // Git speaks in repository-relative paths; everything else here is
         // project-relative, and a project can be a subdirectory of its
         // repository.
@@ -255,15 +305,16 @@ pub fn report(state: &AppState, project_id: &str) -> Result<ReviewReport> {
             .as_deref()
             .and_then(|p| location.to_project(p));
 
-        let (insertions, deletions, binary) = match change.kind {
+        let (insertions, deletions, binary, too_large) = match change.kind {
             ChangeKind::Untracked => {
-                let (lines, binary) = untracked_counts(&root, &path);
-                (lines, 0, binary)
+                let counts = untracked_counts(&root, &path);
+                (counts.lines, 0, counts.binary, counts.too_large)
             }
-            _ => numstat
-                .get(&change.path)
-                .copied()
-                .unwrap_or((0, 0, false)),
+            _ => {
+                let (added, removed, binary) =
+                    numstat.get(&change.path).copied().unwrap_or((0, 0, false));
+                (added, removed, binary, false)
+            }
         };
 
         files_out.push(ReviewFile {
@@ -276,6 +327,7 @@ pub fn report(state: &AppState, project_id: &str) -> Result<ReviewReport> {
             insertions,
             deletions,
             binary,
+            too_large,
         });
     }
 
@@ -319,15 +371,19 @@ pub fn file_diff(
         let contents = files::read(&root, path)?;
         return Ok(match contents.text {
             Some(text) => git::diff::added_file(path, &text),
+            // No text to show, and the two reasons are not the same thing.
+            // Reporting "no line changed" for a two-megabyte new file would be
+            // a plain untruth.
             None => FileDiff {
                 path: path.to_string(),
                 from_path: None,
                 kind: ChangeKind::Untracked,
                 binary: contents.unreadable == Some(files::Unreadable::Binary),
+                too_large: contents.unreadable == Some(files::Unreadable::TooLarge),
                 insertions: 0,
                 deletions: 0,
                 hunks: Vec::new(),
-                truncated: contents.unreadable == Some(files::Unreadable::TooLarge),
+                truncated: false,
             },
         });
     }
@@ -345,6 +401,7 @@ pub fn file_diff(
         from_path: from_path.map(str::to_string),
         kind,
         binary,
+        too_large: false,
         insertions,
         deletions,
         hunks,

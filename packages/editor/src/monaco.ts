@@ -41,6 +41,10 @@ let pending: Promise<MonacoApi> | null = null;
  * editor would be a straight regression. Concurrent callers share one promise:
  * opening three files at once must not start three loads.
  */
+export function isMonacoLoaded(): boolean {
+  return pending !== null;
+}
+
 export function loadMonaco(): Promise<MonacoApi> {
   if (!pending) {
     pending = (async () => {

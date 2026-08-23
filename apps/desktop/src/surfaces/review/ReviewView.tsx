@@ -153,8 +153,12 @@ export function ReviewView({ projectId }: ReviewViewProps) {
                 </span>
                 <span className="review__file-meta">
                   <span className="review__dir">{dirname(file.path)}</span>
-                  {file.binary ? (
-                    <span className="review__binary">{t("review.binaryShort")}</span>
+                  {file.binary || file.tooLarge ? (
+                    // A row with no counts has to say why. Silence here reads
+                    // as "nothing changed" for a file that is entirely new.
+                    <span className="review__binary">
+                      {file.binary ? t("review.binaryShort") : t("review.tooLargeShort")}
+                    </span>
                   ) : (
                     <span className="review__stat">
                       {file.insertions > 0 && (
@@ -237,11 +241,18 @@ function providerName(provider: string): string {
   return provider;
 }
 
+/**
+ * The trailing `/` is stripped first, so a path that names a directory still
+ * has a name. Git no longer sends one (see `changed_files`), and a row with a
+ * blank label is bad enough that it is worth not depending on that.
+ */
 function basename(path: string): string {
-  return path.split("/").pop() ?? path;
+  const clean = path.replace(/\/+$/, "");
+  return clean.split("/").pop() || clean || path;
 }
 
 function dirname(path: string): string {
-  const cut = path.lastIndexOf("/");
-  return cut <= 0 ? "" : path.slice(0, cut);
+  const clean = path.replace(/\/+$/, "");
+  const cut = clean.lastIndexOf("/");
+  return cut <= 0 ? "" : clean.slice(0, cut);
 }

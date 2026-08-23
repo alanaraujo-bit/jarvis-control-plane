@@ -164,10 +164,20 @@ pub fn parse_status(out: &str) -> Vec<ChangedFile> {
 }
 
 /// Everything the working tree has that `HEAD` does not.
+///
+/// `--untracked-files=all`, not the default `normal`. `normal` collapses a
+/// wholly untracked directory into a single entry ending in `/` — a folder with
+/// two new files in it arrives as one record, `assets/`, which has no filename
+/// to show, no line count, and nothing to diff. Found by adding a new folder to
+/// a real project and seeing Review render a row with an empty name.
+///
+/// `all` lists the files themselves, which is also simply the better answer:
+/// this surface exists to review files, and "a directory appeared" is not a
+/// change anyone can read. Ignored files stay out either way.
 pub fn changed_files(root: &Path) -> Vec<ChangedFile> {
     capture(
         root,
-        &["status", "--porcelain=v1", "-z", "--untracked-files=normal"],
+        &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
         None,
     )
     .map(|out| parse_status(&out))

@@ -134,6 +134,9 @@ export const ptBR: Record<MessageKey, string> = {
   "review.loadingDiff": "Lendo as diferenças…",
   "review.binary": "Um arquivo binário mudou. Não há diferença de texto para mostrar.",
   "review.binaryShort": "binário",
+  "review.tooLarge":
+    "Este arquivo novo passa dos 2 MB que o editor lê, então o conteúdo dele não é exibido.",
+  "review.tooLargeShort": "grande demais",
   "review.noTextChange": "Nenhuma linha mudou — apenas o modo ou os metadados do arquivo.",
   "review.truncated": "O restante desta diferença ficou de fora; ela passa de {count} linhas.",
   "review.andOthers": "+{count} outras sessões",

@@ -230,7 +230,7 @@ application, not inferred:
 | | Before M6 | With Monaco |
 |---|---|---|
 | `%LOCALAPPDATA%\J.A.R.V.I.S` | 7.49 MB | **8.53 MB** |
-| `…_x64-setup.exe` | 3.1 MB | 4.13 MB |
+| `…_x64-setup.exe` | not measured | 4.13 MB |
 
 **+1.04 MB installed for a full code editor.** That is not a problem, and it is
 worth writing down that the 4.1 MB figure from a scratch Vite build is a

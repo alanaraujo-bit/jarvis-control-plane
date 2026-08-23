@@ -90,6 +90,32 @@ fn reads_status_from_a_real_working_tree() {
 }
 
 #[test]
+fn a_wholly_untracked_directory_is_listed_file_by_file() {
+    // Git's default `--untracked-files=normal` collapses a new directory into a
+    // single record ending in `/`. That record has no filename to show, no line
+    // count, and nothing to diff — it rendered as a blank row in the real app.
+    let (_guard, root) = repo();
+    std::fs::write(root.join("kept.txt"), "one\n").unwrap();
+    commit(&root, "initial");
+
+    std::fs::create_dir_all(root.join("assets/deep")).unwrap();
+    std::fs::write(root.join("assets/a.txt"), "a\n").unwrap();
+    std::fs::write(root.join("assets/deep/b.txt"), "b\n").unwrap();
+
+    let paths: Vec<String> = git::status::changed_files(&root)
+        .into_iter()
+        .map(|c| c.path)
+        .collect();
+
+    assert!(paths.contains(&"assets/a.txt".to_string()), "got {paths:?}");
+    assert!(paths.contains(&"assets/deep/b.txt".to_string()), "got {paths:?}");
+    assert!(
+        !paths.iter().any(|p| p.ends_with('/')),
+        "no record should name a directory: {paths:?}"
+    );
+}
+
+#[test]
 fn a_rename_in_porcelain_z_lists_the_new_path_first() {
     // Pinned against real Git output. The human format prints
     // `orig -> new`; `-z` reverses the pair, and a parser that follows the
