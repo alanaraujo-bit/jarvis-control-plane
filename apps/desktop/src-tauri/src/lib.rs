@@ -7,6 +7,7 @@
 mod activity;
 mod analytics;
 mod autopilot;
+mod brain;
 mod db;
 mod envscan;
 mod files;
@@ -132,6 +133,16 @@ pub fn run() {
             worktrees::worktree_report,
             worktrees::worktree_create,
             worktrees::worktree_remove,
+            brain::brain_report,
+            brain::brain_add_knowledge,
+            brain::brain_update_knowledge,
+            brain::brain_archive_knowledge,
+            brain::brain_add_note,
+            brain::brain_update_note,
+            brain::brain_set_note_pinned,
+            brain::brain_delete_note,
+            brain::brain_promote_note,
+            brain::brain_preview_brief,
             providers::list_providers,
             activity::list_activity,
             analytics::analytics_report,

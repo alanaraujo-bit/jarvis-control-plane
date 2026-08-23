@@ -22,7 +22,8 @@ use serde_json::Value;
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use crate::session::event::Confidence;
 use super::{
-    ConversationSource, Correlation, GuardrailSupport, Provider, ProviderCapabilities,
+    BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
+    ProviderCapabilities,
     UsageReporting,
 };
 
@@ -49,6 +50,8 @@ impl Provider for Codex {
             // trusted; until it is, this session is observed, not guarded.
             guardrails: GuardrailSupport::PreExecutionWhenTrusted,
             worktrees: true,
+            // No out-of-band flag exists on 0.147.0.
+            briefing: BriefingSupport::OpeningMessage,
             account_switching: false,
         }
     }

@@ -109,8 +109,36 @@ pub struct ProviderCapabilities {
     pub guardrails: GuardrailSupport,
     /// Sessions can be started in a Git worktree (§45).
     pub worktrees: bool,
+    /// How a project brief can reach this provider (§38).
+    pub briefing: BriefingSupport,
     /// The signed-in account can be switched.
     pub account_switching: bool,
+}
+
+/// How a project brief can be handed to a session before it starts (§38).
+///
+/// This is a capability, not a preference, and it is the reason the Brain has
+/// to be told what a provider can do rather than assuming (§26).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BriefingSupport {
+    /// The brief is passed out of band, as an appended system prompt read from
+    /// a file **we** own. Nothing is written into the user's repository and
+    /// nothing appears in their terminal.
+    ///
+    /// Claude Code takes `--append-system-prompt-file`. Verified rather than
+    /// read off a help page: with the flag a fresh session answers a question
+    /// only the brief could have taught it, and without the flag the same
+    /// session does not — see `claude::briefing_capability`.
+    SystemPrompt,
+    /// No out-of-band route was found, so a brief could only arrive as the
+    /// session's opening message — visible in the terminal and spending a turn.
+    ///
+    /// Codex 0.147.0 is here: its `--help` lists no equivalent flag, and its
+    /// instructions arrive as the prompt argument or on stdin. Reported rather
+    /// than papered over, because a person choosing a provider for an
+    /// unattended run should know which of the two they are getting.
+    OpeningMessage,
 }
 
 /// A provider adapter.

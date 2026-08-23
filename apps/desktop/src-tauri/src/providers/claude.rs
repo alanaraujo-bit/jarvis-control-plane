@@ -23,7 +23,8 @@ use serde_json::Value;
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use crate::session::event::Confidence;
 use super::{
-    ConversationSource, Correlation, GuardrailSupport, Provider, ProviderCapabilities,
+    BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
+    ProviderCapabilities,
     UsageReporting,
 };
 
@@ -45,6 +46,8 @@ impl Provider for ClaudeCode {
             // tool runs and a refusal genuinely stops it (§35).
             guardrails: GuardrailSupport::PreExecution,
             worktrees: true,
+            // Verified through a real PTY, not from --help.
+            briefing: BriefingSupport::SystemPrompt,
             account_switching: false,
         }
     }

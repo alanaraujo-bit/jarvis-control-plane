@@ -41,6 +41,25 @@ impl SessionKind {
             Self::Codex => "codex",
         }
     }
+
+    /// How this kind can be briefed, read from the capability model rather than
+    /// matched on here (§26).
+    ///
+    /// Asking the adapter means a provider gaining or losing the ability is one
+    /// edit in one place, instead of a `match` in the launcher quietly
+    /// disagreeing with what the Settings screen claims.
+    fn briefing(self) -> Option<crate::providers::BriefingSupport> {
+        // A shell is not an agent and has nothing to be briefed.
+        if self == Self::Shell {
+            return None;
+        }
+        let id = self.provider_id();
+        crate::providers::all()
+            .into_iter()
+            .map(|p| p.capabilities())
+            .find(|c| c.id == id)
+            .map(|c| c.briefing)
+    }
 }
 
 /// Pick the user's shell.
@@ -86,16 +105,47 @@ fn which(bin: &str) -> Option<String> {
     })
 }
 
+/// Write this project's brief for the session, returning where it landed.
+///
+/// `None` when there is nothing known, when the provider has no out-of-band
+/// route for it, or when the file could not be written. All three are the same
+/// answer to the caller — the session simply starts unbriefed — and none of
+/// them is worth failing a launch over: an agent with no context is the state
+/// every agent was in before this existed.
+fn write_brief(
+    state: &AppState,
+    project_id: &str,
+    log_dir: &std::path::Path,
+    kind: SessionKind,
+) -> Option<std::path::PathBuf> {
+    // §26: only a provider that can take a brief out of band gets one this way.
+    // Codex has no such flag, so it is not handed a file it would never read.
+    if kind.briefing() != Some(crate::providers::BriefingSupport::SystemPrompt) {
+        return None;
+    }
+
+    let knowledge = crate::brain::knowledge(&state.db, project_id).ok()?;
+    let text = crate::brain::brief::compose(&knowledge)?;
+
+    let path = log_dir.join("project-brief.md");
+    std::fs::write(&path, text).ok()?;
+    Some(path)
+}
+
 /// How a session is launched.
 ///
 /// The guardrail settings file points the provider pre-tool hook at our own
 /// executable (§35). It is None when the guardrail could not be installed, and
 /// the session then launches without it: a guardrail that cannot be set up must
 /// not stop the agent from running, and must not be silently claimed either.
+///
+/// `brief` is this project's recorded knowledge (§38), and is None whenever
+/// there is nothing to say or the provider cannot take one.
 fn command_for(
     kind: SessionKind,
     session_id: &str,
     guardrail_settings: Option<&std::path::Path>,
+    brief: Option<&std::path::Path>,
 ) -> (String, Vec<String>, Vec<(String, String)>) {
     match kind {
         SessionKind::Shell => {
@@ -111,6 +161,13 @@ fn command_for(
             // configuration still applies and this only adds a hook.
             if let Some(path) = guardrail_settings {
                 args.push("--settings".into());
+                args.push(path.to_string_lossy().to_string());
+            }
+            // Appended to the default system prompt, not replacing it: the
+            // agent keeps everything it normally knows and gains what this
+            // project knows. `--system-prompt` would have swapped the two.
+            if let Some(path) = brief {
+                args.push("--append-system-prompt-file".into());
                 args.push(path.to_string_lossy().to_string());
             }
             ("claude".into(), args, vec![])
@@ -251,7 +308,16 @@ fn launch(
         _ => None,
     };
 
-    let (program, args, env) = command_for(kind, &id, guardrail_settings.as_deref());
+    // What this project knows, handed to the agent before it starts (§38).
+    //
+    // Written into **our** log directory beside the guardrail snapshot, never
+    // into the user's repository: their code and their Git history are theirs,
+    // and a product that dropped a context file into a working tree would show
+    // up in the very Review surface it also ships.
+    let brief = write_brief(state, &project_id, &log_dir, kind);
+
+    let (program, args, env) =
+        command_for(kind, &id, guardrail_settings.as_deref(), brief.as_deref());
 
     let created_at = timestamp();
     state.db.with(|conn| {
@@ -502,14 +568,14 @@ mod tests {
     fn claude_sessions_carry_our_session_id() {
         // Deterministic correlation to the provider's own transcript depends on
         // this flag being passed (§26).
-        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None);
+        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None, None);
         assert_eq!(program, "claude");
         assert_eq!(args, vec!["--session-id".to_string(), "abc-123".to_string()]);
     }
 
     #[test]
     fn codex_sessions_do_not_claim_an_id_they_cannot_set() {
-        let (program, args, _) = command_for(SessionKind::Codex, "abc-123", None);
+        let (program, args, _) = command_for(SessionKind::Codex, "abc-123", None, None);
         assert_eq!(program, "codex");
         assert!(
             !args.iter().any(|a| a.contains("abc-123")),
@@ -605,4 +671,93 @@ pub fn mission_sessions(
             info
         })
         .collect())
+}
+
+#[cfg(test)]
+mod briefing_launch {
+    use super::*;
+    use crate::providers::BriefingSupport;
+
+    /// The flag has to actually be on the command line, and it has to be the
+    /// *appending* one.
+    ///
+    /// `--system-prompt` would replace everything Claude Code normally knows
+    /// with a paragraph about the user's project — an agent that had forgotten
+    /// how to be an agent. The two flags differ by one word and the wrong one
+    /// fails in a way no test of the brief's *content* would ever catch.
+    #[test]
+    fn a_brief_is_appended_rather_than_replacing_the_system_prompt() {
+        let brief = std::path::Path::new("C:/logs/s1/project-brief.md");
+        let (program, args, _) =
+            command_for(SessionKind::ClaudeCode, "s1", None, Some(brief));
+
+        assert_eq!(program, "claude");
+        let joined = args.join(" ");
+        assert!(
+            joined.contains("--append-system-prompt-file"),
+            "the brief must be appended: {joined}"
+        );
+        assert!(
+            !args.iter().any(|a| a == "--system-prompt"),
+            "replacing the system prompt would strip the agent of everything \
+             else it knows: {joined}"
+        );
+        assert!(joined.contains("project-brief.md"));
+        // The session id still travels, or the transcript cannot be correlated.
+        assert!(joined.contains("--session-id"));
+    }
+
+    #[test]
+    fn a_session_with_nothing_to_say_passes_no_brief_flag() {
+        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None);
+        assert!(
+            !args.iter().any(|a| a.contains("system-prompt")),
+            "an empty brain must not produce an empty flag: {args:?}"
+        );
+    }
+
+    /// §26 in one assertion: a provider that cannot take a brief out of band is
+    /// not handed a file it would never read.
+    #[test]
+    fn only_a_provider_that_can_take_a_brief_is_given_one() {
+        assert_eq!(
+            SessionKind::ClaudeCode.briefing(),
+            Some(BriefingSupport::SystemPrompt)
+        );
+        assert_eq!(
+            SessionKind::Codex.briefing(),
+            Some(BriefingSupport::OpeningMessage)
+        );
+        assert_eq!(
+            SessionKind::Shell.briefing(),
+            None,
+            "a shell is not an agent and has nothing to be briefed"
+        );
+
+        // And even handed a path, Codex's command line does not grow one.
+        let brief = std::path::Path::new("C:/logs/s1/project-brief.md");
+        let (_, args, _) = command_for(SessionKind::Codex, "s1", None, Some(brief));
+        assert!(
+            args.is_empty(),
+            "Codex has no flag for this and must not be given one: {args:?}"
+        );
+    }
+
+    /// The brief lives with our own session data, never in the user's tree.
+    #[test]
+    fn the_brief_is_written_where_our_own_session_data_lives() {
+        let dir = tempfile::tempdir().unwrap();
+        let log_dir = dir.path().join("sessions").join("s1");
+        std::fs::create_dir_all(&log_dir).unwrap();
+
+        // Same directory the guardrail snapshot uses, which is the point: a
+        // context file dropped into a working tree would show up in Review.
+        let brief = log_dir.join("project-brief.md");
+        std::fs::write(&brief, "x").unwrap();
+        assert!(brief.starts_with(dir.path()));
+        assert!(
+            !brief.to_string_lossy().contains("project-root"),
+            "the brief must never be written into the project being worked on"
+        );
+    }
 }

@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 7;
+pub const SCHEMA_VERSION: u32 = 8;
 
 struct Migration {
     version: u32,
@@ -340,6 +340,57 @@ const MIGRATIONS: &[Migration] = &[Migration {
     -- would leave that row pointing at nothing.
     ALTER TABLE projects ADD COLUMN worktree_of TEXT REFERENCES projects (id);
 "#,
+    },
+    Migration {
+        version: 8,
+        sql: r#"
+    -- ---- Project Brain (§36–§38) and Notes (§40) ---------------------------
+    --
+    -- Two tables, because these are two different things and the difference is
+    -- load-bearing rather than cosmetic: **knowledge is briefed to an agent and
+    -- a note is not**. That single question decides which one something is, so
+    -- it does not need a per-item switch that somebody has to remember to set.
+    --
+    -- Knowledge is what stays true about a project — what it is, how it is
+    -- built, what will bite you. A note is working memory: a reminder, a link,
+    -- a thing to come back to. Handing an agent somebody's todo list as
+    -- context would be worse than handing it nothing.
+
+    CREATE TABLE project_knowledge (
+        id          TEXT PRIMARY KEY,
+        project_id  TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+        -- what | convention | gotcha | glossary. Stored as the same id the i18n
+        -- keys use, never prose (D13).
+        kind        TEXT NOT NULL,
+        body        TEXT NOT NULL,
+        -- human | agent. Who said it, so the reader can weigh it (§28). An
+        -- agent's claim about a project is not the same kind of fact as the
+        -- owner's, and flattening them would hide that.
+        source      TEXT NOT NULL,
+        -- Where it came from, when an agent wrote it. Kept so an entry can be
+        -- traced back to the session that learned it.
+        session_id  TEXT REFERENCES sessions (id) ON DELETE SET NULL,
+        mission_id  TEXT REFERENCES missions (id) ON DELETE SET NULL,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL,
+        -- Archived rather than deleted, like everything else here: knowledge
+        -- that stopped being true is still a fact about the project's history.
+        archived    INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_knowledge_project ON project_knowledge (project_id, archived, kind);
+
+    CREATE TABLE project_notes (
+        id          TEXT PRIMARY KEY,
+        project_id  TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+        body        TEXT NOT NULL,
+        pinned      INTEGER NOT NULL DEFAULT 0,
+        mission_id  TEXT REFERENCES missions (id) ON DELETE SET NULL,
+        session_id  TEXT REFERENCES sessions (id) ON DELETE SET NULL,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_notes_project ON project_notes (project_id, pinned DESC, updated_at DESC);
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -445,6 +496,7 @@ mod tests {
             (5, 0x6ee9_96ed_2d3e_b954),
             (6, 0x1851_a45c_4cbe_3881),
             (7, 0x119d_80b1_fc88_9edc),
+            (8, 0x93ed_a072_1ac5_8f63),
         ];
 
         for migration in MIGRATIONS {
