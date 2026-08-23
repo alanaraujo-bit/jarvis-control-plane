@@ -275,3 +275,88 @@ name removes the ambiguity at the source.
 screenshots and UI automation. It already filtered by executable *path* for this
 same reason — two earlier attempts, matching by window title and then by process
 name, each mis-targeted a real unrelated window on this machine.
+
+## D18 — A worktree is a project
+**Date:** 2026-08-23
+**Why:** §45 could have meant two very different things, and the difference was
+worth an hour of checking rather than a week of building the wrong one.
+
+A project in this product is a folder on the machine with a checkout in it
+(§16). A worktree is a folder on the machine with a checkout in it. Registering
+each worktree as **its own project row** means Files, the editor, Review,
+attribution, sessions, missions and guardrails work inside one with no changes
+at all.
+
+The alternative — a worktree as a *view* within a single project — would mean
+teaching `files::project_root` which tree it is looking at, splitting
+`file_changes` attribution across trees, and reworking the path confinement §41
+calls the security boundary. All of it to describe something the filesystem
+already describes.
+
+**Verified before deciding, not after:** `rev-parse --show-toplevel` run inside
+a worktree returns the **worktree's own** path, not the main repository's. That
+one fact is what makes `git::locate` answer correctly inside a worktree, and
+therefore what makes everything above free. Had it returned the main repository,
+opening a worktree would have shown the wrong tree's files and the wrong tree's
+diff, silently. `a_worktree_locates_as_its_own_repository_root` pins it.
+
+**Consequence:** `projects.worktree_of` (migration 7) records the relationship,
+because a worktree registered as a bare project row is a folder that appears in
+the list with no explanation of where it came from — which is precisely how it
+looked before the row was taught to say so.
+
+## D19 — A guardrail in front of our own operation names it; it does not classify it
+**Date:** 2026-08-23
+**Why:** `hold_for_guardrail` classifies a mission's verification command
+because that command is text a person wrote and we have to work out what it
+does. A button is not text. When Review discards a file, this crate builds the
+`git restore` line itself and already knows which operation it is performing.
+
+Round-tripping a command we constructed through the classifier would import
+D11's **fail open** into the one place D11 promises enforcement is
+unconditional: if the matcher ever stopped recognising our own spelling, a
+destructive operation would run silently unguarded and every test would still
+pass. `policy::resolve(conn, project, Operation::…)` cannot fail that way.
+
+**Also decided here: no `Pending` row for a surface-initiated operation.** An
+agent's tool call is intercepted mid-flight and a verification can be parked and
+resumed, so both can wait for somebody to come back. A button cannot — the
+person is *right there*. Worse, `pending()` feeds Mission Control's
+needs-attention list and `decide_guardrail` can only resume work through a
+`criterion_id`, which a Git action does not have: the row would be settled, the
+action silently dropped, and the queue left asserting a human is needed forever.
+
+So the surface asks (`check`, recording nothing), shows the §35 choices, and
+calls back with the answer. The core **re-resolves** on that second call: the
+choice is the human's answer, never the caller's authority. A `Deny` is not
+overridable by anything arriving from the webview.
+`a_refusal_cannot_be_talked_out_of_by_a_choice` pins that.
+
+## D20 — Discard means HEAD, and it is three commands
+**Date:** 2026-08-23
+**Why:** Found by checking against real Git 2.55 **before** writing the button,
+which is the only reason it was found at all — every wrong spelling here exits
+zero.
+
+`git restore <path>` restores the working tree **from the index**. A file
+carrying staged content comes back as the *staged* version, not the committed
+one. A "Discard" button built on it throws away half a change, reports success,
+and leaves nothing on screen to say so. The spelling that reaches the commit is
+`restore --source=HEAD --staged --worktree`, and it is also the only one that
+survives a **staged deletion**, where plain restore fails outright with
+`pathspec did not match any file(s) known to git`.
+
+Two more cases that are not that command at all: an **untracked** file has no
+committed version to return to, so discarding it is `git clean -f`; and a
+repository with **no commits** has no `HEAD`, so unstaging is `git rm --cached`
+rather than `restore --staged`, which dies with `could not resolve HEAD`.
+
+One button, three code paths, each tested against a real repository.
+
+`git.discard-changes` is its own guardrail class for a related reason:
+everything else the classifier catches leaves the old commits in the reflog for
+thirty days, while uncommitted work has never been written to an object at all.
+`git restore`, `git checkout -- <path>` and `git stash drop` were **not**
+recognised by the classifier before this, so an agent discarding a person's
+uncommitted work was never guarded — the handoff said otherwise and the handoff
+was wrong.

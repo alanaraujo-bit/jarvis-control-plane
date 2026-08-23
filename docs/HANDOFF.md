@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**244 tests** (236 Rust, 8 i18n) · all green.
+**289 tests** (281 Rust, 8 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -100,7 +100,9 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Unattended runs (§32)** | an agent driven turn by turn until the mission is verified, blocked, or out of budget |
 | **Files (§41)** | lazy tree, Git-ignored entries dimmed rather than hidden, every path confined to the project |
 | **Editor (§42)** | Monaco behind `packages/editor`, loaded on demand, themed from the tokens, line endings preserved on save |
-| **Diff / Review (§43)** | what changed since `HEAD`, and **which agent changed it** — read-only |
+| **Diff / Review (§43)** | what changed since `HEAD`, and **which agent changed it** |
+| **Git write operations (§44)** | stage, unstage, discard, restore, commit — discard routed through the guardrail (D11/D19/D20) |
+| **Worktrees (§45)** | a worktree is a project (D18), so opening one opens it everywhere |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -128,15 +130,27 @@ list attributed to Claude Code — the attribution path only works because the
 session's `cwd` is folded into the recorded path, which is the kind of thing
 that matches nothing and looks like an empty state when you get it wrong.
 
+
+*Git, in the installed app (§44).* Staged a file and watched the row say so;
+discarded one carrying **both** staged and working-tree changes and checked on
+disk that it came back as the committed version rather than the staged one;
+restored a deleted file, where the same command is a recovery and the surface
+says so; committed three staged files; then chose **Never allow** and watched
+the next discard be refused with the working tree untouched.
+
+*Worktrees, in the installed app (§45).* Created one for `agent/login-form` and
+saw the slash become a dash rather than a nested directory; opened it and read
+its own diff in Review, against its own branch; put uncommitted work in it and
+removed it — refused by Git first, then held by the guardrail, then done, with
+its project row archived. Both themes, both languages.
+
 ### Not built — deliberately absent, not stubbed
 
-Project Brain (§36–39), Notes (§40), **Git write operations and worktrees
-(§44/§45)**, Preview (§46), Global Search (§51), onboarding (§13),
-mobile PWA (§55), cloud (§59), voice (§54).
+Project Brain (§36–39), Notes (§40), Preview (§46), Global Search (§51),
+onboarding (§13), mobile PWA (§55), cloud (§59), voice (§54).
 
-Review deliberately reads and does not write: stage, discard and restore are
-destructive Git operations, and D11 says those go through the guardrail rather
-than behind a plain button. See ROADMAP M6.
+Also absent by choice: **push and pull**. Review commits but does not talk to a
+remote — see section 7.
 
 ---
 
@@ -256,6 +270,38 @@ Every one of these is real and already cost time.
 
 ---
 
+20. **`git restore <path>` restores from the *index*, not from `HEAD`.** A file
+    with staged content comes back as the staged version, so a "discard" built
+    on it throws away half a change and reports success. It also fails outright
+    on a **staged deletion**. The spelling that reaches the commit is
+    `restore --source=HEAD --staged --worktree`, and an untracked file is not a
+    restore at all — there is nothing committed to return to, so it is
+    `git clean -f`. In a repository with **no commits** there is no `HEAD`
+    either: unstaging is `git rm --cached`, because `restore --staged` dies with
+    `could not resolve HEAD`. See D20; all three are tested against real repos.
+
+21. **Porcelain reports an untracked file as `??`, which is neither staged nor
+    unstaged.** A faithful reading of the two status columns, and the wrong
+    answer for a Review row: it removed the stage button from every new file, so
+    nothing an agent created could be staged or committed. Nothing errored, no
+    test noticed, and the row looked completely normal — found by hovering one
+    in the real app and counting the buttons. `review::staging_state` is the
+    correction and `a_new_file_can_be_staged` pins it.
+
+22. **`git worktree list --porcelain -z` separates records with an empty
+    field.** Records are NUL-terminated *lines*, so the blank line between
+    records arrives as two NULs in a row. And `detached`, `bare`, `locked` and
+    `prunable` are **bare words with no value** — a parser assuming `key value`
+    throughout misreads them. `-z` is not optional here: the common path on this
+    machine contains a space.
+
+23. **A tauri command that is not in `invoke_handler!` fails at runtime, not at
+    build time.** Three worktree commands were written, exported and compiled
+    cleanly while the surface reported `Command worktree_report not found`. The
+    registration had been added by a script whose earlier step failed, so it
+    never ran — which is rule 3 in section 3 of this file, met again. Verify the
+    patch applied.
+
 ## 6. Commands
 
 ```bash
@@ -319,32 +365,32 @@ selected in the listing, and typing over it silently produces
 
 ## 7. Suggested next steps, in priority order
 
-1. **Git + worktrees (§44/§45)** — the other half of **M6**, and the reason
-   Review currently only reads.
+**M6 is finished.** Files, the editor, Review, Git write operations and
+worktrees are all built and verified in the installed app.
 
-   Every write here is a destructive operation run on the user's behalf —
-   staging, discarding a change, restoring a file, and later pushing. D11 draws
-   the line clearly: where J.A.R.V.I.S. owns the process, the guardrail is
-   *unconditional*, so these must route through it rather than sit behind a
-   plain button. `guardrail::classify` already knows the sensitive Git
-   operations; the missing part is the surface asking it before acting, plus the
-   confirmation for the ones a person should see first.
-
-   Worktrees (§45) are the reason D5 chose the `git` executable over libgit2 in
-   the first place, so that part should be straightforward.
-
-   The pieces M6 leaves ready: `git::locate` gives the repo root and the
-   project's prefix inside it, `git::status` parses porcelain `-z` (including
-   both rename orderings, which differ between `status` and `diff --numstat`),
-   and `git::diff` turns a patch into numbered hunks.
-2. **Project Brain (§36–39) and Notes (§40)** — the memory layer.
-3. **Onboarding (§13)** — first-run experience; the environment scan already
+1. **Project Brain (§36–§39) and Notes (§40)** — the memory layer, and the
+   largest remaining gap in M7.
+2. **Onboarding (§13)** — first-run experience; the environment scan already
    provides its data.
-4. **Finish localising evidence summaries (§65)** — the mechanism now exists
+3. **Finish localising evidence summaries (§65)** — the mechanism exists
    (`evidence.code` + `code_args`, rendered through the catalogue) and the
    guardrail refusal uses it. The command/file summaries still need converting.
+4. **The rest of M2** — split panes and layout presets (§20), search within
+   scrollback, image paste as a first-class attachment (§22). The terminal is
+   the hero surface and these are the three things it still lacks.
 
----
+### Two things §44/§45 left on the table, deliberately
+
+- **Push and pull are not built.** Review commits; it does not talk to a
+  remote. `git.force-push` has been in the classifier since §35 and the gate in
+  `guardrail::surface` is ready for it, so this is a surface, not a design.
+  Worth doing with the credential story in mind: `GIT_TERMINAL_PROMPT=0` (D5)
+  means a push needing authentication fails rather than hanging, which is the
+  right failure but not yet an explained one.
+- **Nothing offers to start an agent *in* a worktree.** That is the reason
+  worktrees exist here (§45) and the pieces are all present — a worktree is a
+  project (D18), so launching an agent in one already works by opening it. What
+  is missing is the one gesture that does both from a mission.
 
 ## 8. Blockers needing Alan (see `docs/BLOCKERS.md`)
 

@@ -99,17 +99,18 @@ still there afterwards.
   `code`/`code_args` columns and the rendering path exist; the remaining
   summaries need converting one at a time (§65).
 
-## M6 — Code surfaces  ~
+## M6 — Code surfaces  ✅
 - [x] Files explorer (§41)
 - [x] Editor, Monaco (§42)
 - [x] Diff / Review (§43)
-- [ ] Git + worktrees (§44/§45) — **deliberately deferred, see below**
+- [x] Git write operations (§44) — stage, unstage, discard, restore, commit
+- [x] Worktrees (§45)
 
-Files, the editor and Review live **inside a project**, not on the rail: they
-are project-scoped tools and the rail stays six destinations (§85/§87). The
-project header carries an underlined **Sessions · Files · Review** navigation,
-visually distinct from the Terminal/Conversation pill so that two segmented
-controls never stack.
+Files, the editor, Review and Worktrees live **inside a project**, not on the
+rail: they are project-scoped tools and the rail stays six destinations
+(§85/§87). The project header carries an underlined
+**Sessions · Files · Review · Worktrees** navigation, visually distinct from the
+Terminal/Conversation pill so that two segmented controls never stack.
 
 **Verified in the installed app:** browsed the tree with `node_modules` and
 `build.log` dimmed as Git-ignored and `.git` absent; opened a file in Monaco,
@@ -148,23 +149,54 @@ screenshotted.
   an edit the dirty dot was advertising.
 
 ### Deliberately not in M6
-- **Git + worktrees (§44/§45).** Review is **read-only**. Staging, discarding
-  and restoring are destructive Git operations run on the user's behalf, and by
-  D11 those have to go through the guardrail rather than sit behind a plain
-  button. That is Git's own milestone, not a diff viewer's. §81 applies: the
-  actions are absent, not disabled decoration.
 - **Language intelligence.** Monaco's own TypeScript/CSS/HTML/JSON workers are
   excluded because they would be confidently wrong without project context
   (D17). Real diagnostics arrive with the LSP client D4 left room for.
 
-### One behaviour change worth knowing
-**Ctrl+K is now resolved globally, before any widget sees it.** Monaco treats it
-as a chord prefix and called `stopPropagation`, so the command palette silently
+### Git and worktrees, as built (§44/§45)
+- **Discard is the only guarded action**, as `git.discard-changes` (D20).
+  Staging and unstaging move the index and are reversible; asking about them
+  would teach the user to switch the guardrail off, and then the discard is
+  unguarded too.
+- **The gate names its operation rather than classifying a string it just
+  built** (D19), and writes no `Pending` row — the person is at the screen, so
+  the question is asked and answered there.
+- **Every spelling was checked against real Git before it was written down**
+  (D20). Plain `git restore` restores from the *index*, so a discard built on
+  it silently keeps staged content.
+- **A worktree is a project** (D18). Opening one opens it everywhere: Review
+  inside a worktree compares against that worktree's branch, with no
+  worktree-specific code anywhere in §41–§44.
+- **Removing a dirty worktree asks twice, for two different things.** First Git
+  refuses because there is uncommitted work — that is information, answered
+  with a plain "remove it anyway". Only the forced removal is a guarded
+  operation (`fs.recursive-delete`), and only then are the §35 choices offered.
+  `--force` is never passed speculatively.
+
+**Verified in the installed app:** staged and unstaged a file; discarded one
+carrying both staged and working-tree changes and confirmed **on disk** that it
+reached `HEAD` rather than stopping at the index; restored a deleted file;
+committed three staged files; set **Never allow** and watched the next discard
+be refused with the working tree untouched. Created a worktree for
+`agent/login-form`, saw the slash become a dash rather than a nested directory,
+opened it as a project and read its own diff in Review, then removed it — first
+refused by Git for having work in it, then held by the guardrail, then done,
+with its project row archived. Both themes, both languages.
+
+### One behaviour change worth knowing, still open
+**Ctrl+K is resolved globally, before any widget sees it.** Monaco treats it as
+a chord prefix and called `stopPropagation`, so the command palette silently
 stopped opening whenever the editor had focus — while the titlebar went on
 advertising the shortcut. It is now handled in the capture phase. The side
 effect is that Ctrl+K no longer reaches a shell as readline's
-kill-to-end-of-line, which is the same trade VS Code and Cursor make. Say so if
-you would rather the terminal kept it.
+kill-to-end-of-line, which is the same trade VS Code and Cursor make.
+
+It touches the terminal, which is the hero surface (§21), so it is Alan's call
+and it is **reversible**: `App.tsx` is the only place that decides, and letting
+the terminal keep the key means either dropping to the bubble phase (and losing
+the palette while the editor has focus) or exempting the terminal's DOM subtree
+from the capture handler. The second is the one worth building if he wants it
+back.
 
 ## M7 — Knowledge  ~
 - [x] Activity log (§48) — recorded at the moments worth knowing, filterable
@@ -197,13 +229,14 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ---
 
 ## Current milestone
-**M6 — Code surfaces: §41–§43 complete.** Files, the editor and Diff/Review are
-built and verified in the installed app. Git and worktrees (§44/§45) are the
-remaining half of the milestone and were left deliberately: Review reads, and
-anything that *writes* through Git has to go through the guardrail first.
+**M7 — Knowledge.** Activity, Analytics and human leverage are done; Project
+Brain (§36–§38), Notes (§40) and Global Search (§51) are what remain.
+
+**M6 is complete.** Files, the editor, Review, Git write operations and
+worktrees are all built and verified in the installed app.
 
 ## Next steps
-1. Git + worktrees (§44/§45) — finishes M6. Stage, discard and restore routed
-   through the guardrail (D11), then worktrees on top of the CLI (D5).
-2. Project Brain (§36) and Notes (§40) — the memory layer
+1. Project Brain (§36) and Notes (§40) — the memory layer
+2. Onboarding (§13) — the environment scan already provides its data
 3. Finish localising the remaining evidence summaries (§65)
+4. The rest of M2: split panes (§20), scrollback search, image paste (§22)
