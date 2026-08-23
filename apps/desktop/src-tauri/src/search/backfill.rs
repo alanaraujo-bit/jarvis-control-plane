@@ -501,4 +501,116 @@ mod tests {
             .unwrap();
         assert!(bookmark.is_none(), "an unfinished session must still look unfinished");
     }
+
+    /// The real thing: the logs real agent sessions actually wrote on this
+    /// machine, read by the real walker, indexed and then searched for.
+    ///
+    /// A fixture proves the logic and cannot prove the shape. This reads
+    /// `%APPDATA%\dev.jarvis.desktop\sessions` — ten directories holding 82
+    /// conversation items from genuine Claude Code runs — points session rows
+    /// at them, and asks Global Search for a word taken out of what it just
+    /// indexed. Nothing here writes anywhere but a temporary database, and the
+    /// logs are only ever opened for reading.
+    ///
+    /// Why it builds its own rows instead of copying the live database: those
+    /// sessions have **no rows left**. Simulating a fresh install for
+    /// Onboarding (§13) meant deleting `jarvis.db`, which took every session
+    /// row with it and left the directories behind — see the note in
+    /// `docs/HANDOFF.md` about orphaned session directories. The logs are the
+    /// real artefact either way, and they are what this exercises.
+    ///
+    /// `#[ignore]`d because it depends on this machine's own history.
+    #[test]
+    #[ignore = "needs this machine's own recorded sessions"]
+    fn real_recorded_sessions_become_searchable() {
+        let appdata = std::env::var_os("APPDATA").expect("APPDATA");
+        let root = std::path::Path::new(&appdata).join("dev.jarvis.desktop").join("sessions");
+        assert!(root.is_dir(), "no recorded sessions at {root:?}");
+
+        // Only the directories that actually hold a conversation. A plain
+        // shell session records lifecycle frames and terminal bytes, and has
+        // nothing for search to find — which is correct, not a shortfall.
+        let mut with_conversation = Vec::new();
+        for entry in std::fs::read_dir(&root).unwrap() {
+            let dir = entry.unwrap().path();
+            let Ok(reader) = SessionLogReader::open(&dir) else { continue };
+            let mut items = 0;
+            let _ = reader.for_each_structured(|e| {
+                if serde_json::from_slice::<ConversationItem>(&e.payload).is_ok() {
+                    items += 1;
+                }
+                true
+            });
+            if items > 0 {
+                with_conversation.push(dir);
+            }
+        }
+        assert!(
+            !with_conversation.is_empty(),
+            "no recorded session on this machine holds a conversation"
+        );
+
+        let db = Database::open_in_memory().unwrap();
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO projects (id, name, path, created_at, last_opened_at)
+                 VALUES ('p1', 'recorded', 'C:/recorded', 0, 0)",
+                [],
+            )?;
+            for (i, dir) in with_conversation.iter().enumerate() {
+                conn.execute(
+                    "INSERT INTO sessions (id, project_id, provider, cwd, state, log_dir, created_at)
+                     VALUES (?1, 'p1', 'claude-code', 'C:/recorded', 'exited', ?2, ?3)",
+                    params![format!("s{i}"), dir.to_string_lossy(), i as i64],
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+
+        let report = run(&db, &AtomicBool::new(false)).unwrap();
+        eprintln!(
+            "indexed {} rows from {} real session logs in {}ms",
+            report.rows, report.sessions, report.elapsed_ms
+        );
+        assert_eq!(report.sessions, with_conversation.len());
+        assert!(report.rows > 0, "real logs full of conversation produced nothing indexable");
+
+        // Take a word out of what was just indexed and ask search for it,
+        // exactly as the surface would. Choosing the word from the data rather
+        // than hard-coding one keeps this a test of real history instead of a
+        // test of a phrase someone happened to remember.
+        let (session_id, text): (String, String) = db
+            .with(|conn| {
+                conn.query_row(
+                    "SELECT session_id, text FROM session_events
+                      WHERE kind = 'message' AND LENGTH(text) > 40
+                      ORDER BY LENGTH(text) DESC LIMIT 1",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+            })
+            .unwrap();
+        let word = text
+            .split_whitespace()
+            .find(|w| w.chars().count() > 6 && w.chars().all(char::is_alphanumeric))
+            .unwrap_or_else(|| panic!("no searchable word in {text:?}"));
+        eprintln!("asking Global Search for {word:?}, said in {session_id}");
+
+        let hits = super::super::search(&db, word).unwrap();
+        let conversation: Vec<_> =
+            hits.iter().filter(|h| h.kind == crate::search::Kind::Conversation).collect();
+        assert!(
+            !conversation.is_empty(),
+            "a word this build just indexed out of a real session log is not findable"
+        );
+        assert!(
+            conversation.iter().any(|h| h.session_id.as_deref() == Some(&session_id)),
+            "found matches, but not in the session the word actually came from"
+        );
+        assert!(
+            conversation.iter().any(|h| h.snippet.to_lowercase().contains(&word.to_lowercase())),
+            "a result must show the words it matched"
+        );
+    }
 }
