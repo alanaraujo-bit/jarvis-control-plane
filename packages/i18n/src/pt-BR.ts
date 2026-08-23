@@ -431,6 +431,8 @@ export const ptBR: Record<MessageKey, string> = {
     "Parou depois de esgotar o orçamento de turnos. Não estava convergindo para os critérios.",
   "autopilot.needsManualCheck": "Tudo o que resta só pode ser confirmado por uma pessoa.",
   "autopilot.awaitingApproval": "Uma proteção precisa da sua decisão para continuar.",
+  "autopilot.folderNotTrusted":
+    "O Claude Code ainda não sabe que esta pasta é confiável, então ele abriria com a pergunta de confiança e ficaria esperando uma resposta que ninguém está aqui para dar. Abra um agente neste projeto uma vez e aceite, depois inicie a execução.",
   "autopilot.notConverging":
     "Parou: os mesmos critérios continuaram falhando sem progresso entre as tentativas.",
   "autopilot.missionBlocked": "A missão está bloqueada e precisa de você.",

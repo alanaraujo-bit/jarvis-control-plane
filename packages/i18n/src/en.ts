@@ -463,6 +463,8 @@ export const en = {
     "Stopped after the turn budget ran out. It was not converging on the criteria.",
   "autopilot.needsManualCheck": "Everything left can only be confirmed by a person.",
   "autopilot.awaitingApproval": "A guardrail needs your decision before it can continue.",
+  "autopilot.folderNotTrusted":
+    "Claude Code has not been told this folder is safe, so it would open with its trust question and wait for an answer nobody is here to give. Open an agent in this project once and accept it, then start the run.",
   "autopilot.notConverging":
     "Stopped: the same criteria kept failing with no progress between attempts.",
   "autopilot.missionBlocked": "The mission is blocked and needs you.",

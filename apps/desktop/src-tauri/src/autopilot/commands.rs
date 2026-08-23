@@ -74,6 +74,25 @@ pub fn autopilot_start(
     }
 
     let project_id = detail.mission.project_id.clone();
+
+    // Claude Code asks "is this a project you trust?" the first time it opens a
+    // folder, and waits. Under Guided or Autonomous someone answers it. Here
+    // nobody is watching, so the run would sit on that dialog until its budget
+    // ran out — the indefinite consumption §34 forbids, in the same shape as
+    // D12's permission prompt but arriving before the agent has said a word.
+    //
+    // Not hypothetical: a worktree is a brand-new folder (§45), so "run this
+    // mission unattended in a fresh worktree" is exactly the case that hangs.
+    //
+    // Refusing here rather than accepting trust on the user's behalf: that is a
+    // security decision, and it is theirs to make in Claude Code's own
+    // interface. An *unknown* answer proceeds — see `folder_is_trusted`.
+    if let Ok(root) = crate::files::project_root(&state, &project_id) {
+        if crate::providers::claude::folder_is_trusted(&root) == Some(false) {
+            return Err("autopilot.folderNotTrusted".into());
+        }
+    }
+
     let started = crate::session::commands::start_agent_session(
         &state,
         &project_id,
