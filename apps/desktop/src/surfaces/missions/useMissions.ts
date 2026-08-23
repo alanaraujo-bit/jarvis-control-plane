@@ -62,7 +62,12 @@ export interface Evidence {
   sessionId: string | null;
   kind: "command" | "file" | "commit" | "screenshot" | "url" | "manual";
   ok: boolean;
+  /** English, always present — the fallback when there is no code (§65). */
   summary: string;
+  /** A message key the UI translates, when the sentence is ours to write. */
+  code: string | null;
+  /** JSON arguments for that message. */
+  codeArgs: string | null;
   detail: string | null;
   tsMs: number;
 }

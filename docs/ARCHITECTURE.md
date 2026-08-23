@@ -52,7 +52,8 @@ Raw PTY bytes are **never** stored as SQLite rows — that dies on hour-3 sessio
 
 ## Provider observability (verified against installed CLIs)
 
-Verified on **Claude Code 2.1.240** and **Codex CLI 0.147.0** on this machine.
+Verified on **Claude Code 2.1.240** and **Codex CLI 0.147.0** (guardrail hooks
+re-verified on **0.149.0**) on this machine.
 
 The critical question was: can one session be simultaneously PTY-attached
 *and* structured-observable? **Yes.** Both CLIs write structured JSONL
@@ -103,6 +104,52 @@ packages/
 
 Each provider adapter declares a `ProviderCapabilities` struct. UI renders from
 it. Adding a provider must never require touching a component.
+
+## Guardrails (§35)
+
+A policy per sensitive operation, resolved **project → global → default (Ask)**
+— the same chain as autonomy (§33).
+
+Where it can actually be enforced differs, and the capability model reports
+which applies rather than the UI assuming (§26):
+
+| Situation | What happens |
+|---|---|
+| A verification command J.A.R.V.I.S. runs (§30) | Real enforcement. We own the process. |
+| A Claude Code session | Real enforcement, through its pre-tool hook. |
+| A Codex session | Same hook mechanism, but Codex will not run it until the user trusts it in its own interface. Reported as `PreExecutionWhenTrusted`. |
+| A human typing in a terminal | Nothing, deliberately. Guardrails govern agents. |
+
+```
+                        ┌─ app writes ─► guardrail-policy.json   (resolved rules + attended)
+  session starts ───────┤
+                        └─ app writes ─► hook settings ─► provider launches with it
+                                                                │
+                                        tool call about to run ─┤
+                                                                ▼
+                    jarvis-desktop.exe --jarvis-guardrail-hook <snapshot>
+                      reads snapshot · classifies command · answers on stdout
+                                                                │
+                                        appends ─► guardrail-decisions.jsonl
+                                                                │
+                      session runtime tails it ─► Approval frames in the session log
+```
+
+The guard is a **separate process** and can never be the log's writer — a
+session has exactly one (D2). It hands its decisions over the same way a
+provider hands over its transcript: by appending to a file we follow.
+
+It also **fails open**. No snapshot, malformed JSON or a version it does not
+understand means it stays silent and the tool call proceeds (D11). This process
+runs before every tool call in every agent session, so a guard that failed
+closed would turn any bug in it into an agent that cannot work.
+
+Classification is heuristic matching over command text, not a shell parser. It
+tokenises, respects quoting, and reads each program with its arguments. A
+command it does not flag has **not** been proven safe — it failed to match a
+pattern. The negative cases are the load-bearing ones: `--force-with-lease` and
+`echo "rm -rf x"` must not match, or the guardrail is the first thing switched
+off.
 
 ## Distribution (§12, §62)
 

@@ -9,6 +9,7 @@ mod analytics;
 mod db;
 mod envscan;
 mod git;
+mod guardrail;
 mod mission;
 mod project;
 mod providers;
@@ -23,6 +24,15 @@ use tauri::Manager;
 
 use db::Database;
 use session::SessionManager;
+
+/// Argument that runs this executable as the guardrail hook instead of the
+/// application (§35). Re-exported so `main` can check it before Tauri starts.
+pub use guardrail::guard::HOOK_FLAG as GUARDRAIL_HOOK_FLAG;
+
+/// Run as a provider pre-tool hook. Returns the process exit code.
+pub fn run_guardrail_hook(snapshot_path: &str) -> i32 {
+    guardrail::guard::run(snapshot_path)
+}
 
 /// Shared application state, resolved once during setup.
 pub struct AppState {
@@ -117,6 +127,12 @@ pub fn run() {
             mission::store::confirm_criterion,
             mission::store::withdraw_mission_criterion,
             mission::store::set_mission_task_done,
+            guardrail::commands::guardrail_policies,
+            guardrail::commands::set_guardrail_policy,
+            guardrail::commands::guardrail_events,
+            guardrail::commands::guardrail_pending,
+            guardrail::commands::decide_guardrail,
+            guardrail::commands::guardrail_classify,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");

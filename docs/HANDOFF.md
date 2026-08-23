@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-10 commits · **124 tests** (117 Rust, 7 i18n) · all green.
+10 commits · **176 tests** (168 Rust, 8 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -96,6 +96,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | Activity | recorded at moments worth knowing, filterable |
 | Analytics | tokens by provider/model/project/day, **human leverage (§53)** |
 | Installer + updater | NSIS, per-user, minisign-verified, uninstall preserves data |
+| **Guardrails (§35)** | policy per operation and project; real pre-execution enforcement for Claude Code and for our own verification commands |
 
 **The full loop has been executed end to end**: mission created → completion
 refused → agent launched from the mission → Claude Code created a real file →
@@ -105,8 +106,8 @@ re-verification ran, and completion was **revoked**.
 ### Not built — deliberately absent, not stubbed
 
 Project Brain (§36–39), Notes (§40), Files/Editor/Diff (§41–43), Preview (§46),
-Global Search (§51), onboarding (§13), guardrails (§35), agents driving missions
-under Unattended (§32), mobile PWA (§55), cloud (§59), voice (§54).
+Global Search (§51), onboarding (§13), agents driving missions under Unattended
+(§32), mobile PWA (§55), cloud (§59), voice (§54).
 
 ---
 
@@ -144,6 +145,19 @@ Every one of these is real and already cost time.
 
 8. **`.keys/jarvis-updater.key` is gitignored and must be backed up.** Losing it
    means no installed copy can ever be updated again.
+
+9. **Never edit a migration that has already run anywhere** — including on your
+   own machine mid-session. Appending `ALTER TABLE` to an applied migration
+   leaves the columns missing on every database that already recorded that
+   version, while a fresh one looks perfect. It cost a blank surface here.
+   `a_shipped_migration_is_never_edited` fingerprints each migration's SQL and
+   fails if the text changes; when it fires, add a new migration instead.
+
+10. **Guardrails are one layer, and the code says so.** A command that does not
+    match has not been proven safe — it failed to match a pattern. The guard
+    also **fails open**: no snapshot, bad JSON or an unknown version means it
+    stays silent and the tool call proceeds, because a guard that fails closed
+    turns any bug in it into an agent that cannot work at all.
 
 ---
 
@@ -195,17 +209,18 @@ folder for agent tests — **never run test agents in Alan's real projects.**
 
 ## 7. Suggested next steps, in priority order
 
-1. **Guardrails (§35)** — policies for sensitive operations (force push, delete,
-   production, secrets) with Always Ask / Allow for Project / Always Allow /
-   Never Allow. The autonomy model already exists and expects this.
+1. **Agents driving missions under Unattended (§32)** — guardrails were the
+   thing that had to exist first, and now do. An unattended agent that reaches
+   for something sensitive is refused with a reason and the mission goes to
+   Waiting, rather than hanging on a prompt nobody can answer.
 2. **Files, Editor, Diff/Review (§41–43)** — the largest remaining surface.
    Monaco is the intended editor, behind a `packages/editor` boundary.
 3. **Project Brain (§36–39) and Notes (§40)** — the memory layer.
 4. **Onboarding (§13)** — first-run experience; the environment scan already
    provides its data.
-5. **Localised evidence summaries (§65)** — evidence text is generated in Rust
-   and is English-only. It should carry a structured code the UI translates.
-   This is the one known correctness gap in a shipped feature.
+5. **Finish localising evidence summaries (§65)** — the mechanism now exists
+   (`evidence.code` + `code_args`, rendered through the catalogue) and the
+   guardrail refusal uses it. The command/file summaries still need converting.
 
 ---
 

@@ -220,6 +220,79 @@ export const en = {
   "activity.kind.mission.failed": "Mission failed",
   "activity.kind.mission.waiting": "Mission waiting",
 
+
+  // ---- Guardrails (§35) ----------------------------------------------------
+  "guardrail.title": "Guardrails",
+  "guardrail.subtitle":
+    "What an agent must ask about before it does it. Rules apply per project, and fall back to the global setting.",
+  "guardrail.scope.global": "Everywhere",
+  "guardrail.scope.project": "This project",
+  "guardrail.scope.default": "Default",
+  "guardrail.inherited": "Inherited: {decision}",
+  "guardrail.decision.ask": "Always ask",
+  "guardrail.decision.allow": "Allow",
+  "guardrail.decision.deny": "Never allow",
+  "guardrail.clear": "Use the global rule",
+
+  "guardrail.op.git.force-push": "Force push",
+  "guardrail.op.git.force-push.detail":
+    "Overwriting a branch on a remote. Excludes --force-with-lease, which refuses when the remote has moved.",
+  "guardrail.op.git.history-rewrite": "Rewrite history",
+  "guardrail.op.git.history-rewrite.detail": "reset --hard, rebase, filter-branch.",
+  "guardrail.op.git.branch-delete": "Delete a branch",
+  "guardrail.op.git.branch-delete.detail": "Deleting a remote branch, or forcing a local one.",
+  "guardrail.op.fs.recursive-delete": "Delete a directory tree",
+  "guardrail.op.fs.recursive-delete.detail": "rm -rf, Remove-Item -Recurse, git clean -f.",
+  "guardrail.op.secrets.access": "Read a credential file",
+  "guardrail.op.secrets.access.detail": ".env, private keys, .npmrc. Example files are not included.",
+  "guardrail.op.deploy.production": "Deploy to production",
+  "guardrail.op.deploy.production.detail": "vercel --prod, wrangler deploy, terraform apply.",
+  "guardrail.op.package.publish": "Publish a package",
+  "guardrail.op.package.publish.detail": "npm publish, cargo publish, docker push.",
+  "guardrail.op.remote.execute": "Run something downloaded",
+  "guardrail.op.remote.execute.detail": "curl | sh, iex (iwr …).",
+
+  "guardrail.pending.title": "Waiting for you",
+  "guardrail.pending.body_one": "{count} operation needs your decision before it can run.",
+  "guardrail.pending.body": "{count} operations need your decision before they can run.",
+  "guardrail.matched": "Matched",
+  "guardrail.choice.allowOnce": "Allow once",
+  "guardrail.choice.allowForProject": "Allow for this project",
+  "guardrail.choice.alwaysAllow": "Always allow",
+  "guardrail.choice.neverAllow": "Never allow",
+
+  "guardrail.history": "Guardrail history",
+  "guardrail.empty.title": "Nothing has been stopped",
+  "guardrail.empty.body":
+    "When an agent reaches for something sensitive, what happened shows up here.",
+  "guardrail.status.pending": "Waiting",
+  "guardrail.status.allowed": "Allowed",
+  "guardrail.status.denied": "Refused",
+  "guardrail.status.asked": "Asked",
+  "guardrail.origin.agent": "Agent",
+  "guardrail.origin.verification": "Verification",
+  "guardrail.reason.policyDenies": "A rule says never",
+  "guardrail.reason.nobodyToAsk": "Needed approval, nobody was attached",
+  "guardrail.reason.askedHuman": "Put to you",
+  "guardrail.reason.policyAllows": "A rule allows it",
+  "guardrail.reason.allowedOnce": "Allowed once",
+  "guardrail.reason.allowedForProject": "Allowed for this project",
+  "guardrail.reason.allowedAlways": "Always allowed",
+  "guardrail.reason.neverAllowed": "Never allowed",
+
+  "guardrail.coverage.preExecution": "Stopped before it runs",
+  "guardrail.coverage.preExecutionWhenTrusted": "Stopped once you trust the hook in {provider}",
+  "guardrail.coverage.observed": "Recorded, not prevented",
+  "guardrail.coverage.none": "Not governed",
+  "guardrail.coverage.note":
+    "Guardrails govern agents, not what you type yourself. Verification commands J.A.R.V.I.S. runs are always enforced.",
+
+  "activity.kind.guardrail.denied": "Guardrail refused an operation",
+  "activity.kind.guardrail.allowed": "Guardrail approved an operation",
+
+  // ---- Evidence, worded here rather than in Rust (§65) ----------------------
+  "evidence.guardrailRefused": "Not checked: a guardrail refused {operation}",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

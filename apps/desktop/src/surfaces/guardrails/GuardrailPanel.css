@@ -1,0 +1,168 @@
+.guardrails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.guardrails__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.guardrails__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.guardrails__subtitle {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.guardrails__error {
+  font-size: var(--text-sm);
+  color: var(--status-failed, #E5834F);
+}
+
+.guardrails__list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A hairline between rows rather than cards: this is a settings table, and
+   boxing each row would make eight operations look like eight features. */
+.guardrails__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.guardrails__row:last-child {
+  border-bottom: none;
+}
+
+.guardrails__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.guardrails__name {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.guardrails__detail {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: 1.45;
+}
+
+.guardrails__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  justify-self: end;
+}
+
+.guardrails__segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  width: fit-content;
+}
+
+/* A rule that is inherited is stated at lower contrast than one chosen here,
+   so scanning the column shows what has actually been decided. */
+.guardrails__segmented[data-inherited] .guardrails__segment[data-active] {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  box-shadow: none;
+}
+
+.guardrails__segment {
+  height: 24px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.guardrails__segment:hover:not([data-active]) {
+  color: var(--text-secondary);
+}
+
+.guardrails__segment[data-active] {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Refusal is the one state that carries colour, and only when it is the active
+   choice. Amber stays the colour of agent work (§6); this is a stop, not work. */
+.guardrails__segment[data-decision="deny"][data-active] {
+  color: var(--status-failed, #E5834F);
+}
+
+.guardrails__clear,
+.guardrails__scope {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  min-width: 92px;
+  text-align: right;
+}
+
+.guardrails__clear {
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.guardrails__clear:hover {
+  color: var(--text-secondary);
+}
+
+.guardrails__note {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+/* ---- Loading ------------------------------------------------------------- */
+
+.guardrails__skeleton {
+  display: block;
+  height: 11px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-raised);
+}
+
+.guardrails__skeleton--name {
+  width: 180px;
+}
+
+.guardrails__skeleton--control {
+  width: 220px;
+  height: 26px;
+  border-radius: var(--radius-md);
+  justify-self: end;
+}

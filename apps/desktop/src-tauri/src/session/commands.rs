@@ -86,7 +86,17 @@ fn which(bin: &str) -> Option<String> {
     })
 }
 
-fn command_for(kind: SessionKind, session_id: &str) -> (String, Vec<String>, Vec<(String, String)>) {
+/// How a session is launched.
+///
+/// The guardrail settings file points the provider pre-tool hook at our own
+/// executable (§35). It is None when the guardrail could not be installed, and
+/// the session then launches without it: a guardrail that cannot be set up must
+/// not stop the agent from running, and must not be silently claimed either.
+fn command_for(
+    kind: SessionKind,
+    session_id: &str,
+    guardrail_settings: Option<&std::path::Path>,
+) -> (String, Vec<String>, Vec<(String, String)>) {
     match kind {
         SessionKind::Shell => {
             let (program, args) = default_shell();
@@ -95,11 +105,16 @@ fn command_for(kind: SessionKind, session_id: &str) -> (String, Vec<String>, Vec
         // Passing our own session id makes the provider's transcript file
         // deterministic, so the structured stream can be correlated to this
         // session without guessing (§26).
-        SessionKind::ClaudeCode => (
-            "claude".into(),
-            vec!["--session-id".into(), session_id.to_string()],
-            vec![],
-        ),
+        SessionKind::ClaudeCode => {
+            let mut args = vec!["--session-id".into(), session_id.to_string()];
+            // Additional settings, not a replacement: the user's own
+            // configuration still applies and this only adds a hook.
+            if let Some(path) = guardrail_settings {
+                args.push("--settings".into());
+                args.push(path.to_string_lossy().to_string());
+            }
+            ("claude".into(), args, vec![])
+        }
         // Codex has no equivalent flag on 0.147.0, so correlation is done by
         // watching its rollout directory instead. A real capability difference.
         SessionKind::Codex => ("codex".into(), vec![], vec![]),
@@ -131,7 +146,64 @@ pub fn session_start(
     let cwd = cwd.unwrap_or(project_path);
     let id = new_session_id();
     let log_dir = state.session_dir(&id);
-    let (program, args, env) = command_for(kind, &id);
+
+    // Guardrails (§35), installed before the process starts because the hook
+    // has to be in place for the very first tool call.
+    //
+    // A session begins with no view attached — the terminal attaches one moments
+    // later and session_attach updates the snapshot then. Starting from
+    // attended: false is the conservative order, because for that brief window
+    // there genuinely is nobody to ask.
+    let snapshot = crate::guardrail::sessions::installs_hook(kind.provider_id())
+        .then(|| {
+            crate::guardrail::sessions::write_snapshot(
+                &state.db,
+                &log_dir,
+                &id,
+                &project_id,
+                mission_id.as_deref(),
+                kind.provider_id(),
+                false,
+            )
+            .ok()
+        })
+        .flatten();
+
+    // The two providers install the same guard by different routes: Claude Code
+    // through a settings file named on the command line, Codex through a hooks
+    // file it discovers in the project and will not run until the person has
+    // trusted it (§26, §35).
+    let mut guarded = false;
+    let guardrail_settings = match (kind, snapshot.as_ref()) {
+        (SessionKind::ClaudeCode, Some(snapshot)) => {
+            let settings =
+                crate::guardrail::sessions::write_hook_settings(&log_dir, snapshot);
+            guarded = settings.is_some();
+            if !guarded {
+                // Worth saying out loud rather than degrading quietly: this
+                // session runs without the protection Settings says it has.
+                tracing::warn!(
+                    session = %id,
+                    "guardrails could not be installed for this session; it runs unguarded"
+                );
+            }
+            settings
+        }
+        (SessionKind::Codex, Some(snapshot)) => {
+            let written = crate::guardrail::sessions::write_codex_hook(
+                std::path::Path::new(&cwd),
+                snapshot,
+            );
+            // Written, not yet in force: Codex runs it only once the user has
+            // trusted it. The watcher still follows it, so the moment they do,
+            // its decisions arrive here like any other.
+            guarded = written.is_some();
+            None
+        }
+        _ => None,
+    };
+
+    let (program, args, env) = command_for(kind, &id, guardrail_settings.as_deref());
 
     let created_at = timestamp();
     state.db.with(|conn| {
@@ -181,6 +253,19 @@ pub fn session_start(
         session.stop_flag(),
     );
 
+    // Follow what the guard decided, in its separate process, into this same
+    // log (§35). It cannot write the log itself — a session has one writer (D2).
+    if guarded {
+        crate::guardrail::sessions::spawn_watcher(
+            Arc::clone(&session),
+            Arc::clone(&state.db),
+            state.session_dir(&id),
+            project_id.clone(),
+            mission_id.clone(),
+            session.stop_flag(),
+        );
+    }
+
     crate::activity::record(
         &state.db,
         "session.started",
@@ -212,6 +297,9 @@ pub fn session_attach(
     channel: Channel<InvokeResponseBody>,
 ) -> Result<()> {
     state.sessions.get(&session_id)?.attach(channel);
+    // Someone is looking now, so a guardrail that wants a human decision has
+    // one to ask (§35).
+    crate::guardrail::sessions::set_attended(&state.session_dir(&session_id), true);
     Ok(())
 }
 
@@ -219,6 +307,10 @@ pub fn session_attach(
 #[tauri::command]
 pub fn session_detach(state: State<'_, AppState>, session_id: String) -> Result<()> {
     state.sessions.get(&session_id)?.detach();
+    // Nobody is watching any more. From here a rule that says ask has no one to
+    // ask, and the guard refuses rather than leaving the agent on a prompt that
+    // can never be answered (§34).
+    crate::guardrail::sessions::set_attended(&state.session_dir(&session_id), false);
     Ok(())
 }
 
@@ -358,14 +450,14 @@ mod tests {
     fn claude_sessions_carry_our_session_id() {
         // Deterministic correlation to the provider's own transcript depends on
         // this flag being passed (§26).
-        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123");
+        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None);
         assert_eq!(program, "claude");
         assert_eq!(args, vec!["--session-id".to_string(), "abc-123".to_string()]);
     }
 
     #[test]
     fn codex_sessions_do_not_claim_an_id_they_cannot_set() {
-        let (program, args, _) = command_for(SessionKind::Codex, "abc-123");
+        let (program, args, _) = command_for(SessionKind::Codex, "abc-123", None);
         assert_eq!(program, "codex");
         assert!(
             !args.iter().any(|a| a.contains("abc-123")),

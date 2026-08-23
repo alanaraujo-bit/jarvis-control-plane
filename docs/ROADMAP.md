@@ -59,14 +59,33 @@ inspection (§76).
 - [x] Mission Control home, sections that disappear when empty (§18)
 - [x] Missions linked to the agents working on them (§86)
 - [ ] Agents driving missions automatically under Unattended (§32)
-- [ ] Guardrails for sensitive operations (§35)
+- [x] Guardrails for sensitive operations (§35)
 **Verified in the installed app:** created a mission, was refused completion,
 ran verification, did the work, verified, completed — then deleted the artifact
 and watched completion be revoked.
 
+**Verified in the installed app:** set a policy in Settings, ran a mission whose
+acceptance criterion was `npm publish`, watched the check be **held** rather than
+run, answered the approval, and saw the mission leave Waiting. Separately, the
+guard was run against real Claude Code 2.1.240: a force push was refused before
+it executed, and under Unattended an `rm -rf` was stopped with the directory
+still there afterwards.
+
+### Guardrails, as built
+- Eight operation classes, matched by a tokenising classifier that respects
+  quoting — `--force-with-lease` and `echo "rm -rf x"` deliberately do not match.
+- Policy resolves project → global → default (Ask), the §33 shape.
+- Enforcement differs by provider and the capability model says so (§26):
+  Claude Code is stopped pre-execution; Codex has the same hook mechanism but
+  will not run it until the user trusts it, so it is reported as such.
+- Under Unattended, "ask" becomes a refusal rather than a prompt nobody can
+  answer, and the mission goes to Waiting with a reason (§34).
+
 ### Known gaps in this milestone
-- Evidence summaries are generated in Rust and are English-only. They should
-  carry a structured code the UI localises (§65).
+- Evidence summaries generated in Rust are still English-only, **except** the
+  guardrail refusal, which now carries a structured code the UI localises. The
+  `code`/`code_args` columns and the rendering path exist; the remaining
+  summaries need converting one at a time (§65).
 
 ## M6 — Code surfaces
 - [ ] Files explorer (§41)
@@ -105,11 +124,13 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ---
 
 ## Current milestone
-**M5 — Missions**, mostly landed. Next is connecting missions to the agents
-that work on them.
+**M5 — Missions.** Guardrails landed, which was the missing prerequisite for
+agents driving missions unattended: without them, Unattended meant an agent
+doing irreversible things with nobody able to object.
 
 ## Next steps
-1. Guardrails for sensitive operations (§35)
+1. Agents driving missions under Unattended (§32) — guardrails were its
+   prerequisite and are now in place
 2. Files, Editor and Diff/Review (§41–§43)
 3. Project Brain (§36) and Notes (§40)
-4. Localised evidence summaries (§65)
+4. Finish localising the remaining evidence summaries (§65)

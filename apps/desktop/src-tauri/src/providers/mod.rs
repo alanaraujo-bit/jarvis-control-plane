@@ -44,6 +44,37 @@ pub enum ConversationSource {
     None,
 }
 
+/// How far guardrails can actually reach into this provider (§35).
+///
+/// The whole point of the capability model is that providers are not equal, and
+/// this is the sharpest instance of it: one of these values means a command can
+/// be stopped before it runs, and the other means it cannot. Presenting them
+/// the same way would be the product claiming a protection it does not have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuardrailSupport {
+    /// The provider consults us before running a tool and honours a refusal.
+    /// Claude Code does this through a pre-tool hook, installed per session.
+    PreExecution,
+    /// The same mechanism exists, but the provider will not run our hook until
+    /// the person has reviewed and trusted it themselves.
+    ///
+    /// Codex 0.149.0 is here: it has PreToolUse hooks with the same wire shape,
+    /// and deliberately refuses to run a hook that arrived from outside until
+    /// it has been trusted in its own interface. That is a sound decision on
+    /// their part — a tool that silently ran hook programs dropped into a
+    /// project directory would be a hazard — and it means enforcement is real
+    /// but not automatic. Until then such a session is observed, not guarded,
+    /// and the UI must say which of the two it is.
+    PreExecutionWhenTrusted,
+    /// No callback exists, so a matched operation is recorded after the fact
+    /// and never prevented.
+    Observed,
+    /// Nothing to govern — a plain shell is the user typing on their own
+    /// machine, and guardrails govern agents.
+    None,
+}
+
 /// Quality of usage reporting (§28).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +105,8 @@ pub struct ProviderCapabilities {
     pub resume: bool,
     /// The provider surfaces approval requests we can represent (§35).
     pub approvals: bool,
+    /// Whether a sensitive operation can be stopped before it runs (§35).
+    pub guardrails: GuardrailSupport,
     /// Sessions can be started in a Git worktree (§45).
     pub worktrees: bool,
     /// The signed-in account can be switched.
@@ -134,6 +167,30 @@ mod tests {
         assert_ne!(
             claude.correlation, codex.correlation,
             "these providers correlate sessions differently and must say so"
+        );
+    }
+
+    /// The difference guardrails turn on (§35).
+    ///
+    /// Claude Code can be stopped before a tool runs; Codex 0.149.0 cannot. If
+    /// these ever became equal the UI would be free to promise enforcement it
+    /// does not have for one of them.
+    #[test]
+    fn only_a_provider_that_can_be_stopped_claims_pre_execution_guardrails() {
+        assert_eq!(
+            claude::ClaudeCode.capabilities().guardrails,
+            GuardrailSupport::PreExecution
+        );
+        assert_eq!(
+            codex::Codex.capabilities().guardrails,
+            GuardrailSupport::PreExecutionWhenTrusted
+        );
+        assert_ne!(
+            claude::ClaudeCode.capabilities().guardrails,
+            codex::Codex.capabilities().guardrails,
+            "one of these enforces on install and the other only after the user \
+             trusts the hook; collapsing them would promise protection that is \
+             not switched on yet"
         );
     }
 

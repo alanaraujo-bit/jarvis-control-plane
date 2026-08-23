@@ -270,6 +270,10 @@ pub fn evidence_from(
         kind: outcome.kind,
         ok: outcome.ok,
         summary: outcome.summary.clone(),
+        // A command's own output is not ours to translate — it is the tool
+        // speaking, not J.A.R.V.I.S. Codes are for sentences we author.
+        code: None,
+        code_args: None,
         detail: outcome.detail.clone(),
         ts_ms: now_ms(),
     }

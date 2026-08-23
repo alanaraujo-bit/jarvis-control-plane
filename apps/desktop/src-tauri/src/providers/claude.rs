@@ -23,7 +23,8 @@ use serde_json::Value;
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use crate::session::event::Confidence;
 use super::{
-    ConversationSource, Correlation, Provider, ProviderCapabilities, UsageReporting,
+    ConversationSource, Correlation, GuardrailSupport, Provider, ProviderCapabilities,
+    UsageReporting,
 };
 
 pub struct ClaudeCode;
@@ -40,6 +41,9 @@ impl Provider for ClaudeCode {
             images: true,
             resume: true,
             approvals: true,
+            // Verified against 2.1.240: a PreToolUse hook is consulted before a
+            // tool runs and a refusal genuinely stops it (§35).
+            guardrails: GuardrailSupport::PreExecution,
             worktrees: true,
             account_switching: false,
         }

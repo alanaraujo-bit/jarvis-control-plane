@@ -1,6 +1,6 @@
 //! Codex adapter.
 //!
-//! Verified against Codex CLI 0.147.0.
+//! Verified against Codex CLI 0.147.0, and re-verified on 0.149.0.
 //!
 //! Codex writes a "rollout" JSONL per session under
 //! `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl`, with a
@@ -21,7 +21,10 @@ use serde_json::Value;
 
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use crate::session::event::Confidence;
-use super::{ConversationSource, Correlation, Provider, ProviderCapabilities, UsageReporting};
+use super::{
+    ConversationSource, Correlation, GuardrailSupport, Provider, ProviderCapabilities,
+    UsageReporting,
+};
 
 pub struct Codex;
 
@@ -39,6 +42,12 @@ impl Provider for Codex {
             images: true,
             resume: true,
             approvals: true,
+            // Verified against 0.149.0 by experiment: Codex has PreToolUse
+            // hooks with the same wire shape as Claude Code, but will not run
+            // one until the person has reviewed and trusted it in its own
+            // interface. Written on session start so it is there to be
+            // trusted; until it is, this session is observed, not guarded.
+            guardrails: GuardrailSupport::PreExecutionWhenTrusted,
             worktrees: true,
             account_switching: false,
         }

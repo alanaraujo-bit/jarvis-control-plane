@@ -88,6 +88,73 @@ where `var(...)` does not resolve; it falls back to a proportional font and
 every terminal line renders with visibly uneven letter spacing. Caught by
 looking at a screenshot of the real terminal, not by any test.
 
+## D10 — Guardrails enforce through the provider's own pre-tool hook
+**Date:** 2026-08-23
+**Why:** §35 needs a sensitive operation to be *stopped*, not merely noticed. An
+agent CLI running inside a PTY cannot be intercepted from outside — by the time
+bytes reach the terminal the command has run. The only real enforcement point is
+the callback the provider itself makes before running a tool.
+
+Verified empirically **before** any of it was designed, against Claude Code
+2.1.240: a `PreToolUse` hook receives `tool_name` and `tool_input.command` on
+stdin, and `permissionDecision: "deny"` genuinely stops the command and hands
+the reason to the model. Also verified: a hook that exits non-zero is treated as
+having no opinion, which is what makes failing open safe.
+
+**Consequence:** the same executable runs as the hook (`--jarvis-guardrail-hook`),
+checked in `main` before Tauri starts. It reads a policy snapshot the app wrote
+for that session and never opens the database — a program that runs once per
+tool call must not contend with the application for it.
+
+**It cannot write the session log either.** A session has one writer (D2), so
+the guard appends its decisions to its own JSONL and the session runtime
+projects them into the log as `Approval` frames — the same shape as following a
+provider transcript.
+
+## D11 — Guardrails fail open, deliberately
+**Date:** 2026-08-23
+**Why:** This process runs before **every** tool call in every agent session. A
+guard that failed closed would turn any bug in it — a missing file, malformed
+JSON, a snapshot from another version — into an agent that cannot work at all.
+
+The cost is real and is not hidden: a rule can silently fail to apply. So the
+product never claims this layer is absolute. `ProviderCapabilities::guardrails`
+reports what each provider actually enforces, the classifier's own module doc
+says a command that does not match has not been proven safe, and the UI reports
+what *matched* rather than declaring what a command is.
+
+Where enforcement **is** unconditional is a verification command J.A.R.V.I.S.
+runs itself (§30): we own that process, so a refusal there means it truly does
+not execute.
+
+## D12 — "Ask" becomes a refusal when nobody is attached
+**Date:** 2026-08-23
+**Why:** Under Guided or Autonomous someone is looking at the terminal, so the
+provider's own prompt reaches a person. Under Unattended (§32) nobody is, and
+that same prompt would wait forever — which is precisely the indefinite resource
+consumption §34 exists to forbid.
+
+So when a rule says *ask* and no view is attached, the guard **refuses** and the
+mission goes to Waiting with a reason. Stopping and explaining beats hanging
+quietly. The snapshot's `attended` flag is rewritten on every attach and detach,
+because whether a human is present is a fact about *now*, not about when the
+session started.
+
+**Verified against real Claude Code:** with no view attached, `rm -rf junk` was
+refused, the agent reported it was blocked and explicitly did not try another
+deletion method, and the directory was still there afterwards.
+
+## D13 — An operation has exactly one spelling
+**Date:** 2026-08-23
+**Why:** `Operation` is serialised through `as_str`, not a serde `rename_all`
+rule. With `rename_all = "kebab-case"` serde emitted `git-force-push` while
+storage, the policy snapshot and the i18n keys all used `git.force-push`.
+
+Nothing failed. The core was correct, every test passed, and the Settings screen
+rendered eight raw message keys — found by looking at a screenshot, which is the
+fourth time in this codebase that has been the only thing that would have caught
+a bug. `an_operation_serialises_as_the_id_used_everywhere_else` now pins it.
+
 ## D9 — The main binary is named `jarvis-desktop`, not `jarvis`
 **Date:** 2026-08-22
 **Why:** Found by running the real installer on a real machine, not by reading

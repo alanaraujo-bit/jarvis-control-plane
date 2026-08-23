@@ -235,7 +235,19 @@ pub struct Evidence {
     pub session_id: Option<String>,
     pub kind: EvidenceKind,
     pub ok: bool,
+    /// English text, always present.
+    ///
+    /// Kept as the fallback so a build that does not recognise `code` still
+    /// shows something true, and so existing evidence keeps rendering.
     pub summary: String,
+    /// A stable code the UI translates, when one applies (§65).
+    ///
+    /// Evidence is generated in Rust, which has no business choosing the
+    /// reader's language. Where the sentence is ours to write, the code says
+    /// *which* sentence and the catalogue says how to word it.
+    pub code: Option<String>,
+    /// Arguments for that message, as JSON. Lets one code serve many subjects.
+    pub code_args: Option<String>,
     pub detail: Option<String>,
     pub ts_ms: i64,
 }

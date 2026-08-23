@@ -63,6 +63,8 @@ fn row_to_evidence(row: &rusqlite::Row<'_>) -> rusqlite::Result<Evidence> {
         kind: EvidenceKind::parse(&row.get::<_, String>("kind")?),
         ok: row.get::<_, i64>("ok")? != 0,
         summary: row.get("summary")?,
+        code: row.get("code")?,
+        code_args: row.get("code_args")?,
         detail: row.get("detail")?,
         ts_ms: row.get("ts_ms")?,
     })
@@ -367,6 +369,7 @@ pub fn verify_mission(db: &Database, mission_id: &str) -> Result<MissionDetail> 
     })?;
     let project_dir = PathBuf::from(project_dir);
 
+    let mut held = 0usize;
     for criterion in current.criteria.iter().filter(|c| c.is_active()) {
         // A manual criterion is left alone rather than being run and failed
         // every time: it is waiting for a person, not for a check.
@@ -374,37 +377,26 @@ pub fn verify_mission(db: &Database, mission_id: &str) -> Result<MissionDetail> 
             continue;
         }
 
-        let outcome = verify::check(&criterion.verification, &project_dir);
-        let record = verify::evidence_from(mission_id, Some(&criterion.id), None, &outcome);
-        let status = if outcome.ok {
-            CriterionStatus::Verified
-        } else {
-            CriterionStatus::Failed
-        };
+        // Guardrails apply to what J.A.R.V.I.S. runs, not only to what agents
+        // run (§35). A verification command is a command like any other, and
+        // this is the one place where enforcement is unconditional: we own the
+        // process, so a refusal here means it genuinely does not execute.
+        if hold_for_guardrail(db, &current.mission, criterion)? {
+            held += 1;
+            continue;
+        }
 
-        db.with(|conn| {
-            conn.execute(
-                "INSERT INTO evidence
-                     (id, mission_id, criterion_id, session_id, kind, ok, summary, detail, ts_ms)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![
-                    record.id,
-                    record.mission_id,
-                    record.criterion_id,
-                    record.session_id,
-                    record.kind.as_str(),
-                    record.ok as i64,
-                    record.summary,
-                    record.detail,
-                    record.ts_ms
-                ],
-            )?;
-            conn.execute(
-                "UPDATE acceptance_criteria SET status = ?2 WHERE id = ?1",
-                params![criterion.id, status.as_str()],
-            )?;
-            Ok(())
-        })?;
+        run_and_record(db, mission_id, criterion, &project_dir)?;
+    }
+
+    // A mission with a check waiting on a person needs a person (§34). Saying
+    // so is the difference between a mission that is stuck and one that is
+    // stuck and silent.
+    if held > 0 {
+        let reason =
+            format!("{held} acceptance criteria need approval before they can be checked.");
+        set_status(db, mission_id, MissionStatus::Waiting, Some(reason))?;
+        return detail(db, mission_id);
     }
 
     db.with(|conn| {
@@ -436,6 +428,227 @@ pub fn verify_mission(db: &Database, mission_id: &str) -> Result<MissionDetail> 
     }
 
     Ok(after)
+}
+
+/// Run one criterion check and record the evidence.
+fn run_and_record(
+    db: &Database,
+    mission_id: &str,
+    criterion: &AcceptanceCriterion,
+    project_dir: &std::path::Path,
+) -> Result<()> {
+    let outcome = verify::check(&criterion.verification, project_dir);
+    let record = verify::evidence_from(mission_id, Some(&criterion.id), None, &outcome);
+    let status = if outcome.ok {
+        CriterionStatus::Verified
+    } else {
+        CriterionStatus::Failed
+    };
+
+    db.with(|conn| {
+        conn.execute(
+            "INSERT INTO evidence
+                 (id, mission_id, criterion_id, session_id, kind, ok, summary, detail, ts_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                record.id,
+                record.mission_id,
+                record.criterion_id,
+                record.session_id,
+                record.kind.as_str(),
+                record.ok as i64,
+                record.summary,
+                record.detail,
+                record.ts_ms
+            ],
+        )?;
+        conn.execute(
+            "UPDATE acceptance_criteria SET status = ?2 WHERE id = ?1",
+            params![criterion.id, status.as_str()],
+        )?;
+        Ok(())
+    })?;
+    Ok(())
+}
+
+/// Whether a guardrail stops this criterion from being checked right now (§35).
+///
+/// Returns true when the check was held or refused, so the caller skips it.
+/// Only a Command criterion can match: the others touch nothing outside the
+/// project directory.
+fn hold_for_guardrail(
+    db: &Database,
+    mission: &Mission,
+    criterion: &AcceptanceCriterion,
+) -> Result<bool> {
+    let Verification::Command { command, .. } = &criterion.verification else {
+        return Ok(false);
+    };
+    let matches = crate::guardrail::classify(command);
+    if matches.is_empty() {
+        return Ok(false);
+    }
+
+    // The strictest decision across everything the command does. Allowing the
+    // whole command because one part of it was permitted would defeat the point.
+    fn rank(decision: crate::guardrail::Decision) -> u8 {
+        match decision {
+            crate::guardrail::Decision::Allow => 0,
+            crate::guardrail::Decision::Ask => 1,
+            crate::guardrail::Decision::Deny => 2,
+        }
+    }
+
+    let mut strictest: Option<(crate::guardrail::Match, crate::guardrail::Decision)> = None;
+    for m in matches {
+        let resolved = db.with(|conn| {
+            Ok(crate::guardrail::policy::resolve(
+                conn,
+                Some(&mission.project_id),
+                m.operation,
+            )?)
+        })?;
+        let stricter = strictest
+            .as_ref()
+            .map(|(_, current)| rank(resolved.decision) > rank(*current))
+            .unwrap_or(true);
+        if stricter {
+            strictest = Some((m, resolved.decision));
+        }
+    }
+
+    let Some((matched, decision)) = strictest else {
+        return Ok(false);
+    };
+    if decision == crate::guardrail::Decision::Allow {
+        return Ok(false);
+    }
+
+    let denied = decision == crate::guardrail::Decision::Deny;
+    crate::guardrail::record(
+        db,
+        crate::guardrail::NewEvent {
+            project_id: Some(&mission.project_id),
+            session_id: None,
+            mission_id: Some(&mission.id),
+            criterion_id: Some(&criterion.id),
+            origin: crate::guardrail::Origin::Verification,
+            operation: matched.operation,
+            fragment: &matched.fragment,
+            command,
+            status: if denied {
+                crate::guardrail::Status::Denied
+            } else {
+                // Unlike an agent tool call, a verification can genuinely be
+                // paused and resumed: nothing is mid-flight waiting on an
+                // answer, so the question can wait for the person to come back.
+                crate::guardrail::Status::Pending
+            },
+            reason: if denied {
+                crate::guardrail::policy::reason::POLICY_DENIES
+            } else {
+                crate::guardrail::policy::reason::ASKED_HUMAN
+            },
+        },
+    )?;
+
+    if denied {
+        record_refusal(db, &criterion.id, matched.operation.as_str())?;
+    }
+    Ok(true)
+}
+
+/// Run one held criterion now that its approval has been given (§35).
+pub fn verify_criterion(db: &Database, criterion_id: &str) -> Result<()> {
+    let (mission_id, project_dir): (String, String) = db.with(|conn| {
+        conn.query_row(
+            "SELECT c.mission_id, p.path
+               FROM acceptance_criteria c
+               JOIN missions m ON m.id = c.mission_id
+               JOIN projects p ON p.id = m.project_id
+              WHERE c.id = ?1",
+            [criterion_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+    })?;
+
+    let criterion = detail(db, &mission_id)?
+        .criteria
+        .into_iter()
+        .find(|c| c.id == criterion_id)
+        .ok_or_else(|| MissionError::Unknown(criterion_id.to_string()))?;
+
+    run_and_record(
+        db,
+        &mission_id,
+        &criterion,
+        std::path::Path::new(&project_dir),
+    )
+}
+
+/// Record that a criterion could not be checked because a guardrail refused.
+///
+/// Deliberately evidence, and deliberately negative. §30 asks whether a
+/// criterion *holds*, and "we were not allowed to find out" is not a yes — so
+/// it must block completion exactly as a failure does, while saying plainly
+/// that nothing was actually tested.
+pub fn record_refusal(db: &Database, criterion_id: &str, operation: &str) -> Result<()> {
+    let mission_id: String = db.with(|conn| {
+        conn.query_row(
+            "SELECT mission_id FROM acceptance_criteria WHERE id = ?1",
+            [criterion_id],
+            |row| row.get(0),
+        )
+    })?;
+
+    let evidence = Evidence {
+        id: uuid::Uuid::now_v7().to_string(),
+        mission_id,
+        criterion_id: Some(criterion_id.to_string()),
+        session_id: None,
+        kind: EvidenceKind::Manual,
+        ok: false,
+        summary: format!("Not checked: a guardrail refused {operation}"),
+        // The same fact, in a form the interface can say in the reader's
+        // language (§65). The English above stays as the fallback.
+        code: Some("evidence.guardrailRefused".into()),
+        code_args: serde_json::to_string(&serde_json::json!({ "operation": operation })).ok(),
+        detail: Some(
+            "The check was never run, so this criterion is unverified rather than failed."
+                .into(),
+        ),
+        ts_ms: now_ms(),
+    };
+
+    db.with(|conn| {
+        conn.execute(
+            "INSERT INTO evidence
+                 (id, mission_id, criterion_id, session_id, kind, ok, summary,
+                  code, code_args, detail, ts_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                evidence.id,
+                evidence.mission_id,
+                evidence.criterion_id,
+                evidence.session_id,
+                evidence.kind.as_str(),
+                evidence.ok as i64,
+                evidence.summary,
+                evidence.code,
+                evidence.code_args,
+                evidence.detail,
+                evidence.ts_ms
+            ],
+        )?;
+        // Pending, not failed: nothing was tested, and claiming a failure would
+        // be as untrue as claiming a pass.
+        conn.execute(
+            "UPDATE acceptance_criteria SET status = ?2 WHERE id = ?1",
+            params![criterion_id, CriterionStatus::Pending.as_str()],
+        )?;
+        Ok(())
+    })?;
+    Ok(())
 }
 
 /// Confirm a manual criterion, recording who vouched for it.

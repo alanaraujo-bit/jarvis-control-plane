@@ -2,6 +2,7 @@ import { LOCALES, LOCALE_NAMES } from "@jarvis/i18n";
 import { useI18n, useT } from "../../app/i18n";
 import { useTheme, type ThemePreference } from "../../app/theme";
 import { EnvironmentPanel } from "../environment/EnvironmentPanel";
+import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { Updates } from "./Updates";
 import "./Settings.css";
 
@@ -72,6 +73,10 @@ export function Settings() {
               ))}
             </div>
           </div>
+        </section>
+
+        <section className="settings__section">
+          <GuardrailPanel />
         </section>
 
         <section className="settings__section">

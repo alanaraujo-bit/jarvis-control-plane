@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 6;
 
 struct Migration {
     version: u32,
@@ -239,6 +239,86 @@ const MIGRATIONS: &[Migration] = &[Migration {
     CREATE INDEX idx_interaction_minute ON interaction_minutes (minute);
     CREATE INDEX idx_interaction_project ON interaction_minutes (project_id, minute);
 "#,
+    },
+    Migration {
+        version: 5,
+        sql: r#"
+    -- ---- Guardrails (§35) --------------------------------------------------
+    -- A rule about one class of sensitive operation, at one scope.
+    --
+    -- A NULL project_id is the global rule. The absence of a row is meaningful
+    -- and is not the same as a row saying 'ask': "follow whatever the wider
+    -- scope decides" is a different intention from "ask here regardless".
+    CREATE TABLE guardrail_policies (
+        id         TEXT PRIMARY KEY,
+        project_id TEXT REFERENCES projects (id) ON DELETE CASCADE,
+        operation  TEXT NOT NULL,
+        -- ask | allow | deny
+        decision   TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    -- IFNULL folds the global scope into the same index, so a project rule and
+    -- the global rule for one operation cannot collide.
+    CREATE UNIQUE INDEX idx_guardrail_scope
+        ON guardrail_policies (operation, IFNULL(project_id, ''));
+
+    -- Every time a guardrail had something to say, and what came of it.
+    --
+    -- One table for both origins on purpose. A user asking "what has this
+    -- stopped?" does not care whether the command came from an agent's tool
+    -- call or from a mission's own verification — and two tables would make
+    -- that one question into two queries that could disagree.
+    CREATE TABLE guardrail_events (
+        id           TEXT PRIMARY KEY,
+        ts_ms        INTEGER NOT NULL,
+        project_id   TEXT REFERENCES projects (id) ON DELETE CASCADE,
+        session_id   TEXT REFERENCES sessions (id) ON DELETE SET NULL,
+        mission_id   TEXT,
+        criterion_id TEXT,
+        -- agent | verification
+        origin       TEXT NOT NULL,
+        operation    TEXT NOT NULL,
+        -- The text that matched, kept verbatim: a guardrail that will not say
+        -- what made it fire cannot be reviewed, and an unreviewable guardrail
+        -- gets switched off.
+        fragment     TEXT NOT NULL,
+        command      TEXT NOT NULL,
+        -- pending | allowed | denied | asked
+        status       TEXT NOT NULL,
+        -- A stable code the UI localises, never prose (§65).
+        reason       TEXT NOT NULL,
+        decided_at   INTEGER,
+        decided_by   TEXT
+    );
+    CREATE INDEX idx_guardrail_events_time ON guardrail_events (ts_ms DESC);
+    CREATE INDEX idx_guardrail_events_pending ON guardrail_events (status, ts_ms DESC);
+    CREATE INDEX idx_guardrail_events_mission ON guardrail_events (mission_id, ts_ms DESC);
+"#,
+    },
+    Migration {
+        version: 6,
+        sql: r#"
+    -- A stable code the UI localises, so evidence can say what happened in the
+    -- reader's own language (§65).
+    --
+    -- Evidence summaries are generated in Rust and have been English-only; that
+    -- is a known correctness gap in a shipped feature. These columns are the fix
+    -- the roadmap describes, starting with the summaries guardrails add rather
+    -- than leaving one more untranslatable string behind. NULL means the summary
+    -- is all there is, which stays true of evidence written by earlier builds.
+    --
+    -- Its own migration rather than an edit to 5: a database that has already
+    -- applied 5 will never re-run it, so appending to a migration that has been
+    -- applied anywhere leaves those columns missing while the code expects them.
+    -- That is rule 1 at the top of this file, and it was learned here the way
+    -- the rest of this codebase learns things — the surface came up blank on a
+    -- machine that had the earlier schema.
+    ALTER TABLE evidence ADD COLUMN code TEXT;
+    -- Arguments for the message, as JSON. Keeps one code reusable instead of
+    -- needing a separate code per distinct sentence.
+    ALTER TABLE evidence ADD COLUMN code_args TEXT;
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -303,5 +383,120 @@ mod tests {
             SCHEMA_VERSION,
             "SCHEMA_VERSION must match the last migration"
         );
+    }
+
+    /// Fingerprint of a migration's SQL.
+    ///
+    /// FNV-1a: not cryptography, and it does not need to be. It only has to
+    /// change when the text changes.
+    fn fingerprint(sql: &str) -> u64 {
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for byte in sql.as_bytes() {
+            hash ^= *byte as u64;
+            hash = hash.wrapping_mul(0x0000_0100_0000_01B3);
+        }
+        hash
+    }
+
+    /// Rule 1 at the top of this file, made executable.
+    ///
+    /// A shipped migration's text must never change. Appending an `ALTER TABLE`
+    /// to a migration that has already run leaves those columns missing on
+    /// exactly the machines that matter — the ones carrying a user's history —
+    /// while a database built from scratch looks perfect. That happened here:
+    /// the mission surface went blank on the installed copy and every test
+    /// stayed green, because every test built its database from nothing.
+    ///
+    /// It cannot be caught by replaying migrations, because the test only ever
+    /// has the *current* text to replay — the first attempt at this test made
+    /// that mistake and passed while the bug was reintroduced. A recorded
+    /// fingerprint is what actually notices.
+    ///
+    /// **When this fails:** if you edited a migration, undo it and add a new
+    /// one. Only update a number here when adding a genuinely new migration.
+    #[test]
+    fn a_shipped_migration_is_never_edited() {
+        const SHIPPED: &[(u32, u64)] = &[
+            (1, 0x8c60_1cfb_a4c0_8781),
+            (2, 0xa812_ab92_91c6_aae9),
+            (3, 0x8988_cb64_23bd_8b74),
+            (4, 0xe44a_5219_db9e_f30d),
+            (5, 0x6ee9_96ed_2d3e_b954),
+            (6, 0x1851_a45c_4cbe_3881),
+        ];
+
+        for migration in MIGRATIONS {
+            let Some((_, expected)) = SHIPPED.iter().find(|(v, _)| *v == migration.version) else {
+                panic!(
+                    "migration {} has no recorded fingerprint. If it is new, add \
+                     (version, 0x{:016x}) to SHIPPED.",
+                    migration.version,
+                    fingerprint(migration.sql)
+                );
+            };
+            assert_eq!(
+                fingerprint(migration.sql),
+                *expected,
+                "migration {} was edited after shipping. Databases that already \
+                 applied it will never see the change — undo the edit and add a \
+                 new migration instead. (Its fingerprint is now 0x{:016x}.)",
+                migration.version,
+                fingerprint(migration.sql)
+            );
+        }
+    }
+
+    /// Upgrading step by step must land on the same schema as building fresh.
+    ///
+    /// This catches a migration that is not additive — one that assumes a state
+    /// only a fresh database has. It does **not** catch a migration whose text
+    /// was edited; `a_shipped_migration_is_never_edited` is what does that.
+    #[test]
+    fn upgrading_an_older_database_produces_the_same_schema_as_a_new_one() {
+        let columns = |conn: &Connection, table: &str| -> Vec<String> {
+            let mut stmt = conn
+                .prepare(&format!("SELECT name FROM pragma_table_info('{table}') ORDER BY name"))
+                .unwrap();
+            let rows: rusqlite::Result<Vec<String>> =
+                stmt.query_map([], |row| row.get(0)).unwrap().collect();
+            rows.unwrap()
+        };
+
+        // A database that stopped at each earlier version, then upgraded.
+        for stop_at in 1..SCHEMA_VERSION {
+            let stepped = Connection::open_in_memory().unwrap();
+            stepped
+                .execute(
+                    "CREATE TABLE IF NOT EXISTS schema_migrations (
+                         version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)",
+                    [],
+                )
+                .unwrap();
+            for migration in MIGRATIONS.iter().filter(|m| m.version <= stop_at) {
+                stepped
+                    .execute_batch(&format!("BEGIN; {} COMMIT;", migration.sql))
+                    .unwrap();
+                stepped
+                    .execute(
+                        "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)",
+                        [migration.version],
+                    )
+                    .unwrap();
+            }
+            // Now upgrade it the way a real installation would.
+            run(&stepped).unwrap();
+
+            let fresh = Connection::open_in_memory().unwrap();
+            run(&fresh).unwrap();
+
+            for table in ["evidence", "guardrail_events", "missions", "sessions", "projects"] {
+                assert_eq!(
+                    columns(&stepped, table),
+                    columns(&fresh, table),
+                    "a database upgraded from v{stop_at} has a different `{table}` \
+                     than a new one — a migration was edited after it shipped"
+                );
+            }
+        }
     }
 }

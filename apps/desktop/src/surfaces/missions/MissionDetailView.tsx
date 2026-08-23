@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Bot, Check, ChevronLeft, CircleDashed, Play, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import { useT } from "../../app/i18n";
+import type { MessageKey } from "@jarvis/i18n";
 import { missionSessions, type SessionInfo } from "../../app/sessions";
 import { StatusDot } from "../../design/StatusDot";
+import { GuardrailHistory, PendingApprovals } from "../guardrails/PendingApprovals";
+import { useGuardrails } from "../guardrails/useGuardrails";
 import {
   useMissions,
   type AcceptanceCriterion,
@@ -10,6 +13,31 @@ import {
   type Verification,
 } from "./useMissions";
 import "./MissionDetailView.css";
+
+/**
+ * Evidence text in the reader's language, when we wrote the sentence (§65).
+ *
+ * Evidence is generated in Rust, which has no business choosing a language.
+ * Where the wording is ours, it travels as a code and is worded here; where it
+ * is a command's own output, the summary is the tool speaking and is shown as
+ * it came. Falling back to `summary` also keeps evidence recorded by earlier
+ * builds readable.
+ */
+function useEvidenceText() {
+  const t = useT();
+  return (evidence: { summary: string; code: string | null; codeArgs: string | null }) => {
+    if (!evidence.code) return evidence.summary;
+    let values: Record<string, string | number> = {};
+    try {
+      if (evidence.codeArgs) values = JSON.parse(evidence.codeArgs);
+    } catch {
+      // Malformed arguments are not worth losing the sentence over; the
+      // message still renders with its placeholders visible, which is the
+      // behaviour the i18n layer already chose for a missing value.
+    }
+    return t(evidence.code as MessageKey, values);
+  };
+}
 
 /** A one-line, human rendering of how a criterion is checked. */
 function describeCheck(verification: Verification): string {
@@ -46,6 +74,13 @@ export function MissionDetailView({
 }) {
   const t = useT();
   const { detail, verify, setStatus, confirmCriterion, setTaskDone } = useMissions();
+  const {
+    pending,
+    events: guardrailEvents,
+    loadPending,
+    loadEvents,
+    decide,
+  } = useGuardrails();
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -54,6 +89,9 @@ export function MissionDetailView({
   const load = async () => {
     setMission(await detail(missionId));
     setAgents(await missionSessions(missionId));
+    // Guardrails are part of this mission's state, not a separate concern:
+    // a held approval is why it is not progressing (§34, §35).
+    await Promise.all([loadPending(missionId), loadEvents(undefined, missionId)]);
   };
 
   useEffect(() => {
@@ -72,6 +110,11 @@ export function MissionDetailView({
     setRefusal(null);
     const next = await verify(missionId);
     if (next) setMission(next);
+    // Verifying is exactly when a guardrail decides to hold a check, so the
+    // approval queue has to be re-read here. Setting only the mission left the
+    // held approval invisible — the core was right and the screen was wrong,
+    // which is the failure only running the thing catches.
+    await Promise.all([loadPending(missionId), loadEvents(undefined, missionId)]);
     setVerifying(false);
   };
 
@@ -162,6 +205,19 @@ export function MissionDetailView({
             {t("mission.notVerified", { count: openRequired.length })}
           </p>
         )}
+
+        {/* Held approvals sit directly under the actions that produced them:
+            pressing Verify is what puts a decision here, so the answer belongs
+            where the eye already is. Empty renders nothing at all (§18). */}
+        <PendingApprovals
+          events={pending}
+          onDecide={(eventId, choice) => {
+            void (async () => {
+              await decide(eventId, choice);
+              await load();
+            })();
+          }}
+        />
 
         {/* ---- Agents (§86) ------------------------------------------------
             The thread from a mission to the agent doing it. Clicking through
@@ -270,6 +326,11 @@ export function MissionDetailView({
             </ul>
           </section>
         )}
+
+        {/* What guardrails have had to say about this mission. Last, because it
+            is a record rather than something to act on — the acting happens in
+            the pending section above. */}
+        <GuardrailHistory events={guardrailEvents.filter((e) => e.status !== "pending")} />
       </div>
     </div>
   );
@@ -285,6 +346,7 @@ function CriterionRow({
   onConfirm: () => void;
 }) {
   const t = useT();
+  const evidenceText = useEvidenceText();
   const [open, setOpen] = useState(false);
   const latest = evidence[0];
   const check = describeCheck(criterion.verification);
@@ -323,7 +385,7 @@ function CriterionRow({
           aria-expanded={open}
           data-ok={latest.ok || undefined}
         >
-          {latest.summary}
+          {evidenceText(latest)}
         </button>
       )}
 

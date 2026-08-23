@@ -13,7 +13,7 @@ use std::path::Path;
 use parking_lot::Mutex;
 use rusqlite::Connection;
 
-mod migrations;
+pub mod migrations;
 
 pub use migrations::SCHEMA_VERSION;
 

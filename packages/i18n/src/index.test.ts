@@ -46,6 +46,16 @@ test("falls back to english when a locale lacks a key", () => {
   assert.equal(rendered, "J.A.R.V.I.S.");
 });
 
+test("pluralises a pending-approval count in both locales", () => {
+  // §35 puts this string in front of someone who has been interrupted; getting
+  // the agreement wrong in their own language is the tell that it was an
+  // afterthought.
+  assert.match(translate("en", "guardrail.pending.body", { count: 1 }), /1 operation needs/);
+  assert.match(translate("en", "guardrail.pending.body", { count: 4 }), /4 operations need/);
+  assert.match(translate("pt-BR", "guardrail.pending.body", { count: 1 }), /1 operação precisa/);
+  assert.match(translate("pt-BR", "guardrail.pending.body", { count: 4 }), /4 operações precisam/);
+});
+
 test("resolves locales from browser language lists", () => {
   assert.equal(resolveLocale(["pt-BR", "en"]), "pt-BR");
   assert.equal(resolveLocale(["en-GB"]), "en");
