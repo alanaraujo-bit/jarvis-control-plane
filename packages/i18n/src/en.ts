@@ -85,6 +85,8 @@ export const en = {
     "Open a folder on this machine to get started. Nothing is uploaded — J.A.R.V.I.S. works against your files where they already are.",
   "projects.missing": "Folder missing",
   "projects.back": "All projects",
+  "projects.worktreeOf": "worktree of {project}",
+  "projects.archive": "Remove {project} from J.A.R.V.I.S. — the folder stays on disk",
 
   // ---- Terminal (§21) ------------------------------------------------------
   "terminal.title": "Terminal",

@@ -29,6 +29,12 @@ pub struct Project {
     /// False when the folder has since been moved or deleted. Surfaced in the
     /// UI so a stale entry is explained rather than silently failing to open.
     pub exists: bool,
+    /// The project this is a worktree of (§45).
+    ///
+    /// Without it a worktree is a folder that appeared in the list with no
+    /// explanation of where it came from — which is what it looked like when
+    /// this was stored and not shown.
+    pub worktree_of: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -64,6 +70,7 @@ fn row_to_project(row: &rusqlite::Row<'_>) -> rusqlite::Result<Project> {
         created_at: row.get("created_at")?,
         last_opened_at: row.get("last_opened_at")?,
         archived: row.get::<_, i64>("archived")? != 0,
+        worktree_of: row.get("worktree_of")?,
         path,
     })
 }

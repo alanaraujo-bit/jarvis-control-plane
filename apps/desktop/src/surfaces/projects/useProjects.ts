@@ -14,6 +14,12 @@ export interface Project {
   archived: boolean;
   /** False when the folder has been moved or deleted since it was added. */
   exists: boolean;
+  /**
+   * The project this is a worktree of (§45). A worktree is registered as its
+   * own project, so without this it is a folder in the list with no
+   * explanation of where it came from.
+   */
+  worktreeOf: string | null;
 }
 
 interface ProjectsState {

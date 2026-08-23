@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { FolderOpen, GitBranch, TriangleAlert } from "lucide-react";
+import { Archive, FolderGit2, FolderOpen, GitBranch, TriangleAlert } from "lucide-react";
 import { useT } from "../../app/i18n";
 import { useProjects, type Project } from "./useProjects";
 import "./Projects.css";
@@ -17,7 +17,7 @@ interface ProjectsProps {
  */
 export function Projects({ onOpen }: ProjectsProps) {
   const t = useT();
-  const { projects, loading, error, refresh, openFolder } = useProjects();
+  const { projects, loading, error, refresh, openFolder, archive } = useProjects();
 
   useEffect(() => {
     void refresh();
@@ -49,7 +49,7 @@ export function Projects({ onOpen }: ProjectsProps) {
         ) : (
           <ul className="projects__list">
             {projects.map((project) => (
-              <li key={project.id}>
+              <li key={project.id} className="projects__item">
                 <button
                   type="button"
                   className="projects__row"
@@ -65,6 +65,15 @@ export function Projects({ onOpen }: ProjectsProps) {
                         {project.gitBranch}
                       </span>
                     )}
+                    {/* A worktree is a project, so it belongs in this list —
+                        but it is a checkout *of* something, and a row that
+                        does not say so is an unexplained sibling (§45). */}
+                    {worktreeParent(project, projects) && (
+                      <span className="projects__worktree">
+                        <FolderGit2 size={11} strokeWidth={2} aria-hidden="true" />
+                        {t("projects.worktreeOf", { project: worktreeParent(project, projects)! })}
+                      </span>
+                    )}
                     {!project.exists && (
                       <span className="projects__missing">
                         <TriangleAlert size={11} strokeWidth={2} aria-hidden="true" />
@@ -77,6 +86,21 @@ export function Projects({ onOpen }: ProjectsProps) {
                     {project.path}
                   </span>
                 </button>
+
+                {/* Archiving only removes the project from J.A.R.V.I.S.; the
+                    folder on disk is never touched (§35). Sibling of the row
+                    rather than inside it, because a button cannot contain a
+                    button — and it is the reason a dead entry pointing at a
+                    folder that no longer exists had no way to be cleared. */}
+                <button
+                  type="button"
+                  className="projects__archive"
+                  onClick={() => void archive(project.id)}
+                  aria-label={t("projects.archive", { project: project.name })}
+                  title={t("projects.archive", { project: project.name })}
+                >
+                  <Archive size={13} strokeWidth={1.9} aria-hidden="true" />
+                </button>
               </li>
             ))}
           </ul>
@@ -84,4 +108,16 @@ export function Projects({ onOpen }: ProjectsProps) {
       </div>
     </div>
   );
+}
+
+/**
+ * The name of the project a worktree came from.
+ *
+ * `null` when this is not a worktree, or when its parent has been archived —
+ * naming a project the user can no longer see would raise a question rather
+ * than answer one.
+ */
+function worktreeParent(project: Project, all: Project[]): string | null {
+  if (!project.worktreeOf) return null;
+  return all.find((p) => p.id === project.worktreeOf)?.name ?? null;
 }

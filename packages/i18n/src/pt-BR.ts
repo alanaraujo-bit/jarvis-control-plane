@@ -75,6 +75,8 @@ export const ptBR: Record<MessageKey, string> = {
     "Abra uma pasta deste computador para começar. Nada é enviado para lugar nenhum — o J.A.R.V.I.S. trabalha nos seus arquivos onde eles já estão.",
   "projects.missing": "Pasta não encontrada",
   "projects.back": "Todos os projetos",
+  "projects.worktreeOf": "worktree de {project}",
+  "projects.archive": "Tirar {project} do J.A.R.V.I.S. — a pasta continua no disco",
 
   "terminal.title": "Terminal",
   "terminal.new": "Novo terminal",

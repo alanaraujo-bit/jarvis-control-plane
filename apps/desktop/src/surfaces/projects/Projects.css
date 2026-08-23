@@ -119,3 +119,37 @@
   color: var(--text-tertiary);
   text-wrap: pretty;
 }
+
+/* A worktree is a project, and the row says whose checkout it is (§45). */
+.projects__worktree {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+}
+
+/* The row is a button, so the archive action is a sibling laid over it. */
+.projects__item { position: relative; display: flex; align-items: stretch; }
+.projects__item .projects__row { flex: 1 1 auto; min-width: 0; }
+
+.projects__archive {
+  position: absolute;
+  right: var(--space-5);
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-instant) var(--ease-out);
+}
+.projects__item:hover .projects__archive,
+.projects__item:focus-within .projects__archive { opacity: 1; pointer-events: auto; }
+.projects__archive:hover { color: var(--text-primary); background: var(--bg-active); }
