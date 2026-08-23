@@ -37,6 +37,8 @@ Not built yet — deliberately absent rather than stubbed (§81):
 Project Brain, Notes, Files/Editor/Diff, Preview, Global Search, onboarding,
 guardrails, mobile companion, cloud sync, voice.
 
+**Picking this up in a new session? Start with [`docs/HANDOFF.md`](docs/HANDOFF.md).**
+
 `docs/ROADMAP.md` is the live plan. `docs/DECISIONS.md` records why things are
 the way they are, including several findings that only showed up by running the
 product rather than reasoning about it.
