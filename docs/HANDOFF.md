@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-12 commits · **205 tests** (197 Rust, 8 i18n) · all green.
+13 commits · **205 tests** (197 Rust, 8 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -99,10 +99,22 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Guardrails (§35)** | policy per operation and project; real pre-execution enforcement for Claude Code and for our own verification commands |
 | **Unattended runs (§32)** | an agent driven turn by turn until the mission is verified, blocked, or out of budget |
 
-**The full loop has been executed end to end**: mission created → completion
-refused → agent launched from the mission → Claude Code created a real file →
-verification found the evidence → mission completed. Then the file was deleted,
-re-verification ran, and completion was **revoked**.
+**The full loop has been executed end to end**, twice over:
+
+*By hand.* Mission created → completion refused → agent launched from the
+mission → Claude Code created a real file → verification found the evidence →
+mission completed. Then the file was deleted, re-verification ran, and
+completion was **revoked**.
+
+*Unattended (§32).* Mission set to Unattended → "run until done" → a real Claude
+Code agent was started, driven turn by turn, created the file, verification
+passed, and the mission **completed on its own** with `autopilot.completed` in
+the activity log. Nobody typed anything in the middle.
+
+*Guardrails (§35), against real agents.* A force push was refused before it
+executed. With nobody able to answer, `rm -rf` was refused, the agent reported
+it was blocked, explicitly declined to find another way, and the directory was
+still there afterwards.
 
 ### Not built — deliberately absent, not stubbed
 
@@ -207,7 +219,11 @@ $inst = "$env:LOCALAPPDATA\J.A.R.V.I.S"
 Start-Process "$root\apps\desktop\src-tauri\target\release\bundle\nsis\J.A.R.V.I.S_0.1.0_x64-setup.exe" -ArgumentList "/S" -Wait
 Start-Process "$inst\jarvis-desktop.exe"
 
-& "$root\tools\send-keys.ps1"      -Steps "^k|sleep:600|miss|sleep:500|{ENTER}" -ExeRoot $inst
+# The rail is more reliable than the command palette: the app may be running
+# in pt-BR, where English search terms match nothing. Rail icons top to bottom
+# are Mission Control, Projects, Missions, Activity, Analytics — and Settings
+# at the foot (27,850).
+& "$root\tools\send-keys.ps1"      -Steps "click:27,134|sleep:1600" -ExeRoot $inst
 & "$root\tools\capture-window.ps1" -Out "$root\shots\x.png" -ExeRoot $inst
 ```
 
@@ -215,16 +231,36 @@ Start-Process "$inst\jarvis-desktop.exe"
 `click:<x>,<y>` (window-relative). It **refuses to run** if our window is not
 focused — that guard is deliberate, do not weaken it.
 
-A scratch project for testing lives at
-`…\Temp\claude\…\scratchpad\demo-project` (a real git repo). Use a scratch
-folder for agent tests — **never run test agents in Alan's real projects.**
+**Use a scratch folder for agent tests — never run test agents in Alan's real
+projects.** Your session's own scratchpad directory is the right place: create
+a `demo-project` there and `git init` it, because several surfaces need a real
+repository.
+
+Note that the scratchpad path is **per session**. Earlier sessions did exactly
+this, so the app's project list may already show a `demo-project` pointing at a
+previous session's temp folder — a path that no longer exists. Add yours as a
+new project rather than assuming the existing entry is live.
 
 ---
 
 ## 7. Suggested next steps, in priority order
 
-1. **Files, Editor, Diff/Review (§41–43)** — the largest remaining surface.
-   Monaco is the intended editor, behind a `packages/editor` boundary.
+1. **Files, Editor, Diff/Review (§41–43)** — the largest remaining surface, and
+   the current milestone (**M6**). Monaco is the intended editor, behind a
+   `packages/editor` boundary (D4), so an LSP client can land later without
+   touching surfaces.
+
+   Worth deciding early, before writing much: these are project-scoped tools, so
+   they belong **inside a project** rather than on the global rail (§85/§87) —
+   the rail is deliberately six destinations. The session log already records
+   which files a session touched (`FileChange`, mirrored into `file_changes`),
+   so Diff/Review has a real source for "what did this agent change?" without
+   inventing one. Git goes through the `git` executable, never a library (D5).
+
+   The §81 rule applies as it has all along: a surface that is not built is
+   absent, not a "coming soon" screen. Monaco is a large dependency — check what
+   it does to the 7.3 MB install footprint before committing to it, and say so
+   if it is a problem rather than discovering it at release.
 2. **Project Brain (§36–39) and Notes (§40)** — the memory layer.
 3. **Onboarding (§13)** — first-run experience; the environment scan already
    provides its data.
