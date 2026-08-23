@@ -295,6 +295,20 @@
   grid-auto-rows: 1fr;
 }
 
+/* Three panes in a grid leave the fourth cell empty, so the last pane sat at
+   half width beside a rectangle of nothing. An odd one out spans both columns
+   instead — it is alone on its row, so it may as well have the row.
+
+   This is driven by `data-last-odd` from the component rather than by
+   `:nth-child`, and that is not a preference: every tab is mounted, so CSS
+   counts hidden panes too and `:nth-child(odd):last-of-type` would pick the
+   wrong element as soon as the split is a subset of the open tabs. Only the
+   component knows how many panes are actually on screen. Found by closing one
+   pane of four. */
+.workspace__body[data-split="grid"] .workspace__pane[data-last-odd] {
+  grid-column: 1 / -1;
+}
+
 /* Which pane the keyboard is going to.
    A 1px grid gap painted with the border colour already separates the panes;
    the focused one gets a brighter inset edge rather than a heavy outline —

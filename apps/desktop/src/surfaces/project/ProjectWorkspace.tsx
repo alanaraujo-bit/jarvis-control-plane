@@ -425,6 +425,16 @@ export function ProjectWorkspace({
               // Only meaningful with more than one pane on screen: it says
               // which of them the keyboard is going to.
               data-focused={(splitting && tab.sessionId === active) || undefined}
+              // An odd last pane in the grid spans both columns rather than
+              // sitting at half width beside an empty cell. Computed here
+              // because CSS counts hidden siblings and would pick the wrong
+              // element — every tab stays mounted (see the note above).
+              data-last-odd={
+                (layout === "grid" &&
+                  split.length % 2 === 1 &&
+                  split.indexOf(tab.sessionId) === split.length - 1) ||
+                undefined
+              }
               // Clicking anywhere in a pane moves focus to it, which is what
               // every split terminal does and what the click was for anyway.
               onMouseDown={() => {
