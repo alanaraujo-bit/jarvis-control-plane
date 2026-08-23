@@ -360,3 +360,102 @@ thirty days, while uncommitted work has never been written to an object at all.
 recognised by the classifier before this, so an agent discarding a person's
 uncommitted work was never guarded — the handoff said otherwise and the handoff
 was wrong.
+
+## D21 — Knowledge is briefed; a note is not
+**Date:** 2026-08-23
+**Why:** §36–§40 could have been one table with a flag. Two tables, and the
+line between them is a question with one answer: **does an agent need to know
+this?**
+
+Knowledge is what stays true about a project — what it is, how it is built,
+what will bite you, what a word means here. A note is working memory: a
+reminder, a link, a thing to come back to. Handing an agent somebody's todo
+list as context is worse than handing it nothing, because it is exactly the
+kind of noise that makes a model confidently wrong.
+
+Deciding it by *kind* rather than by a per-item switch means there is nothing
+for anyone to forget to set, and nothing to get wrong in a hurry.
+`a_note_never_reaches_the_brief` is the test, and `brief::compose` takes only
+`&[Knowledge]` — there is no parameter through which a note could arrive.
+
+A note can be **promoted** into knowledge when it turns out to be durable, and
+the note is removed rather than copied: the same sentence in two places is two
+sentences that will drift apart.
+
+## D22 — Derived facts are recomputed, never stored
+**Date:** 2026-08-23
+**Why:** The Brain shows two kinds of thing and marks which is which, for the
+same reason §28 stamps confidence on every number. *"Deploys go through
+staging"* and *"src/app.ts changed nine times"* are not the same kind of claim,
+and a surface that renders them identically invites the reader to trust the
+weaker one as much as the stronger. They are on **separate tabs**, so the rule
+is structural rather than a caption somebody has to read.
+
+Stated knowledge carries its `source`: an agent's claim about a project is not
+the owner's, and flattening the two hides that.
+
+Derived facts are computed on every read and never written down — the choice
+Review made (D2), for the reason that a *stored* derived fact can go stale
+without anybody noticing. A memory layer that quietly lies is worse than one
+that is empty.
+
+What earns a place is a fact that would change what somebody does. Analytics
+(§52) already counts tokens and runtime; these answer the narrower question
+*"what should I know before I touch this?"* — which files everyone keeps
+editing, what has been refused here, whether completions in this project hold.
+Completed and revoked are reported **together**: nine completions with six
+revocations says something that "nine completed" actively hides (§30).
+
+## D23 — A brief reaches the agent out of band, never through the user's repo
+**Date:** 2026-08-23
+**Why:** There were two honest ways to give an agent a project's knowledge, and
+one of them is invasive.
+
+Writing `CLAUDE.md` or `AGENTS.md` into the project is cheaper — the provider
+reads it unprompted, costing nothing extra — and it means J.A.R.V.I.S. writing
+into the user's repository. It would appear in `git status`, in their diff, and
+in the very Review surface this product also ships; and it would collide with a
+`CLAUDE.md` they wrote themselves. §3 says the code is theirs.
+
+So the brief is written beside the guardrail snapshot in **our own** log
+directory and passed with `--append-system-prompt-file`. Nothing in their tree,
+nothing in their terminal, and it survives them having their own instructions
+file.
+
+**Appended, never replacing.** `--system-prompt` differs by one word and would
+strip the agent of everything else it knows — an agent that had forgotten how
+to be an agent. No test of the brief's *content* would catch that, so
+`a_brief_is_appended_rather_than_replacing_the_system_prompt` tests the
+argument list.
+
+**Verified twice, and the first time did not count.** `--append-system-prompt-file`
+plainly works under `claude -p`; every session this product starts is an
+interactive PTY. Assuming those are the same thing is the shape of the Monaco
+option that exists, type-checks and does nothing (D17). It was settled by
+writing four things into a scratch project's Brain, starting Claude Code from
+the app, and asking what it knew without reading files: it answered with all
+four, under the brief's own headings, in a folder it had never seen.
+
+Codex 0.147.0 has no equivalent flag, so it reports `OpeningMessage` and is not
+handed a file it would never read (§26).
+
+## D24 — A hidden area is not an unmounted one
+**Date:** 2026-08-23
+**Why:** The project areas are mounted once and hidden with CSS, so returning to
+one keeps its open file, its scroll position and its selected diff. That is
+worth keeping, and it quietly broke three surfaces at once.
+
+A `useEffect` keyed on the project id fires when the component mounts and never
+again. Review carried the comment *"Re-read on every visit. An agent may have
+been working the whole time the user was on another surface, and a stale diff is
+worse than a slow one"* directly above an effect that did not do that. Nothing
+errored; the surface simply showed what had been true the first time it was
+opened.
+
+Found by running a real agent, going back to the Brain, and reading "nothing has
+happened in this project yet" over a project where something had just happened.
+
+`useVisitRefresh` watches `active` going from false to true, which is the signal
+a mounted-and-hidden component has instead of a mount. Note the shape of this
+bug: the comment was right and the code was wrong, so reading the code alone
+would have confirmed the intention rather than the behaviour.

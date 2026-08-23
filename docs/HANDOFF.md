@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**289 tests** (281 Rust, 8 i18n) · all green.
+**333 tests** (324 Rust, 9 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -103,6 +103,9 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Diff / Review (§43)** | what changed since `HEAD`, and **which agent changed it** |
 | **Git write operations (§44)** | stage, unstage, discard, restore, commit — discard routed through the guardrail (D11/D19/D20) |
 | **Worktrees (§45)** | a worktree is a project (D18), so opening one opens it everywhere |
+| **Project Brain (§36–§38)** | what is known about a project, **briefed to every agent that starts here** (D21/D23) |
+| **Project history (§39)** | the project's own story, and what the record shows — derived, never stored (D22) |
+| **Notes (§40)** | working memory, never sent to an agent; promotable into knowledge |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -144,10 +147,21 @@ its own diff in Review, against its own branch; put uncommitted work in it and
 removed it — refused by Git first, then held by the guardrail, then done, with
 its project row archived. Both themes, both languages.
 
+
+*The memory layer, in the installed app (§36–§40).* Wrote four things into a
+scratch project's Brain, started Claude Code from the app, and asked what it
+knew **without reading any files**. It answered with all four, grouped under
+the brief's own headings, in a folder it had never seen before — and said
+plainly it had no other context without reading the repo. The brief was 484
+bytes in our own log directory beside the guardrail snapshot, matching the size
+the panel reported, and `git status` in the project was empty: nothing of ours
+in the user's repository. Promoted a note into knowledge and watched it leave
+the notes list and the count fall. Both themes, both languages.
+
 ### Not built — deliberately absent, not stubbed
 
-Project Brain (§36–39), Notes (§40), Preview (§46), Global Search (§51),
-onboarding (§13), mobile PWA (§55), cloud (§59), voice (§54).
+Preview (§46), Global Search (§51), onboarding (§13), mobile PWA (§55),
+cloud (§59), voice (§54).
 
 Also absent by choice: **push and pull**. Review commits but does not talk to a
 remote — see section 7.
@@ -302,6 +316,49 @@ Every one of these is real and already cost time.
     never ran — which is rule 3 in section 3 of this file, met again. Verify the
     patch applied.
 
+24. **A project area that is hidden is still mounted, so `useEffect` never
+    fires again.** Files, Review, Worktrees and the Brain are mounted once and
+    hidden with CSS, deliberately, so returning to one keeps its open file and
+    scroll position. An effect keyed on the project id therefore runs on mount
+    and never again — and Review carried a comment saying it re-read on every
+    visit directly above an effect that did not. Nothing errors; the surface
+    shows what was true when it was first opened. `useVisitRefresh` watches
+    the transition into view. See D24, and note the shape: the **comment was
+    right and the code was wrong**, so reading the code would have confirmed
+    the intention rather than the behaviour.
+
+25. **Claude Code asks "is this a project you trust?" the first time it opens
+    any folder, and waits.** Everything typed before it is answered goes into
+    that dialog rather than to the agent. Under Unattended (§32) nobody can
+    answer, so the run would sit there until its budget ran out. **A worktree
+    is a brand-new folder**, so §45 made this reachable the moment it shipped.
+    `autopilot_start` refuses with `autopilot.folderNotTrusted`; trust is read
+    from `~/.claude.json` and never written — that is the user's decision to
+    make in Claude Code's own interface.
+
+26. **A capability verified in `-p` mode has not been verified.** Every session
+    this product starts is an interactive PTY.
+    `--append-system-prompt-file` plainly works under `claude -p`, and assuming
+    that settled it is the same shape as the Monaco option that exists,
+    type-checks and does nothing (item 12). It was settled properly by writing
+    knowledge into a project's Brain and asking a real interactive session what
+    it knew — see D23.
+
+27. **Do not scrape the TUI to find out what an agent said.** An early version
+    of the briefing test searched the PTY stream for a word and reported the
+    question "never reached the agent" while the agent was answering: Claude
+    Code redraws its input line character by character with cursor moves
+    interleaved, so typed text very often never appears as a contiguous run of
+    bytes anywhere in the stream. D3 rejected scraping for the product and it is
+    no more sound in a test — read the transcript.
+
+28. **A sentence with a number in it needs the number, not just the digits.**
+    The Brain's derived facts passed positional arguments and never reached the
+    plural machinery, so every sentence was written for the plural and used for
+    everything: pt-BR rendered **"1 sessões"**. A `Fact` now carries the count
+    it has to agree with, separately from its arguments, because guessing which
+    argument decides the plural is not the interface's job. Found on screen.
+
 ## 6. Commands
 
 ```bash
@@ -365,32 +422,43 @@ selected in the listing, and typing over it silently produces
 
 ## 7. Suggested next steps, in priority order
 
-**M6 is finished.** Files, the editor, Review, Git write operations and
-worktrees are all built and verified in the installed app.
+**M6 is finished** (Files, editor, Review, Git, worktrees) and **M7 is nearly
+finished** — the memory layer is built and verified against a real agent.
 
-1. **Project Brain (§36–§39) and Notes (§40)** — the memory layer, and the
-   largest remaining gap in M7.
-2. **Onboarding (§13)** — first-run experience; the environment scan already
-   provides its data.
-3. **Finish localising evidence summaries (§65)** — the mechanism exists
-   (`evidence.code` + `code_args`, rendered through the catalogue) and the
-   guardrail refusal uses it. The command/file summaries still need converting.
-4. **The rest of M2** — split panes and layout presets (§20), search within
-   scrollback, image paste as a first-class attachment (§22). The terminal is
-   the hero surface and these are the three things it still lacks.
+1. **Global Search (§51)** — the last of M7, and the one question the product
+   cannot yet answer: *"where did I see that?"* Everything it would search is
+   already in one place (D2): `session_events` exists for exactly this, and the
+   Brain, missions and activity are all queryable rows.
+2. **Let an agent write to the Brain.** The whole path is in place —
+   `add_knowledge` takes `Source::Agent`, `session_id` and `mission_id`, the
+   surface renders "an agent recorded this" in amber, and no code produces such
+   a row. What is missing is the *moment*: most plausibly at the end of a
+   verified mission, asking the agent what it learned that should outlive the
+   session. Worth thinking about carefully — an agent that writes freely into
+   a project's memory will fill it with restatements of its own last task.
+3. **Onboarding (§13)** — the environment scan already provides its data.
+4. **Finish localising evidence summaries (§65)** — the mechanism exists
+   (`evidence.code` + `code_args`); the command/file summaries still need it.
+5. **The rest of M2** — split panes (§20), scrollback search, image paste (§22).
+   The terminal is the hero surface and these are what it still lacks.
 
-### Two things §44/§45 left on the table, deliberately
+### Things left on the table, deliberately
 
-- **Push and pull are not built.** Review commits; it does not talk to a
-  remote. `git.force-push` has been in the classifier since §35 and the gate in
-  `guardrail::surface` is ready for it, so this is a surface, not a design.
-  Worth doing with the credential story in mind: `GIT_TERMINAL_PROMPT=0` (D5)
-  means a push needing authentication fails rather than hanging, which is the
-  right failure but not yet an explained one.
+- **Push and pull.** Review commits but does not talk to a remote.
+  `git.force-push` has been in the classifier since §35 and `guardrail::surface`
+  is ready for it, so this is a surface rather than a design. Worth doing with
+  the credential story in mind: `GIT_TERMINAL_PROMPT=0` (D5) means a push
+  needing authentication fails rather than hangs — the right failure, not yet an
+  explained one.
 - **Nothing offers to start an agent *in* a worktree.** That is the reason
-  worktrees exist here (§45) and the pieces are all present — a worktree is a
-  project (D18), so launching an agent in one already works by opening it. What
-  is missing is the one gesture that does both from a mission.
+  worktrees exist (§45), and the pieces are all there since a worktree is a
+  project (D18). What is missing is the one gesture that does both from a
+  mission — and note item 25 before building it: a fresh worktree is an
+  untrusted folder.
+- **Briefing Codex.** It reports `OpeningMessage` and is given nothing. The
+  delivery would be the autopilot's own typing path (D16), and it costs a turn
+  and a wall of text in the terminal, so it is worth deciding whether that is
+  better than starting unbriefed rather than assuming it is.
 
 ## 8. Blockers needing Alan (see `docs/BLOCKERS.md`)
 

@@ -202,9 +202,43 @@ back.
 - [x] Activity log (§48) — recorded at the moments worth knowing, filterable
 - [x] Analytics (§52) — tokens by provider/model/project/day, confidence-aware
 - [x] Human leverage (§53) — measured from real interaction, not inferred
-- [ ] Project Brain (§36–§38)
-- [ ] Notes (§40)
+- [x] Project Brain (§36–§38) — knowledge, briefed to every agent that starts
+- [x] Project history (§39) — the project's own story, not the global feed
+- [x] Notes (§40) — working memory, never sent anywhere
 - [ ] Global Search (§51)
+
+### The memory layer, as built
+- **Knowledge is briefed; a note is not** (D21). One question decides which a
+  thing is, so there is no per-item switch to forget. `brief::compose` takes
+  only knowledge — a note cannot arrive through it.
+- **Stated and derived live on separate tabs** (D22), so §28's rule is
+  structural rather than a caption. Stated knowledge carries who said it;
+  derived facts are recomputed on every read and never stored.
+- **The brief goes out of band** (D23): written beside the guardrail snapshot
+  in our own log directory and passed with `--append-system-prompt-file`.
+  Nothing is written into the user's repository — a context file in a working
+  tree would show up in the Review surface this product also ships.
+- **Codex is reported honestly** (§26). It has no equivalent flag on 0.147.0,
+  so it is `OpeningMessage` and is not handed a file it would never read.
+
+**Verified in the installed app:** wrote four things into a scratch project's
+Brain, started Claude Code from the app, and asked what it knew without reading
+files. It answered with all four, grouped under the brief's own headings, in a
+folder it had never seen before — and said plainly it had no other context
+without reading the repo. The brief file was 484 bytes in our own data
+directory, matching the size the panel reported, and `git status` in the
+project was empty. Promoted a note into knowledge and watched it leave the
+notes list. Both themes, both languages.
+
+### Two bugs this milestone found in earlier work
+- **Every project area was showing stale data** (D24). Areas are mounted once
+  and hidden with CSS, so an effect keyed on the project id never fires again.
+  Review's comment said it re-read on every visit; it did not.
+- **An unattended run in an untrusted folder would have hung forever.** Claude
+  Code asks "is this a project you trust?" the first time it opens any folder.
+  A worktree is a brand-new folder, so §45 had just made this reachable.
+  `autopilot_start` now refuses rather than starting something that cannot
+  proceed (§34).
 
 ### Notes on the analytics design
 Bars use one hue because each row is already named beside it: the bar carries
@@ -229,14 +263,19 @@ reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
 ---
 
 ## Current milestone
-**M7 — Knowledge.** Activity, Analytics and human leverage are done; Project
-Brain (§36–§38), Notes (§40) and Global Search (§51) are what remain.
+**M7 — Knowledge.** Activity, Analytics, human leverage and the memory layer
+(Project Brain, history and Notes) are done. **Global Search (§51)** is what
+remains.
 
-**M6 is complete.** Files, the editor, Review, Git write operations and
-worktrees are all built and verified in the installed app.
+M6 is complete: Files, the editor, Review, Git write operations and worktrees.
 
 ## Next steps
-1. Project Brain (§36) and Notes (§40) — the memory layer
+1. Global Search (§51) — finishes M7. The one place the product cannot yet
+   answer "where did I see that?"
 2. Onboarding (§13) — the environment scan already provides its data
-3. Finish localising the remaining evidence summaries (§65)
-4. The rest of M2: split panes (§20), scrollback search, image paste (§22)
+3. Let an agent write to the Brain. The column and the provenance exist
+   (`source = 'agent'`, `session_id`), and nothing produces such a row yet:
+   what is missing is the moment worth writing one, most likely at the end of
+   a verified mission.
+4. Finish localising the remaining evidence summaries (§65)
+5. The rest of M2: split panes (§20), scrollback search, image paste (§22)
