@@ -262,6 +262,41 @@ impl SessionLogReader {
         Ok(events)
     }
 
+    /// Visit every **structured** frame in order, never holding more than one
+    /// payload in memory at a time.
+    ///
+    /// `read_from` returns a `Vec`, which is exactly right for a projection
+    /// reading a bounded tail and exactly wrong for a one-time pass over every
+    /// session ever recorded: a long agent run is overwhelmingly PTY output,
+    /// and materialising all of it to pick out the handful of JSON frames
+    /// would allocate hundreds of megabytes to yield a few kilobytes — the
+    /// same mistake `replay_pty` below documents avoiding, one caller along.
+    ///
+    /// PTY payloads are stepped over by their header alone and never read.
+    /// Returning `false` from `visit` stops the walk, so a caller that has been
+    /// asked to shut down does not have to finish a large log first.
+    pub fn for_each_structured(&self, mut visit: impl FnMut(SessionEvent) -> bool) -> Result<()> {
+        let mut file = self.stream.try_clone()?;
+        let mut offset = HEADER_LEN;
+
+        while offset < self.end {
+            let Some((header, next)) = read_frame_header_at(&mut file, offset, self.end)? else {
+                break;
+            };
+            if header.kind.is_structured() {
+                // Only now is the payload worth reading.
+                let Some((event, _)) = read_frame_at(&mut file, offset, self.end)? else {
+                    break;
+                };
+                if !visit(event) {
+                    return Ok(());
+                }
+            }
+            offset = next;
+        }
+        Ok(())
+    }
+
     /// Concatenate the terminal output for replay, keeping at most
     /// `max_bytes` from the end of the session.
     ///
@@ -455,6 +490,60 @@ mod tests {
         assert_eq!(events[2].seq, 2);
         assert_eq!(events[0].payload, b"hello ");
         assert_eq!(events[1].kind, EventKind::Message);
+    }
+
+    /// The walk a one-time pass over every session on the machine relies on:
+    /// it must see every structured frame, in order, with its own seq — and it
+    /// must not pay for the terminal bytes in between, which are the bulk of
+    /// any real log.
+    #[test]
+    fn walking_structured_frames_skips_the_terminal_bytes_entirely() {
+        let dir = temp();
+        let mut log = SessionLog::open(dir.path()).unwrap();
+        log.append(EventKind::PtyOutput, &vec![b'x'; 200_000]).unwrap();
+        log.append(EventKind::Message, br#"{"role":"user"}"#).unwrap();
+        log.append(EventKind::PtyInput, b"typed").unwrap();
+        log.append(EventKind::ToolCall, br#"{"name":"Bash"}"#).unwrap();
+        log.append(EventKind::PtyOutput, &vec![b'y'; 200_000]).unwrap();
+
+        let reader = SessionLogReader::open(dir.path()).unwrap();
+        let mut seen = Vec::new();
+        let mut bytes = 0usize;
+        reader
+            .for_each_structured(|event| {
+                bytes += event.payload.len();
+                seen.push((event.seq, event.kind));
+                true
+            })
+            .unwrap();
+
+        assert_eq!(seen, vec![(1, EventKind::Message), (3, EventKind::ToolCall)]);
+        assert!(
+            bytes < 1_000,
+            "400KB of terminal output was read into memory to find 40 bytes of JSON"
+        );
+    }
+
+    /// Returning `false` stops the walk where it stands, so a long log does not
+    /// have to be finished before a caller can give up.
+    #[test]
+    fn walking_structured_frames_stops_when_asked() {
+        let dir = temp();
+        let mut log = SessionLog::open(dir.path()).unwrap();
+        for _ in 0..5 {
+            log.append(EventKind::Message, br#"{"role":"user"}"#).unwrap();
+        }
+
+        let reader = SessionLogReader::open(dir.path()).unwrap();
+        let mut count = 0;
+        reader
+            .for_each_structured(|_| {
+                count += 1;
+                count < 2
+            })
+            .unwrap();
+
+        assert_eq!(count, 2);
     }
 
     #[test]

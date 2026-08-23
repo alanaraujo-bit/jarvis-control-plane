@@ -341,10 +341,15 @@ fn launch(
     let created_at = timestamp();
     state.db.with(|conn| {
         conn.execute(
+            // `events_backfilled_at` is stamped here, at birth, rather than
+            // left NULL: this session's transcript tailer indexes it live as
+            // it happens (§51), so `search::backfill` re-reading its log later
+            // would only duplicate rows it already has. NULL means "recorded
+            // before search existed", and that is never true of a new session.
             "INSERT INTO sessions
                  (id, project_id, mission_id, provider, cwd, state, log_dir, created_at,
-                  updated_at, provider_session_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)",
+                  updated_at, provider_session_id, events_backfilled_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?8)",
             params![
                 id,
                 project_id,

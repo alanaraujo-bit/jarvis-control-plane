@@ -13,6 +13,8 @@
 //! for the write side) mirrors what an agent said, thought, ran and got back,
 //! and `session_events_fts` is an FTS5 index over it.
 
+pub mod backfill;
+
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tauri::State;

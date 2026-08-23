@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 9;
+pub const SCHEMA_VERSION: u32 = 10;
 
 struct Migration {
     version: u32,
@@ -433,6 +433,29 @@ const MIGRATIONS: &[Migration] = &[Migration {
         text
     );
 "#,
+    },
+    Migration {
+        version: 10,
+        sql: r#"
+    -- ---- Global Search backfill (§51, D30) ---------------------------------
+    --
+    -- Migration 9 gave conversation content somewhere to live, but only from
+    -- that build onward: every session recorded before it has its structured
+    -- frames on disk in the session log and nothing in `session_events`, so it
+    -- is invisible to search in a way that looks identical to "no match".
+    --
+    -- This column is the backfill's bookmark, and it is *only* a column. The
+    -- scan itself deliberately does not run here: reading every session log on
+    -- the machine is unbounded work over on-disk data, and a migration is the
+    -- one place where failing halfway leaves a database claiming a version it
+    -- does not have. `search::backfill` does the walk afterwards, off the
+    -- startup path, one session per transaction, resumable from this bookmark.
+    --
+    -- NULL means "not yet backfilled". A session created from this build on is
+    -- stamped at insert time, because its live transcript tailer already
+    -- mirrors it and re-reading its log would only duplicate rows.
+    ALTER TABLE sessions ADD COLUMN events_backfilled_at INTEGER;
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -540,6 +563,7 @@ mod tests {
             (7, 0x119d_80b1_fc88_9edc),
             (8, 0x93ed_a072_1ac5_8f63),
             (9, 0x5843_2197_f138_27bd),
+            (10, 0xee5e_755e_d603_e551),
         ];
 
         for migration in MIGRATIONS {

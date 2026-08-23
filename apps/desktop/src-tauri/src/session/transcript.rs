@@ -523,7 +523,7 @@ fn mirror(
 /// text itself. A `usage`-only `Message` still reaches here with empty text
 /// and is dropped by the empty check at the call site, same as an empty
 /// `ToolResult` summary.
-fn search_event(item: &ConversationItem) -> Option<(&'static str, Option<String>, String)> {
+pub(crate) fn search_event(item: &ConversationItem) -> Option<(&'static str, Option<String>, String)> {
     match item {
         ConversationItem::Message { role, text, .. } => {
             let role = serde_json::to_string(role).unwrap_or_default();

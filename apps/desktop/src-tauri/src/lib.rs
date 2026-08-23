@@ -100,8 +100,19 @@ pub fn run() {
             let db = Database::open(data_dir.join("jarvis.db"))?;
             tracing::info!(path = ?data_dir, "local data directory ready");
 
+            let db = Arc::new(db);
+
+            // Everything said in a session recorded before Global Search
+            // existed is on disk and not in the index (D25). This walks those
+            // logs once, off the startup path — see `search::backfill` for why
+            // it is deliberately not a migration.
+            search::backfill::spawn(
+                Arc::clone(&db),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            );
+
             app.manage(AppState {
-                db: Arc::new(db),
+                db,
                 data_dir,
                 sessions: SessionManager::default(),
                 autopilots: autopilot::driver::Autopilots::default(),
