@@ -89,24 +89,12 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
     term.loadAddon(search);
     term.open(host);
 
-    // Ctrl+F opens the find bar instead of reaching the process.
-    //
-    // **This takes the key away from the shell**, exactly as item 13 in
-    // HANDOFF §5 records Ctrl+K being taken for the command palette: readline
-    // binds ^F to forward-char, and it no longer arrives. That is a real cost,
-    // stated rather than hidden — searching twenty thousand lines of agent
-    // output is worth more than a keystroke that moves the cursor one column
-    // and has an arrow key sitting next to it. Everything else, including
-    // Ctrl+C and Ctrl+D, still goes straight through.
+    // Escape closes the find bar even when the terminal itself holds the
+    // keyboard, so a search can be dismissed without clicking back into it.
+    // Ctrl+F is **not** handled here — see the capture-phase effect below for
+    // why a widget-level handler was not enough.
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
-      if (event.ctrlKey && !event.altKey && !event.metaKey && event.key === "f") {
-        event.preventDefault();
-        setFind((current) => current ?? { ...NO_SEARCH });
-        return false;
-      }
-      // Escape closes the bar even when the terminal itself has the keyboard,
-      // so a search can be dismissed without first clicking back into it.
       if (event.key === "Escape" && findOpen.current) {
         event.preventDefault();
         setFind(null);
@@ -211,6 +199,60 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
    */
   useEffect(() => {
     if (autoFocus) termRef.current?.focus();
+  }, [autoFocus]);
+
+  /**
+   * Ctrl+F opens the find bar — resolved on `window`, in the **capture**
+   * phase, before anything else can answer for it.
+   *
+   * The first version handled it inside xterm's own
+   * `attachCustomKeyEventHandler`, which works only while the terminal
+   * literally holds DOM focus. Come back from the command palette, or click
+   * the tab strip, and the key never reached xterm at all — at which point
+   * **WebView2 answered it with its own built-in find-in-page**: a browser
+   * widget floating over the app, styled like nothing else in the product,
+   * searching the DOM rather than the scrollback. Found by pressing Ctrl+F in
+   * the real app after using the palette, and seeing a Chromium find bar
+   * appear where ours should have been.
+   *
+   * This is item 13 in `docs/HANDOFF.md` a second time, with a different
+   * villain: a shortcut the product owns has to be taken before any widget —
+   * or any embedded browser — gets an opinion about it. `preventDefault` here
+   * is what stops WebView2, and nothing further down can undo it.
+   *
+   * Guarded on `autoFocus`, which is true exactly for the terminal the user is
+   * actually looking at, so several mounted terminals cannot all answer at
+   * once — and so Ctrl+F still reaches Monaco's own find when the editor is
+   * the visible surface instead.
+   *
+   * **This takes the key away from the shell**: readline binds ^F to
+   * forward-char and it no longer arrives. Stated rather than hidden — a
+   * keystroke that moves the cursor one column, with an arrow key beside it,
+   * is worth less than searching twenty thousand lines of agent output.
+   * Ctrl+C, Ctrl+D and everything else still go straight through.
+   */
+  useEffect(() => {
+    if (!autoFocus) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      // `toLowerCase`, because `event.key` is "F" whenever Shift or CapsLock
+      // is down. A plain `=== "f"` silently stops working for anyone with
+      // CapsLock on — `App.tsx` already spells its own shortcuts this way and
+      // this one did not. Shift is excluded outright: Ctrl+Shift+F is Global
+      // Search (§51) and the terminal must never answer for it.
+      if (
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "f"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        setFind((current) => current ?? { ...NO_SEARCH });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [autoFocus]);
 
   // Apply theme changes without recreating the terminal.

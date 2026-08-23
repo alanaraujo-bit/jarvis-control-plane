@@ -103,8 +103,14 @@
 }
 
 /* The sentence that says what "Inherit" inherits from. Aligned under the
-   control rather than under the label, because it explains the choice. */
+   control rather than under the label, because it explains the choice.
+
+   `margin-left`, not `padding-left`: `max-width` measures the border box, so
+   padding eats into the 62ch measure and the sentence wrapped after about
+   thirty characters — a two-line stub beside half a screen of empty space.
+   Found on screen, not in the stylesheet. */
 .autonomy__note {
+  margin-top: calc(var(--space-3) * -1);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   line-height: 1.5;
@@ -113,7 +119,7 @@
 
 @media (min-width: 621px) {
   .autonomy__note {
-    padding-left: calc(180px + var(--space-6));
+    margin-left: calc(180px + var(--space-6));
   }
 }
 

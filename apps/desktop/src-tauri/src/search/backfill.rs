@@ -86,15 +86,19 @@ pub fn spawn(db: Arc<Database>, stop: Arc<AtomicBool>) {
             if stop.load(Ordering::Relaxed) {
                 return;
             }
+            // Logged even when there is nothing to do, and that is the point.
+            // A background task that is silent in its steady state is a task
+            // nobody can tell apart from one that never started — which is
+            // exactly the failure items 23 and 33 in `docs/HANDOFF.md` record,
+            // and exactly what made this thread's own wiring hard to confirm
+            // the first time. One line per launch is a price worth paying to
+            // be able to answer "did it run?" from the log alone.
             match run(&db, &stop) {
-                Ok(report) if report.sessions == 0 => {
-                    tracing::debug!("search backfill: nothing left to index");
-                }
                 Ok(report) => tracing::info!(
                     sessions = report.sessions,
                     rows = report.rows,
                     ms = report.elapsed_ms,
-                    "search backfill complete"
+                    "search backfill finished"
                 ),
                 Err(e) => tracing::warn!(error = %e, "search backfill stopped early"),
             }

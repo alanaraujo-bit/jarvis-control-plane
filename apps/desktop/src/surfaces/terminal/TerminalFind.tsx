@@ -120,7 +120,13 @@ export function TerminalFind({
         aria-pressed={state.caseSensitive}
         title={t("terminal.find.matchCase")}
         aria-label={t("terminal.find.matchCase")}
-        onClick={() => onChange({ caseSensitive: !state.caseSensitive })}
+        onClick={() => {
+          onChange({ caseSensitive: !state.caseSensitive });
+          // Narrowing a search and continuing to type is one thought, not two.
+          // Leaving focus on the button means the next keystroke goes nowhere
+          // and the person has to click back into the field to carry on.
+          inputRef.current?.focus();
+        }}
       >
         <CaseSensitive size={14} aria-hidden />
       </button>

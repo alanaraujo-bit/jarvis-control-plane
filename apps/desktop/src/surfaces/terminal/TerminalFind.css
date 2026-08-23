@@ -12,6 +12,14 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  /* Fixed, not content-sized. The status text changes as you type — "6/6"
+     becomes "Nenhum resultado" becomes "1000+" — and a content-sized bar
+     grows leftward with it, sliding the input and the buttons out from under
+     the cursor mid-search. Wide enough for the longest status in either
+     language; the input takes whatever is left. Found on screen: the digits
+     were already tabular so the count could not jitter, and then the bar
+     jumped anyway the moment a search stopped matching. */
+  width: 392px;
   height: 30px;
   padding: 0 var(--space-2) 0 var(--space-4);
 
@@ -40,7 +48,9 @@
 }
 
 .tfind__input {
-  width: 168px;
+  /* Takes whatever the fixed-width bar has left after the status. */
+  flex: 1 1 auto;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--text-primary);
@@ -59,6 +69,9 @@
 .tfind__status {
   flex: 0 0 auto;
   min-width: 34px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: right;
   color: var(--text-tertiary);
   font-size: var(--text-xs);
