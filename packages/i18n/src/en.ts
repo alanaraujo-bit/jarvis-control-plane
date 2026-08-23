@@ -547,6 +547,20 @@ export const en = {
   "activity.kind.autopilot.awaitingApproval": "Autopilot is waiting on approval",
   "activity.kind.autopilot.missionBlocked": "Autopilot stopped, mission blocked",
 
+  // ---- Global Search (§51) --------------------------------------------------
+  "search.title": "Search everywhere",
+  "search.placeholder": "Search knowledge, notes, missions, activity and conversations…",
+  "search.empty.prompt": "Search across every project — not just this one",
+  "search.empty.noResults": "Nothing found",
+  "search.empty.tooShort": "Keep typing — at least two characters",
+  "search.group.conversation": "Conversations",
+  "search.group.knowledge": "Knowledge",
+  "search.group.note": "Notes",
+  "search.group.mission": "Missions",
+  "search.group.activity": "Activity",
+  "search.everyProject": "Every project",
+  "search.historicalTab": "Opened from Search — read-only",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

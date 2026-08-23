@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Languages, Moon, RefreshCw, Sun, SunMoon } from "lucide-react";
+import { Languages, Moon, RefreshCw, Search, Sun, SunMoon } from "lucide-react";
 import { LOCALES, LOCALE_NAMES } from "@jarvis/i18n";
 import { Rail, RAIL_ITEMS, type SurfaceId } from "./shell/Rail";
 import { TitleBar } from "./shell/TitleBar";
 import { StatusBar } from "./shell/StatusBar";
 import { CommandPalette, type Command } from "./shell/CommandPalette";
+import { GlobalSearch } from "./shell/GlobalSearch";
+import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
 import { Analytics } from "./surfaces/analytics/Analytics";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
 import { Missions } from "./surfaces/missions/Missions";
 import { Projects } from "./surfaces/projects/Projects";
-import { ProjectWorkspace } from "./surfaces/project/ProjectWorkspace";
+import { ProjectWorkspace, type Area } from "./surfaces/project/ProjectWorkspace";
 import type { Project } from "./surfaces/projects/useProjects";
+import type { SessionKind } from "./app/sessions";
 import { Settings } from "./surfaces/settings/Settings";
 import { useEnvironmentStore } from "./surfaces/environment/useEnvironment";
 import { useProjects } from "./surfaces/projects/useProjects";
@@ -46,25 +49,79 @@ export function App() {
 
   const [surface, setSurface] = useState<SurfaceId>("mission-control");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   // An open project takes over the surface area. The rail stays put, so the
   // user never loses their bearings when they go deeper (§85).
   const [openProject, setOpenProject] = useState<Project | null>(null);
   // Set when arriving at Missions from somewhere that already knows which one.
   const [focusMission, setFocusMission] = useState<string | undefined>();
+  // Where inside a project Global Search (§51) wants to land — which area, and
+  // which past session's conversation, if any.
+  const [focusArea, setFocusArea] = useState<Area | undefined>();
+  const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
+  const [focusSessionProvider, setFocusSessionProvider] = useState<SessionKind | undefined>();
+  const [focusSessionTitle, setFocusSessionTitle] = useState<string | undefined>();
 
   /**
    * Open a project workspace by id.
    *
    * Missions know their project as an id; the workspace needs the project
-   * itself, so this is the join between the two (§86).
+   * itself, so this is the join between the two (§86). This is the *only*
+   * place `openProject` is set to a real project, so it is also the one place
+   * that has to decide the focus fields — every caller that does not pass one
+   * clears it, or a stale search result would leak its focus into the next,
+   * unrelated project somebody opens by hand.
    */
   const openProjectById = useCallback(
-    (projectId: string) => {
+    (
+      projectId: string,
+      focus?: {
+        area?: Area;
+        sessionId?: string;
+        sessionProvider?: SessionKind;
+        sessionTitle?: string;
+      },
+    ) => {
       const project = projects.find((p) => p.id === projectId);
-      if (project) setOpenProject(project);
+      if (project) {
+        setOpenProject(project);
+        setFocusArea(focus?.area);
+        setFocusSessionId(focus?.sessionId);
+        setFocusSessionProvider(focus?.sessionProvider);
+        setFocusSessionTitle(focus?.sessionTitle);
+      }
       return project;
     },
     [projects],
+  );
+
+  const handleSearchResult = useCallback(
+    (result: SearchResult) => {
+      if (result.kind === "mission" && result.missionId) {
+        setOpenProject(null);
+        setFocusMission(result.missionId);
+        setSurface("missions");
+        return;
+      }
+      if (result.kind === "activity") {
+        setOpenProject(null);
+        setFocusMission(undefined);
+        setSurface("activity");
+        return;
+      }
+      if (!result.projectId) return;
+      if (result.kind === "conversation" && result.sessionId) {
+        openProjectById(result.projectId, {
+          area: "sessions",
+          sessionId: result.sessionId,
+          sessionProvider: (result.sessionProvider as SessionKind | null) ?? "shell",
+          sessionTitle: result.heading || undefined,
+        });
+      } else {
+        openProjectById(result.projectId, { area: "brain" });
+      }
+    },
+    [openProjectById],
   );
 
   const goTo = useCallback((id: SurfaceId) => {
@@ -110,6 +167,17 @@ export function App() {
         event.preventDefault();
         event.stopPropagation();
         togglePalette();
+      } else if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "f"
+      ) {
+        // Global Search (§51). Same capture-phase reasoning as Ctrl+K above —
+        // Monaco and the terminal both have their own ideas about Ctrl+Shift+F
+        // otherwise.
+        event.preventDefault();
+        event.stopPropagation();
+        setSearchOpen((open) => !open);
       }
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
@@ -168,6 +236,15 @@ export function App() {
 
     const actions: Command[] = [
       {
+        id: "search.open",
+        title: t("search.title"),
+        group: "Go to",
+        icon: Search,
+        keywords: "search find buscar procurar everywhere tudo",
+        hint: "Ctrl Shift F",
+        run: () => setSearchOpen(true),
+      },
+      {
         id: "env.rescan",
         title: t("env.rescan"),
         group: t("env.title"),
@@ -196,11 +273,15 @@ export function App() {
               project={openProject}
               onBack={() => setOpenProject(null)}
               onOpenProject={openProjectById}
+              focusArea={focusArea}
+              focusSessionId={focusSessionId}
+              focusSessionProvider={focusSessionProvider}
+              focusSessionTitle={focusSessionTitle}
             />
           ) : surface === "settings" ? (
             <Settings />
           ) : surface === "projects" ? (
-            <Projects onOpen={setOpenProject} />
+            <Projects onOpen={(project) => openProjectById(project.id)} />
           ) : surface === "activity" ? (
             <Activity />
           ) : surface === "analytics" ? (
@@ -236,6 +317,7 @@ export function App() {
       <StatusBar />
 
       <CommandPalette open={paletteOpen} commands={commands} onClose={() => setPaletteOpen(false)} />
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchResult} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { FilesView } from "../files/FilesView";
 import { ReviewView } from "../review/ReviewView";
 import { WorktreesView } from "../worktrees/WorktreesView";
 import { BrainView } from "../brain/BrainView";
+import { HistoricalTabBadge } from "../../shell/GlobalSearch";
 import { useT } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
@@ -20,6 +21,14 @@ interface ProjectWorkspaceProps {
   onBack: () => void;
   /** Opening a worktree is opening a project — see §45. */
   onOpenProject: (projectId: string) => void;
+  /** Where Global Search (§51) wants this project opened. */
+  focusArea?: Area;
+  /** A past session Global Search found a conversation match in. Opened
+   * read-only: this tab was never started here, and never should be closable
+   * back into a live agent (§51). */
+  focusSessionId?: string;
+  focusSessionProvider?: SessionKind;
+  focusSessionTitle?: string;
 }
 
 /**
@@ -30,8 +39,8 @@ interface ProjectWorkspaceProps {
  * The list is the same kind of thing `App.tsx` keeps for the rail: an area that
  * is not built is absent from it, never a "coming soon" screen (§81).
  */
-const AREAS = ["sessions", "files", "review", "worktrees", "brain"] as const;
-type Area = (typeof AREAS)[number];
+export const AREAS = ["sessions", "files", "review", "worktrees", "brain"] as const;
+export type Area = (typeof AREAS)[number];
 
 const AREA_LABEL: Record<Area, MessageKey> = {
   sessions: "project.sessions",
@@ -53,22 +62,45 @@ const AGENT_TOOL_ID: Record<Exclude<SessionKind, "shell">, string> = {
  * Everything here is scoped to one project. Only surfaces that exist are shown;
  * the rest arrive with the milestones that build them (§81).
  */
-export function ProjectWorkspace({ project, onBack, onOpenProject }: ProjectWorkspaceProps) {
+export function ProjectWorkspace({
+  project,
+  onBack,
+  onOpenProject,
+  focusArea,
+  focusSessionId,
+  focusSessionProvider,
+  focusSessionTitle,
+}: ProjectWorkspaceProps) {
   const t = useT();
   const { report } = useEnvironment();
-  const { tabs, activeTab, openTerminal, closeTerminal, setActive, adopt, error } = useTerminals();
+  const { tabs, activeTab, openTerminal, openHistorical, closeTerminal, setActive, adopt, error } =
+    useTerminals();
 
   const projectTabs = tabs[project.id] ?? [];
   const active = activeTab[project.id];
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLButtonElement | null>(null);
   const [view, setView] = useState<"terminal" | "conversation">("terminal");
-  const [area, setArea] = useState<Area>("sessions");
+  const [area, setArea] = useState<Area>(focusArea ?? "sessions");
   // Files and Review are mounted the first time they are opened and stay
   // mounted after that, so returning to one keeps its open files, its scroll
   // position and its selected diff. Sessions is always mounted: unmounting it
   // would tear down every terminal in the project.
-  const [visited, setVisited] = useState<Set<Area>>(() => new Set<Area>(["sessions"]));
+  const [visited, setVisited] = useState<Set<Area>>(
+    () => new Set<Area>(focusArea ? ["sessions", focusArea] : ["sessions"]),
+  );
+
+  // Global Search (§51) landed here pointing at a specific past session. This
+  // project is a fresh mount whenever it opens (`App.tsx` keys on the project
+  // id), so a mount-time effect is enough — no cleanup needed for a value that
+  // cannot change under this component without it being torn down first.
+  useEffect(() => {
+    if (focusSessionId && focusSessionProvider) {
+      openHistorical(project.id, focusSessionId, focusSessionProvider, focusSessionTitle);
+      setView("conversation");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, focusSessionId, focusSessionProvider, focusSessionTitle]);
 
   const goToArea = (next: Area) => {
     setVisited((seen) => (seen.has(next) ? seen : new Set(seen).add(next)));
@@ -148,6 +180,7 @@ export function ProjectWorkspace({ project, onBack, onOpenProject }: ProjectWork
             >
               <span className="workspace__tab-dot" data-kind={tab.kind} aria-hidden="true" />
               {tab.title}
+              {tab.historical && <HistoricalTabBadge title={t("search.historicalTab")} />}
             </button>
             <button
               type="button"
@@ -211,8 +244,11 @@ export function ProjectWorkspace({ project, onBack, onOpenProject }: ProjectWork
 
         {/* Terminal and Conversation are the same session, not two sessions
             (§23). This switches how it is rendered; nothing is restarted, the
-            process keeps running, and the terminal keeps its scrollback. */}
-        {activeTab_ && (
+            process keeps running, and the terminal keeps its scrollback.
+            A historical tab has no terminal to toggle to — there is nothing
+            running to attach a PTY view to — so it skips the pill entirely
+            and always shows as a conversation below. */}
+        {activeTab_ && !activeTab_.historical && (
           <div className="workspace__view-toggle" role="radiogroup" aria-label={t("view.terminal")}>
             {(["terminal", "conversation"] as const).map((mode) => (
               <button
@@ -251,23 +287,38 @@ export function ProjectWorkspace({ project, onBack, onOpenProject }: ProjectWork
               className="workspace__pane"
               data-visible={tab.sessionId === active || undefined}
             >
-              {/* The terminal stays mounted even when the conversation is
-                  showing: unmounting it would discard its scrollback, and
-                  switching views must never cost the user their history. */}
-              <div className="workspace__projection" data-visible={view === "terminal" || undefined}>
-                <TerminalView
-                  sessionId={tab.sessionId}
-                  // Also gated on the area: a terminal that is off screen
-                  // behind Files or Review must not hold the keyboard.
-                  autoFocus={
-                    area === "sessions" && tab.sessionId === active && view === "terminal"
-                  }
-                />
-              </div>
-              {view === "conversation" && (
+              {tab.historical ? (
+                // Opened by Global Search (§51) against a session this window
+                // never started. There is no PTY to attach `TerminalView` to
+                // — only the log `session_conversation` already reads — so
+                // this is the one place a tab is conversation-only.
                 <div className="workspace__projection" data-visible>
-                  <ConversationView sessionId={tab.sessionId} live />
+                  <ConversationView sessionId={tab.sessionId} live={false} />
                 </div>
+              ) : (
+                <>
+                  {/* The terminal stays mounted even when the conversation is
+                      showing: unmounting it would discard its scrollback, and
+                      switching views must never cost the user their history. */}
+                  <div
+                    className="workspace__projection"
+                    data-visible={view === "terminal" || undefined}
+                  >
+                    <TerminalView
+                      sessionId={tab.sessionId}
+                      // Also gated on the area: a terminal that is off screen
+                      // behind Files or Review must not hold the keyboard.
+                      autoFocus={
+                        area === "sessions" && tab.sessionId === active && view === "terminal"
+                      }
+                    />
+                  </div>
+                  {view === "conversation" && (
+                    <div className="workspace__projection" data-visible>
+                      <ConversationView sessionId={tab.sessionId} live />
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))

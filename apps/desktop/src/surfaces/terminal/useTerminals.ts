@@ -10,6 +10,10 @@ export interface TerminalTab {
   sessionId: string;
   kind: SessionKind;
   title: string;
+  /** Opened by Global Search (§51) against a session this window never
+   * started: no PTY to attach, closing it drives no backend call, and the
+   * surface renders it as conversation-only, read-only. */
+  historical?: boolean;
 }
 
 interface TerminalsState {
@@ -28,6 +32,15 @@ interface TerminalsState {
   closeTerminal: (projectId: string, sessionId: string) => Promise<void>;
   setActive: (projectId: string, sessionId: string) => void;
   adopt: (projectId: string, sessions: SessionInfo[]) => void;
+  /** Open a past session read-only, found through Global Search (§51). Never
+   * calls `startSession` — the session already ran, sometimes long ago — and
+   * re-activates the existing tab rather than duplicating it. */
+  openHistorical: (
+    projectId: string,
+    sessionId: string,
+    kind: SessionKind,
+    title?: string,
+  ) => void;
 }
 
 const TITLES: Record<SessionKind, string> = {
@@ -83,6 +96,7 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
   },
 
   closeTerminal: async (projectId, sessionId) => {
+    const tab = (get().tabs[projectId] ?? []).find((t) => t.sessionId === sessionId);
     // Remove the tab first: the view must not keep rendering a dying session.
     set((state) => {
       const remaining = (state.tabs[projectId] ?? []).filter((t) => t.sessionId !== sessionId);
@@ -95,6 +109,9 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
         },
       };
     });
+    // A historical tab was never started here — nothing was ever attached,
+    // and this session may have ended long before this window opened it.
+    if (tab?.historical) return;
     await closeSession(sessionId).catch(() => {
       // Already gone; nothing left to do.
     });
@@ -118,6 +135,24 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
       return {
         tabs: { ...state.tabs, [projectId]: tabs },
         activeTab: { ...state.activeTab, [projectId]: tabs[0].sessionId },
+      };
+    }),
+
+  openHistorical: (projectId, sessionId, kind, title) =>
+    set((state) => {
+      const existing = state.tabs[projectId] ?? [];
+      if (existing.some((t) => t.sessionId === sessionId)) {
+        return { activeTab: { ...state.activeTab, [projectId]: sessionId } };
+      }
+      const tab: TerminalTab = {
+        sessionId,
+        kind,
+        title: title ?? nextTitle(existing, kind),
+        historical: true,
+      };
+      return {
+        tabs: { ...state.tabs, [projectId]: [...existing, tab] },
+        activeTab: { ...state.activeTab, [projectId]: sessionId },
       };
     }),
 }));
