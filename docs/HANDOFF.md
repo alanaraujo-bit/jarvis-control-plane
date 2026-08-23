@@ -112,6 +112,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **An agent writes to its own Brain (§36–§38)** | once, right after an Unattended mission completes, asked one narrow question — never a manually completed mission (D27) |
 | **Onboarding (§13)** | shown once per install, reuses the environment scan and `openFolder` as-is, gates the window reveal so there is no flash of the wrong screen |
 | **Voice dictation (§54)** | fully local speech-to-text, primed with the project's own vocabulary, typed into the prompt — never auto-submitted (D29) |
+| **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -586,6 +587,37 @@ Every one of these is real and already cost time.
     `session/typing.rs`, `#[ignore]`d because `claude` is not guaranteed to
     be on every machine that runs the test suite.
 
+37. **Deleting `jarvis.db` strands every session log on disk, permanently.**
+    The onboarding reset in section 6 (`Remove-Item ...jarvis.db*`) is
+    documented as the way to see §13 again, and it is — but it also takes
+    every row in `sessions` with it while leaving the directories under
+    `%APPDATA%\dev.jarvis.desktop\sessions` exactly where they are. There are
+    **42 session directories on this machine and 10 session rows**; the ten
+    directories holding real Claude Code conversations, 82 items between them,
+    have no row pointing at them any more and nothing will ever read them
+    again. This is a **development-environment consequence, not a product
+    bug** — the product itself never deletes a project or a session (the only
+    `DELETE FROM projects` in the tree is in two tests), and archiving keeps
+    the row. It was found by running the Global Search backfill against a copy
+    of the real database and getting `0 rows` from 10 sessions, which looked
+    exactly like a broken backfill and was not. Two things follow: reach for
+    that reset less casually than the section-6 snippet suggests, and do not
+    trust "the live database has no conversations in it" as evidence about
+    anything except the last reset.
+
+38. **Session logs are never pruned, by anything.** Nothing in this product
+    removes a `sessions/<id>/` directory — not archiving a project, not
+    closing a session, not uninstalling (M10 preserves user data on purpose).
+    2.5 MB across 42 sessions here is nothing, and the growth is unbounded and
+    proportional to how much the product is actually used: a heavy month of
+    agent work is terminal output measured in hundreds of megabytes. No
+    retention policy has been designed and none should be invented casually —
+    the log **is** the record (§23), so pruning it is throwing away history
+    Conversation View, Analytics and Global Search all read. Flagged here so
+    it is a decision someone makes rather than a surprise someone discovers.
+
+---
+
 ## 6. Commands
 
 ```bash
@@ -729,15 +761,15 @@ and a substantial feature request from that same session:
    with a hover preview of the pasted image — reinforced explicitly, make sure
    it lands with the rest rather than as a bare paste). The terminal is the
    hero surface and these are what it still lacks.
-3. **Global Search does not backfill.** It has found everything said in a
-   session from this build onward, forward-only (D25) — a session recorded
-   before today has nothing in `session_events` and simply will not surface in
-   the Conversas group, which looks identical to "no match" rather than
-   "too old to search". A one-time backfill walking `SessionLogReader::read_from(0)`
-   over every session directory would close the gap, but was deliberately left
-   out of this pass: it is a migration-time scan over unbounded on-disk data,
-   on a machine with dozens of transcripts, and earlier bugs here (rule 9) came
-   from exactly that kind of operation running inside a schema migration.
+3. ~~**Global Search does not backfill.**~~ **Done** — see D30 and section 4.
+   It is a background task with a bookmark, deliberately *not* a migration:
+   migration 10 adds `sessions.events_backfilled_at` and nothing else, and
+   `search::backfill` does the walk five seconds after launch, chunked so the
+   single mutex-guarded connection is never held long, delete-then-insert per
+   session with the bookmark stamped last so a crash halfway through is redone
+   rather than doubled. `SessionLogReader::for_each_structured` is what makes
+   it affordable — `read_from(0)` would have materialised every PTY frame in
+   every log to find the JSON between them.
 4. **A manually completed mission is never asked what it learned (D27).**
    The reflection only fires at the end of an Unattended run, because that is
    the one place a driven run holds the seat with nobody else in it (D15).

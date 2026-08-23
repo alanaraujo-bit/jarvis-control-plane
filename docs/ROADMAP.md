@@ -233,6 +233,9 @@ back.
       conversation content, across every project, from Ctrl+Shift+F
 - [x] An agent writes to its own Brain (§36–§38, D27) — once, at the end of
       an Unattended run, asked one narrow question it can decline to answer
+- [x] Global Search finds sessions recorded **before** it existed (D30) — a
+      one-time backfill, a background task with a bookmark rather than a
+      migration, idempotent across a crash halfway through
 
 ### The memory layer, as built
 - **Knowledge is briefed; a note is not** (D21). One question decides which a
@@ -411,8 +414,11 @@ pass confirming the new sound cues and both fixes together by ear.
    See HANDOFF §7 item 2.
 3. The rest of M2: split panes (§20), scrollback search, image paste (§22,
    with a hover preview of the pasted image)
-4. Global Search does not backfill (D25) — it finds everything said from this
-   build onward, forward-only. A one-time backfill over every session log was
-   deliberately left out of this pass; see HANDOFF §7.
+4. ~~Global Search does not backfill~~ — **done** (D30). `search::backfill`
+   walks every session log once, off the startup path, one session per
+   transaction, resumable and idempotent. Verified against this machine's own
+   recorded sessions: 55 rows out of 10 real logs, and a Portuguese word from
+   a real Claude Code run came back as a Conversation hit attributed to the
+   session it was said in.
 5. A manually completed mission is never asked what it learned (D27) — the
    reflection only fires at the end of an Unattended run, deliberately.
