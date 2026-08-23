@@ -65,3 +65,22 @@ test("resolves locales from browser language lists", () => {
   assert.equal(resolveLocale(["ja", "de"]), "en");
   assert.equal(resolveLocale([]), "en");
 });
+
+test("a derived fact agrees with its number in both languages", () => {
+  // Found on screen, in pt-BR, reading "1 sessões". The Brain sends `count`
+  // alongside the positional arguments precisely so the catalogue can pick the
+  // singular; without it the sentence is written for the plural and used for
+  // everything, which is the tell that a translation was done on top of an
+  // English sentence rather than with it.
+  const one = { "0": "Claude Code", "1": "1", count: 1 };
+  const many = { "0": "Claude Code", "1": "4", count: 4 };
+
+  assert.match(translate("pt-BR", "brain.fact.sessions", one), /1 sessão aqui/);
+  assert.match(translate("pt-BR", "brain.fact.sessions", many), /4 sessões aqui/);
+  assert.match(translate("en", "brain.fact.sessions", one), /1 session here/);
+  assert.match(translate("en", "brain.fact.sessions", many), /4 sessions here/);
+
+  // And the mission tallies, where pt-BR also has to change the adjective.
+  assert.match(translate("pt-BR", "brain.fact.completed", { "0": "1", count: 1 }), /1 missão concluída/);
+  assert.match(translate("pt-BR", "brain.fact.completed", { "0": "3", count: 3 }), /3 missões concluídas/);
+});

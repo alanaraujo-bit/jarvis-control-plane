@@ -5,6 +5,7 @@ import { Popover } from "../../design/Popover";
 import { FilesView } from "../files/FilesView";
 import { ReviewView } from "../review/ReviewView";
 import { WorktreesView } from "../worktrees/WorktreesView";
+import { BrainView } from "../brain/BrainView";
 import { useT } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
@@ -29,7 +30,7 @@ interface ProjectWorkspaceProps {
  * The list is the same kind of thing `App.tsx` keeps for the rail: an area that
  * is not built is absent from it, never a "coming soon" screen (§81).
  */
-const AREAS = ["sessions", "files", "review", "worktrees"] as const;
+const AREAS = ["sessions", "files", "review", "worktrees", "brain"] as const;
 type Area = (typeof AREAS)[number];
 
 const AREA_LABEL: Record<Area, MessageKey> = {
@@ -37,6 +38,7 @@ const AREA_LABEL: Record<Area, MessageKey> = {
   files: "project.files",
   review: "project.review",
   worktrees: "project.worktrees",
+  brain: "project.brain",
 };
 
 /** Which agents can actually be launched, from the real environment scan (§14). */
@@ -281,13 +283,23 @@ export function ProjectWorkspace({ project, onBack, onOpenProject }: ProjectWork
 
       {visited.has("review") && (
         <div className="workspace__area-body" data-visible={area === "review" || undefined}>
-          <ReviewView projectId={project.id} />
+          <ReviewView projectId={project.id} active={area === "review"} />
         </div>
       )}
 
       {visited.has("worktrees") && (
         <div className="workspace__area-body" data-visible={area === "worktrees" || undefined}>
-          <WorktreesView projectId={project.id} onOpenProject={onOpenProject} />
+          <WorktreesView
+            projectId={project.id}
+            active={area === "worktrees"}
+            onOpenProject={onOpenProject}
+          />
+        </div>
+      )}
+
+      {visited.has("brain") && (
+        <div className="workspace__area-body" data-visible={area === "brain" || undefined}>
+          <BrainView projectId={project.id} active={area === "brain"} />
         </div>
       )}
     </div>

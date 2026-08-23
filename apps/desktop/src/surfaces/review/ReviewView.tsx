@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { GitBranch, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Undo2 } from "lucide-react";
 import { useT } from "../../app/i18n";
+import { useVisitRefresh } from "../../app/useVisitRefresh";
 import type { MessageKey } from "@jarvis/i18n";
 import type { Choice } from "../guardrails/useGuardrails";
 import { DiffView } from "./DiffView";
@@ -9,6 +10,8 @@ import "./ReviewView.css";
 
 interface ReviewViewProps {
   projectId: string;
+  /** True while this area is the one on screen. See `useVisitRefresh`. */
+  active: boolean;
 }
 
 /**
@@ -48,7 +51,7 @@ const KIND_FULL: Record<ChangeKind, MessageKey> = {
  * ordinary; **discarding goes through the guardrail** (D11), because what it
  * destroys was never committed and nothing anywhere can bring it back.
  */
-export function ReviewView({ projectId }: ReviewViewProps) {
+export function ReviewView({ projectId, active }: ReviewViewProps) {
   const t = useT();
   const report = useReview((state) => state.report[projectId]);
   const loading = useReview((state) => state.loading[projectId]);
@@ -66,9 +69,10 @@ export function ReviewView({ projectId }: ReviewViewProps) {
 
   // Re-read on every visit. An agent may have been working the whole time the
   // user was on another surface, and a stale diff is worse than a slow one.
-  useEffect(() => {
-    void refresh(projectId);
-  }, [projectId, refresh]);
+  //
+  // This area stays mounted and is hidden with CSS, so there is no second mount
+  // to hang that off — becoming visible is the signal (`useVisitRefresh`).
+  useVisitRefresh(active, () => void refresh(projectId));
 
   if (report && !report.isRepo) {
     return (
@@ -80,9 +84,13 @@ export function ReviewView({ projectId }: ReviewViewProps) {
   }
 
   const files = report?.files ?? [];
-  const active = files.find((file) => file.path === selected);
-  const activeDiff = active ? diffs[reviewDiffKey(projectId, active.path)] : undefined;
-  const activeLoading = active ? diffLoading[reviewDiffKey(projectId, active.path)] : false;
+  // Named for what it is, because `active` is now the prop that says whether
+  // this whole area is on screen.
+  const activeFile = files.find((file) => file.path === selected);
+  const activeDiff = activeFile ? diffs[reviewDiffKey(projectId, activeFile.path)] : undefined;
+  const activeLoading = activeFile
+    ? diffLoading[reviewDiffKey(projectId, activeFile.path)]
+    : false;
 
   const totals = files.reduce(
     (sum, file) => ({
@@ -194,14 +202,14 @@ export function ReviewView({ projectId }: ReviewViewProps) {
       </aside>
 
       <section className="review__diff">
-        {active ? (
+        {activeFile ? (
           <>
             <header className="review__diff-header">
               <span className="review__diff-path selectable">
-                {active.fromPath && (
-                  <span className="review__renamed-from">{active.fromPath} → </span>
+                {activeFile.fromPath && (
+                  <span className="review__renamed-from">{activeFile.fromPath} → </span>
                 )}
-                {active.path}
+                {activeFile.path}
               </span>
             </header>
             {/* The confirmation sits above the diff rather than in a modal, so

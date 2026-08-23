@@ -121,6 +121,75 @@ export const en = {
   "project.files": "Files",
   "project.review": "Review",
   "project.worktrees": "Worktrees",
+  "project.brain": "Brain",
+
+  // ---- Project Brain (§36–§39) and Notes (§40) -----------------------------
+  "brain.title": "Brain",
+  "brain.subtitle":
+    "What is known about this project. Knowledge is handed to every agent that starts here; notes are yours.",
+  "brain.tab.knowledge": "Knowledge",
+  "brain.tab.notes": "Notes",
+  "brain.tab.timeline": "History",
+
+  "brain.kind.what": "What this project is",
+  "brain.kind.convention": "How work is done here",
+  "brain.kind.gotcha": "Things that will bite you",
+  "brain.kind.glossary": "What words mean here",
+
+  "brain.source.human": "You wrote this",
+  "brain.source.agent": "An agent recorded this",
+  "brain.add": "Add",
+  "brain.addPlaceholder": "Something that stays true about this project",
+  "brain.placeholder.what": "e.g. Next.js 15 with Prisma, deployed on Vercel",
+  "brain.placeholder.convention": "e.g. Tests live beside the code they cover",
+  "brain.placeholder.gotcha": "e.g. The seed depends on insertion order",
+  "brain.placeholder.glossary": "e.g. \"Tenant\" here means a billing account, not a user",
+  "brain.save": "Save",
+  "brain.cancel": "Cancel",
+  "brain.edit": "Edit",
+  "brain.archive": "Retire",
+  "brain.archiveTitle": "Retire this — it stops being briefed, and the record stays",
+  "brain.empty.title": "Nothing recorded yet",
+  "brain.empty.body":
+    "Write down what someone joining this project would need to know. Every agent that starts here is told the same thing.",
+
+  "brain.notes.placeholder": "A reminder, a link, a thing to come back to",
+  "brain.notes.add": "Add note",
+  "brain.notes.pin": "Pin",
+  "brain.notes.unpin": "Unpin",
+  "brain.notes.delete": "Delete",
+  "brain.notes.promote": "Move to knowledge",
+  "brain.notes.promoteAs": "Move to knowledge as…",
+  "brain.notes.empty.title": "No notes",
+  "brain.notes.empty.body":
+    "Notes are your working memory and are never sent to an agent. Anything that turns out to stay true can be moved into knowledge.",
+
+  "brain.facts.title": "What the record shows",
+  "brain.facts.derived": "Worked out from this project's own history, not written by anyone.",
+  "brain.facts.empty": "Nothing has happened in this project yet.",
+  "brain.fact.sessions": "{0} has run {1} sessions here",
+  "brain.fact.sessions_one": "{0} has run {1} session here",
+  "brain.fact.completed": "{0} missions completed",
+  "brain.fact.completed_one": "{0} mission completed",
+  "brain.fact.blocked": "{0} missions blocked or failed",
+  "brain.fact.blocked_one": "{0} mission blocked or failed",
+  "brain.fact.revoked": "{0} completions were later taken back",
+  "brain.fact.revoked_one": "{0} completion was later taken back",
+  "brain.fact.hotFile": "{0} changed {1} times",
+  "brain.fact.hotFile_one": "{0} changed once",
+  "brain.fact.refused": "{0} was refused {1} times",
+  "brain.fact.refused_one": "{0} was refused once",
+
+  "brain.timeline.empty": "Nothing has happened in this project yet.",
+
+  "brain.brief.title": "What an agent is told",
+  "brain.brief.show": "Preview the briefing",
+  "brain.brief.hide": "Hide",
+  "brain.brief.size": "{count} characters, sent once per session",
+  "brain.brief.none":
+    "Nothing is recorded yet, so agents start here with no briefing at all.",
+  "brain.brief.notSupported":
+    "{provider} has no way to take a briefing before it starts, so a session with it begins unbriefed.",
 
   // ---- Worktrees (§45) -----------------------------------------------------
   "worktree.title": "Worktrees",

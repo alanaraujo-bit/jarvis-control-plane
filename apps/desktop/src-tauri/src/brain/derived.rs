@@ -42,14 +42,23 @@ pub struct Fact {
     /// The single most important thing about a derived fact: that it is
     /// derived. Carried so a surface cannot render it as something stated.
     pub derived: bool,
+    /// The number the sentence has to agree with.
+    ///
+    /// Carried separately from `args` because it is not the interface's job to
+    /// guess which argument decides the plural, and getting that wrong renders
+    /// **"1 sessões"** — which is exactly what it did until somebody looked at
+    /// the screen. pt-BR and English happen to agree on the rule here, and both
+    /// disagree with a sentence that ignores it.
+    pub count: i64,
 }
 
 impl Fact {
-    fn new(code: &str, args: Vec<String>) -> Self {
+    fn new(code: &str, args: Vec<String>, count: i64) -> Self {
         Self {
             code: code.into(),
             args,
             derived: true,
+            count,
         }
     }
 }
@@ -100,6 +109,7 @@ pub fn facts(db: &Database, project_id: &str) -> Result<Vec<Fact>> {
             out.push(Fact::new(
                 "brain.fact.sessions",
                 vec![provider_name(&provider), count.to_string()],
+                count,
             ));
         }
 
@@ -120,10 +130,14 @@ pub fn facts(db: &Database, project_id: &str) -> Result<Vec<Fact>> {
             |r| r.get(0),
         )?;
         if completed > 0 {
-            out.push(Fact::new("brain.fact.completed", vec![completed.to_string()]));
+            out.push(Fact::new(
+                "brain.fact.completed",
+                vec![completed.to_string()],
+                completed,
+            ));
         }
         if blocked > 0 {
-            out.push(Fact::new("brain.fact.blocked", vec![blocked.to_string()]));
+            out.push(Fact::new("brain.fact.blocked", vec![blocked.to_string()], blocked));
         }
 
         // Completion being taken back is the most informative thing this
@@ -136,7 +150,7 @@ pub fn facts(db: &Database, project_id: &str) -> Result<Vec<Fact>> {
             |r| r.get(0),
         )?;
         if revoked > 0 {
-            out.push(Fact::new("brain.fact.revoked", vec![revoked.to_string()]));
+            out.push(Fact::new("brain.fact.revoked", vec![revoked.to_string()], revoked));
         }
 
         // ---- What keeps being edited ---------------------------------------
@@ -161,6 +175,7 @@ pub fn facts(db: &Database, project_id: &str) -> Result<Vec<Fact>> {
             out.push(Fact::new(
                 "brain.fact.hotFile",
                 vec![tidy_path(&path), touches.to_string()],
+                touches,
             ));
         }
 
@@ -182,6 +197,7 @@ pub fn facts(db: &Database, project_id: &str) -> Result<Vec<Fact>> {
             out.push(Fact::new(
                 "brain.fact.refused",
                 vec![operation, count.to_string()],
+                count,
             ));
         }
 
@@ -245,7 +261,7 @@ mod tests {
     fn a_fact_says_that_it_is_derived() {
         // The one property a derived fact must never lose on the way to a
         // surface: that it was computed rather than stated (§28).
-        let fact = Fact::new("brain.fact.completed", vec!["3".into()]);
+        let fact = Fact::new("brain.fact.completed", vec!["3".into()], 3);
         assert!(fact.derived);
         let json = serde_json::to_string(&fact).unwrap();
         assert!(
@@ -258,7 +274,7 @@ mod tests {
     fn a_fact_carries_a_code_and_arguments_rather_than_a_sentence() {
         // Prose assembled in Rust cannot be translated (§65), and this panel is
         // read in two languages.
-        let fact = Fact::new("brain.fact.hotFile", vec!["src/app.ts".into(), "9".into()]);
+        let fact = Fact::new("brain.fact.hotFile", vec!["src/app.ts".into(), "9".into()], 9);
         assert_eq!(fact.code, "brain.fact.hotFile");
         assert_eq!(fact.args, vec!["src/app.ts", "9"]);
         assert!(

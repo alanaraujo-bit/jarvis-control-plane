@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FolderGit2, GitBranch, Lock, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { useT } from "../../app/i18n";
+import { useVisitRefresh } from "../../app/useVisitRefresh";
 import type { MessageKey } from "@jarvis/i18n";
 import type { Choice } from "../guardrails/useGuardrails";
 import { useWorktrees, type BranchMode, type WorktreeView } from "./useWorktrees";
@@ -8,6 +9,8 @@ import "./WorktreesView.css";
 
 interface WorktreesViewProps {
   projectId: string;
+  /** True while this area is the one on screen. See `useVisitRefresh`. */
+  active: boolean;
   /** Opening a worktree is opening a project — that is the whole design. */
   onOpenProject: (projectId: string) => void;
 }
@@ -24,7 +27,7 @@ interface WorktreesViewProps {
  * already. That is why this surface is a list and three buttons rather than a
  * new half of the application.
  */
-export function WorktreesView({ projectId, onOpenProject }: WorktreesViewProps) {
+export function WorktreesView({ projectId, active, onOpenProject }: WorktreesViewProps) {
   const t = useT();
   const report = useWorktrees((s) => s.report[projectId]);
   const loading = useWorktrees((s) => s.loading[projectId]);
@@ -34,9 +37,8 @@ export function WorktreesView({ projectId, onOpenProject }: WorktreesViewProps) 
   const refresh = useWorktrees((s) => s.refresh);
   const remove = useWorktrees((s) => s.remove);
 
-  useEffect(() => {
-    void refresh(projectId);
-  }, [projectId, refresh]);
+  // A worktree can be created or removed from a terminal while this is open.
+  useVisitRefresh(active, () => void refresh(projectId));
 
   if (report && !report.isRepo) {
     return (

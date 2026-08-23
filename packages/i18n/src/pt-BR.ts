@@ -107,6 +107,74 @@ export const ptBR: Record<MessageKey, string> = {
   "project.files": "Arquivos",
   "project.review": "Revisão",
   "project.worktrees": "Worktrees",
+  "project.brain": "Memória",
+
+  "brain.title": "Memória",
+  "brain.subtitle":
+    "O que se sabe sobre este projeto. O conhecimento é entregue a todo agente que começa aqui; as notas são suas.",
+  "brain.tab.knowledge": "Conhecimento",
+  "brain.tab.notes": "Notas",
+  "brain.tab.timeline": "Histórico",
+
+  "brain.kind.what": "O que este projeto é",
+  "brain.kind.convention": "Como se trabalha aqui",
+  "brain.kind.gotcha": "O que vai te morder",
+  "brain.kind.glossary": "O que as palavras significam aqui",
+
+  "brain.source.human": "Você escreveu isto",
+  "brain.source.agent": "Um agente registrou isto",
+  "brain.add": "Adicionar",
+  "brain.addPlaceholder": "Algo que continua verdade sobre este projeto",
+  "brain.placeholder.what": "ex. Next.js 15 com Prisma, deploy na Vercel",
+  "brain.placeholder.convention": "ex. Os testes ficam ao lado do código que cobrem",
+  "brain.placeholder.gotcha": "ex. O seed depende da ordem de inserção",
+  "brain.placeholder.glossary": "ex. \"Tenant\" aqui é conta de cobrança, não usuário",
+  "brain.save": "Salvar",
+  "brain.cancel": "Cancelar",
+  "brain.edit": "Editar",
+  "brain.archive": "Aposentar",
+  "brain.archiveTitle": "Aposentar isto — deixa de ser enviado, e o registro fica",
+  "brain.empty.title": "Nada registrado ainda",
+  "brain.empty.body":
+    "Escreva o que alguém que chega neste projeto precisaria saber. Todo agente que começa aqui recebe a mesma coisa.",
+
+  "brain.notes.placeholder": "Um lembrete, um link, algo para voltar depois",
+  "brain.notes.add": "Adicionar nota",
+  "brain.notes.pin": "Fixar",
+  "brain.notes.unpin": "Desafixar",
+  "brain.notes.delete": "Apagar",
+  "brain.notes.promote": "Mover para conhecimento",
+  "brain.notes.promoteAs": "Mover para conhecimento como…",
+  "brain.notes.empty.title": "Nenhuma nota",
+  "brain.notes.empty.body":
+    "As notas são sua memória de trabalho e nunca são enviadas a um agente. O que se mostrar durável pode virar conhecimento.",
+
+  "brain.facts.title": "O que o registro mostra",
+  "brain.facts.derived": "Deduzido do histórico do próprio projeto, não escrito por ninguém.",
+  "brain.facts.empty": "Ainda não aconteceu nada neste projeto.",
+  "brain.fact.sessions": "{0} rodou {1} sessões aqui",
+  "brain.fact.sessions_one": "{0} rodou {1} sessão aqui",
+  "brain.fact.completed": "{0} missões concluídas",
+  "brain.fact.completed_one": "{0} missão concluída",
+  "brain.fact.blocked": "{0} missões bloqueadas ou falhas",
+  "brain.fact.blocked_one": "{0} missão bloqueada ou falha",
+  "brain.fact.revoked": "{0} conclusões foram revogadas depois",
+  "brain.fact.revoked_one": "{0} conclusão foi revogada depois",
+  "brain.fact.hotFile": "{0} mudou {1} vezes",
+  "brain.fact.hotFile_one": "{0} mudou uma vez",
+  "brain.fact.refused": "{0} foi recusado {1} vezes",
+  "brain.fact.refused_one": "{0} foi recusado uma vez",
+
+  "brain.timeline.empty": "Ainda não aconteceu nada neste projeto.",
+
+  "brain.brief.title": "O que um agente recebe",
+  "brain.brief.show": "Ver o briefing",
+  "brain.brief.hide": "Esconder",
+  "brain.brief.size": "{count} caracteres, enviados uma vez por sessão",
+  "brain.brief.none":
+    "Nada foi registrado ainda, então os agentes começam aqui sem briefing nenhum.",
+  "brain.brief.notSupported":
+    "O {provider} não tem como receber um briefing antes de começar, então uma sessão com ele começa sem contexto.",
 
   "worktree.title": "Worktrees",
   "worktree.subtitle":
