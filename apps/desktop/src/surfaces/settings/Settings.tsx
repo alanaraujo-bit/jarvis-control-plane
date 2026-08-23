@@ -3,6 +3,7 @@ import { useI18n, useT } from "../../app/i18n";
 import { useTheme, type ThemePreference } from "../../app/theme";
 import { EnvironmentPanel } from "../environment/EnvironmentPanel";
 import { GuardrailPanel } from "../guardrails/GuardrailPanel";
+import { AutonomyPanel } from "./AutonomyPanel";
 import { Updates } from "./Updates";
 import "./Settings.css";
 
@@ -75,7 +76,13 @@ export function Settings() {
           </div>
         </section>
 
+        {/* Agents before guardrails, on purpose: how much an agent does on its
+            own is the broader question, and what it may never do is the fence
+            around that answer. Reading them the other way round asks the user
+            to bound a behaviour they have not chosen yet. */}
         <section className="settings__section">
+          <h2 className="settings__section-title">{t("settings.agents")}</h2>
+          <AutonomyPanel />
           <GuardrailPanel />
         </section>
 

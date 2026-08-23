@@ -93,6 +93,19 @@ export const en = {
   "settings.theme.light": "Light",
   "settings.theme.system": "System",
   "settings.language": "Language",
+  "settings.agents": "Agents",
+  "autonomy.title": "Autonomy",
+  "autonomy.subtitle": "How much an agent does before it asks.",
+  "autonomy.default": "Default for new work",
+  "autonomy.project": "This project",
+  "autonomy.inherit": "Inherit",
+  // Shown under a project set to Inherit, so the word points at something the
+  // reader can actually see rather than at a value with no surface.
+  "autonomy.inherits": "Follows the global default: {0}",
+  "autonomy.appliesTo": "Applies to every mission that has not chosen its own.",
+  "autonomy.guided.help": "The agent checks in often. The safe assumption.",
+  "autonomy.autonomous.help": "The agent handles what falls within its remit and asks when it does not.",
+  "autonomy.unattended.help": "The agent keeps going until the work is verified, blocked or failed.",
 
 
   // ---- Projects (§16) ------------------------------------------------------

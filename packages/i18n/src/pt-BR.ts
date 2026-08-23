@@ -84,6 +84,17 @@ export const ptBR: Record<MessageKey, string> = {
   "settings.theme.light": "Claro",
   "settings.theme.system": "Sistema",
   "settings.language": "Idioma",
+  "settings.agents": "Agentes",
+  "autonomy.title": "Autonomia",
+  "autonomy.subtitle": "Quanto um agente faz antes de perguntar.",
+  "autonomy.default": "Padrão para novos trabalhos",
+  "autonomy.project": "Este projeto",
+  "autonomy.inherit": "Herdar",
+  "autonomy.inherits": "Segue o padrão global: {0}",
+  "autonomy.appliesTo": "Vale para toda missão que não escolheu a sua própria.",
+  "autonomy.guided.help": "O agente consulta você com frequência. A suposição segura.",
+  "autonomy.autonomous.help": "O agente resolve o que cabe a ele e pergunta quando não cabe.",
+  "autonomy.unattended.help": "O agente segue até o trabalho ser verificado, bloqueado ou falhar.",
 
 
   "projects.openFolder": "Abrir pasta",

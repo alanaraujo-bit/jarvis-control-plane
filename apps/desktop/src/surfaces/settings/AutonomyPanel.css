@@ -1,0 +1,122 @@
+/* Autonomy defaults (§33).
+
+   Deliberately the same shapes as the Guardrail panel beside it and the theme
+   picker above it: same header, same subtitle measure, same segmented control.
+   A third spelling of "pick one of a few" would read as a third mechanism. */
+.autonomy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.autonomy__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.autonomy__subtitle {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.autonomy__error {
+  font-size: var(--text-sm);
+  color: var(--state-danger);
+}
+
+.autonomy__field {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.autonomy__label {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+/* Below the 180px label column plus the widest four-segment control, the two
+   stop fitting on one line and the control starts clipping. Stacking is the
+   honest response to a narrow window; squeezing the label is not. */
+@media (max-width: 620px) {
+  .autonomy__field {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: var(--space-3);
+  }
+}
+
+.autonomy__segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  width: fit-content;
+}
+
+.autonomy__segment {
+  height: 24px;
+  padding: 0 var(--space-5);
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.autonomy__segment:hover:not([data-active]):not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.autonomy__segment[data-active] {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Disabled while the core has not answered yet. Dimmed rather than hidden, so
+   the control does not appear and shift the layout a moment after the page. */
+.autonomy__segment:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+.autonomy__segment:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+/* The sentence that says what "Inherit" inherits from. Aligned under the
+   control rather than under the label, because it explains the choice. */
+.autonomy__note {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+@media (min-width: 621px) {
+  .autonomy__note {
+    padding-left: calc(180px + var(--space-6));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .autonomy__segment { transition: none; }
+}

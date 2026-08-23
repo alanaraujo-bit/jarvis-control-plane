@@ -824,6 +824,105 @@ pub fn set_mission_autonomy(
     set_autonomy(&state.db, &mission_id, autonomy)
 }
 
+/// The whole §33 chain, in one answer.
+///
+/// A surface that offers to change a default has to be able to say what the
+/// default currently *is* and what it would give way to — otherwise the word
+/// "inherited" points at something nobody can see. Mission Detail has rendered
+/// exactly that label since §33 shipped, against a project value and a global
+/// value with no way to read or set either.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutonomyChain {
+    /// The global default. `None` means nothing has been chosen and `Guided`
+    /// applies — which is a different statement from "Guided was chosen", and
+    /// the surface says so.
+    pub global: Option<Autonomy>,
+    /// This project's own default, when a project was asked about.
+    pub project: Option<Autonomy>,
+    /// What a mission with no setting of its own would run at.
+    pub effective: Autonomy,
+}
+
+/// Read the autonomy chain, optionally for one project.
+pub fn chain(db: &Database, project_id: Option<&str>) -> Result<AutonomyChain> {
+    let chain = db.with(|conn| {
+        let global = global_autonomy(conn);
+        let project = project_id.and_then(|id| project_autonomy(conn, id));
+        Ok(AutonomyChain {
+            global,
+            project,
+            // The same resolver missions use, not a second copy of the rule —
+            // two spellings of an inheritance chain is how they drift apart.
+            effective: resolve_autonomy(None, project, global),
+        })
+    })?;
+    Ok(chain)
+}
+
+pub fn set_global(db: &Database, autonomy: Option<Autonomy>) -> Result<AutonomyChain> {
+    db.with(|conn| {
+        match autonomy {
+            Some(level) => conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?1, ?2)
+                 ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                params![GLOBAL_AUTONOMY_KEY, level.as_str()],
+            )?,
+            None => conn.execute("DELETE FROM settings WHERE key = ?1", [GLOBAL_AUTONOMY_KEY])?,
+        };
+        Ok(())
+    })?;
+    chain(db, None)
+}
+
+pub fn set_project(
+    db: &Database,
+    project_id: &str,
+    autonomy: Option<Autonomy>,
+) -> Result<AutonomyChain> {
+    let id = project_id.to_string();
+    let value = autonomy.map(|a| a.as_str().to_string());
+    db.with(move |conn| {
+        conn.execute("UPDATE projects SET autonomy = ?2 WHERE id = ?1", params![id, value])?;
+        Ok(())
+    })?;
+    chain(db, Some(project_id))
+}
+
+#[tauri::command]
+pub fn autonomy_chain(
+    state: State<'_, AppState>,
+    project_id: Option<String>,
+) -> Result<AutonomyChain> {
+    chain(&state.db, project_id.as_deref())
+}
+
+/// Set — or clear — the global default.
+///
+/// `None` removes the row rather than storing a sentinel, so "no global
+/// default has been chosen" has exactly one representation in the database and
+/// `global_autonomy`'s existing `Option` keeps meaning what it already meant.
+#[tauri::command]
+pub fn set_global_autonomy(
+    state: State<'_, AppState>,
+    autonomy: Option<Autonomy>,
+) -> Result<AutonomyChain> {
+    set_global(&state.db, autonomy)
+}
+
+/// Set — or clear — one project's default.
+///
+/// Clearing is `NULL`, which is what `project_autonomy` already reads as "this
+/// project has no opinion, ask the global default".
+#[tauri::command]
+pub fn set_project_autonomy(
+    state: State<'_, AppState>,
+    project_id: String,
+    autonomy: Option<Autonomy>,
+) -> Result<AutonomyChain> {
+    set_project(&state.db, &project_id, autonomy)
+}
+
 #[tauri::command]
 pub fn set_mission_task_done(
     state: State<'_, AppState>,
@@ -1246,6 +1345,81 @@ mod tests {
             Autonomy::Autonomous,
             "the mission setting must beat both"
         );
+    }
+
+    /// The two levels of §33 that had no way in.
+    ///
+    /// `resolve_autonomy` has read the project and global levels since §33
+    /// shipped, and nothing in the product could write either — so Mission
+    /// Detail rendered "inherited" against a value that could not be seen or
+    /// changed. This drives both from the outside and checks that a real
+    /// mission's effective autonomy moves as a result.
+    #[test]
+    fn the_project_and_global_defaults_can_now_be_set_and_cleared() {
+        let f = fixture();
+        let mission = mission_with(&f, vec![]);
+
+        // Nothing chosen anywhere. `Guided` applies, and the chain says so
+        // *without* claiming Guided was chosen — that distinction is the whole
+        // reason `global` is an `Option` rather than a level.
+        let start = chain(&f.db, Some(&f.project_id)).unwrap();
+        assert!(start.global.is_none());
+        assert!(start.project.is_none());
+        assert_eq!(start.effective, Autonomy::Guided);
+
+        let after_global = set_global(&f.db, Some(Autonomy::Autonomous)).unwrap();
+        assert_eq!(after_global.global, Some(Autonomy::Autonomous));
+        assert_eq!(after_global.effective, Autonomy::Autonomous);
+        assert_eq!(
+            detail(&f.db, &mission.id).unwrap().effective_autonomy,
+            Autonomy::Autonomous,
+            "a real mission with no setting of its own has to follow the global default"
+        );
+
+        let after_project = set_project(&f.db, &f.project_id, Some(Autonomy::Guided)).unwrap();
+        assert_eq!(after_project.project, Some(Autonomy::Guided));
+        assert_eq!(
+            after_project.global,
+            Some(Autonomy::Autonomous),
+            "setting a project default must not quietly overwrite the global one"
+        );
+        assert_eq!(after_project.effective, Autonomy::Guided);
+
+        // Clearing is not the same as choosing Guided: it hands the decision
+        // back up the chain, which is exactly what the surface has to be able
+        // to express.
+        let cleared = set_project(&f.db, &f.project_id, None).unwrap();
+        assert!(cleared.project.is_none());
+        assert_eq!(cleared.effective, Autonomy::Autonomous);
+
+        let no_global = set_global(&f.db, None).unwrap();
+        assert!(no_global.global.is_none(), "clearing removes the row rather than storing a sentinel");
+        assert_eq!(no_global.effective, Autonomy::Guided);
+        assert_eq!(
+            detail(&f.db, &mission.id).unwrap().effective_autonomy,
+            Autonomy::Guided
+        );
+    }
+
+    /// Setting the same level twice must update, not fail on the primary key.
+    #[test]
+    fn choosing_a_global_default_twice_replaces_it() {
+        let f = fixture();
+        set_global(&f.db, Some(Autonomy::Guided)).unwrap();
+        let second = set_global(&f.db, Some(Autonomy::Unattended)).unwrap();
+        assert_eq!(second.global, Some(Autonomy::Unattended));
+
+        let rows: i64 = f
+            .db
+            .with(|conn| {
+                conn.query_row(
+                    "SELECT COUNT(*) FROM settings WHERE key = ?1",
+                    [GLOBAL_AUTONOMY_KEY],
+                    |r| r.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(rows, 1);
     }
 
     #[test]
