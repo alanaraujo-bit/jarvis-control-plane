@@ -144,6 +144,13 @@ export const en = {
   "terminal.split.columns": "Side by side",
   "terminal.split.rows": "Stacked",
   "terminal.split.grid": "Grid",
+  "terminal.paste.attached": "Image attached",
+  "terminal.paste.remove": "Hide preview",
+  "terminal.paste.tooLarge": "That image is too large to attach.",
+  "terminal.paste.unsupported": "That is not an image J.A.R.V.I.S. can attach.",
+  "terminal.paste.empty": "The clipboard image was empty.",
+  "terminal.paste.outsideSession": "That file does not belong to this session.",
+  "terminal.paste.failed": "The image could not be attached.",
 
 
   // ---- Conversation (§24) --------------------------------------------------

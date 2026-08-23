@@ -4,6 +4,7 @@
 //! two separate sessions. `event` defines the frames, `log` stores them and
 //! `manager` runs the live ones.
 
+pub mod attachment;
 pub mod commands;
 pub mod event;
 pub mod log;

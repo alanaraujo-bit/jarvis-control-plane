@@ -1,0 +1,132 @@
+/* A pasted image (§22), as a chip over the terminal.
+
+   Bottom-left, above the prompt: the path has just been typed at the cursor,
+   so the chip sits near what it describes rather than in a corner far from it. */
+.pasted {
+  position: absolute;
+  left: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 4;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) 0 var(--space-4);
+  height: 26px;
+
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+
+  animation: pasted-enter var(--duration-fast) var(--ease-out);
+}
+
+@keyframes pasted-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pasted { animation: none; }
+}
+
+.pasted__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: default;
+  outline: none;
+}
+
+.pasted__chip:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.pasted__size {
+  color: var(--text-disabled);
+  font-variant-numeric: tabular-nums;
+}
+
+.pasted__remove {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background var(--duration-instant) var(--ease-out),
+              color var(--duration-instant) var(--ease-out);
+}
+
+.pasted__remove:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pasted__remove:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+/* The picture itself, above the chip.
+
+   Hidden until hover rather than not rendered, so it can fade in — and it
+   opens *upward* because the chip already sits at the bottom of the pane. */
+.pasted__preview {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + var(--space-3));
+  padding: var(--space-3);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+}
+
+.pasted:hover .pasted__preview,
+.pasted:focus-within .pasted__preview {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Bounded in both directions: a 4K screenshot must not cover the terminal it
+   is being pasted into, and a favicon-sized image must not stretch. */
+.pasted__preview img {
+  display: block;
+  max-width: 320px;
+  max-height: 220px;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-sm);
+  /* A checkerboard behind transparency, so a PNG with an alpha channel does
+     not read as a differently-shaped image against the panel. */
+  background-color: var(--bg-inset);
+  background-image:
+    linear-gradient(45deg, var(--bg-raised) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg-raised) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-raised) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg-raised) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pasted__preview,
+  .pasted__remove { transition: none; }
+}

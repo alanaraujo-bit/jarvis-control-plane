@@ -139,6 +139,8 @@ pub fn run() {
             session::commands::session_resize,
             session::commands::session_close,
             session::commands::session_replay,
+            session::commands::session_save_attachment,
+            session::commands::session_read_attachment,
             session::commands::session_list,
             session::commands::session_conversation,
             session::commands::mission_sessions,

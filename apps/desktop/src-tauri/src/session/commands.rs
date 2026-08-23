@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, InvokeResponseBody, Response};
 use tauri::State;
 
+use super::attachment;
 use super::manager::{new_session_id, timestamp, Result, SessionInfo};
 use super::{transcript, SessionLogReader, SessionState};
 use crate::providers::conversation::ConversationItem;
@@ -523,6 +524,52 @@ pub fn session_replay(state: State<'_, AppState>, session_id: String) -> Result<
 
     let reader = SessionLogReader::open(&log_dir)?;
     Ok(Response::new(reader.replay_pty(REPLAY_LIMIT)?))
+}
+
+/// The session's own directory on disk, or an error naming the session.
+fn log_dir_of(state: &AppState, session_id: &str) -> Result<String> {
+    Ok(state.db.with(|conn| {
+        conn.query_row("SELECT log_dir FROM sessions WHERE id = ?1", [session_id], |row| {
+            row.get(0)
+        })
+    })?)
+}
+
+/// Save an image pasted into a session (§22).
+///
+/// The webview names a session, never a directory: where the file lands is
+/// read from the database here, so a renderer cannot choose a path (§3).
+/// Errors come back as stable codes the surface localises (§65), the same
+/// shape evidence summaries use.
+#[tauri::command]
+pub fn session_save_attachment(
+    state: State<'_, AppState>,
+    session_id: String,
+    data: Vec<u8>,
+) -> std::result::Result<attachment::Attachment, String> {
+    let log_dir = log_dir_of(&state, &session_id).map_err(|e| e.to_string())?;
+    let saved = attachment::save(&log_dir, &data)?;
+
+    // The log is the record (§23). An attachment is part of what happened in
+    // this session, and `EventKind::Attachment` has existed for it since
+    // migration 1 with nothing ever writing one.
+    if let Ok(session) = state.sessions.get(&session_id) {
+        if let Ok(payload) = serde_json::to_vec(&saved) {
+            session.log(crate::session::event::EventKind::Attachment, payload);
+        }
+    }
+    Ok(saved)
+}
+
+/// Read a pasted image back, for the hover preview.
+#[tauri::command]
+pub fn session_read_attachment(
+    state: State<'_, AppState>,
+    session_id: String,
+    path: String,
+) -> std::result::Result<Response, String> {
+    let log_dir = log_dir_of(&state, &session_id).map_err(|e| e.to_string())?;
+    Ok(Response::new(attachment::read(&log_dir, &path)?))
 }
 
 #[tauri::command]

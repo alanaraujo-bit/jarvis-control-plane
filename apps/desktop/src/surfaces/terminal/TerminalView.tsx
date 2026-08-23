@@ -5,8 +5,18 @@ import { SearchAddon } from "@xterm/addon-search";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 
+import type { MessageKey } from "@jarvis/i18n";
+import { useT } from "../../app/i18n";
 import { useTheme } from "../../app/theme";
-import { attachSession, replaySession, resizeSession, writeSession } from "../../app/sessions";
+import {
+  attachSession,
+  replaySession,
+  resizeSession,
+  saveAttachment,
+  writeSession,
+  type Attachment,
+} from "../../app/sessions";
+import { PastedImage } from "./PastedImage";
 import { TerminalFind, type FindState } from "./TerminalFind";
 import { terminalSearchDecorations, terminalTheme } from "./theme";
 import "./TerminalView.css";
@@ -31,6 +41,36 @@ const RULER_WIDTH = 10;
 const NO_SEARCH: FindState = { query: "", caseSensitive: false, index: 0, total: 0 };
 
 /**
+ * Quote a path if the shell would otherwise split it on a space.
+ *
+ * The session log directory lives under `%APPDATA%`, which on a machine whose
+ * user has a space in their name — as this one does — produces exactly the
+ * path that breaks unquoted. Double quotes work in PowerShell, cmd and POSIX
+ * shells alike; a path containing a double quote is not something any of the
+ * clipboard formats here can produce, since the name is ours.
+ */
+function quoteIfNeeded(path: string): string {
+  return path.includes(" ") ? `"${path}"` : path;
+}
+
+/**
+ * Turn a paste failure into a sentence.
+ *
+ * The core answers with a stable code (`attachment.tooLarge`, …) which is
+ * localised here — the same shape evidence summaries use (§65). Anything else
+ * is an OS error string in whatever language Windows is in, and dropping that
+ * on a person would be worse than saying plainly that the paste failed, so it
+ * falls back to a general sentence and keeps the detail for the log.
+ */
+function pasteMessage(t: (key: MessageKey) => string, code: string): string {
+  const known = ["empty", "tooLarge", "unsupported", "outsideSession"];
+  const tail = code.split(".").pop() ?? "";
+  return known.includes(tail)
+    ? t(`terminal.paste.${tail}` as MessageKey)
+    : t("terminal.paste.failed");
+}
+
+/**
  * A live terminal bound to one session.
  *
  * The terminal is the raw projection of the session log (§23): every byte the
@@ -38,6 +78,7 @@ const NO_SEARCH: FindState = { query: "", caseSensitive: false, index: 0, total:
  * Conversation View shows the same session, not a different one.
  */
 export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps) {
+  const t = useT();
   const hostRef = useRef<HTMLDivElement>(null);
   const resolved = useTheme((state) => state.resolved);
   const termRef = useRef<Terminal | null>(null);
@@ -46,6 +87,8 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
   const refit = useRef<(() => void) | null>(null);
 
   const [find, setFind] = useState<FindState | null>(null);
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [pasteError, setPasteError] = useState<string | null>(null);
   // The effect that builds the terminal must not be rebuilt when the find bar
   // opens — that would kill the process. A ref lets the key handler inside it
   // read the current state without depending on it.
@@ -289,6 +332,51 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
    * so the first hit should be the most recent one, not the first one after
    * wrapping around.
    */
+  /**
+   * Pasting an image types its path (§22).
+   *
+   * There is no way to put a picture *through* a PTY — a terminal carries
+   * bytes, and an agent CLI reads a terminal. What actually reaches the agent
+   * is a path to a file on disk, typed at the prompt exactly as a person would
+   * type it. Claude Code reads an image when a path points at one; that is the
+   * whole mechanism and it is worth being plain about rather than implying the
+   * terminal grew a new capability.
+   *
+   * Registered on the host element in the **capture** phase so it runs before
+   * xterm's own paste handling, which would otherwise write the clipboard's
+   * text rendering of an image — usually nothing at all — into the shell.
+   * Text pastes are untouched and still go to xterm.
+   */
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    const onPaste = (event: ClipboardEvent) => {
+      const file = Array.from(event.clipboardData?.items ?? [])
+        .find((item) => item.kind === "file" && item.type.startsWith("image/"))
+        ?.getAsFile();
+      if (!file) return; // A text paste. xterm's own handling is correct.
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      void file
+        .arrayBuffer()
+        .then((buffer) => saveAttachment(sessionId, new Uint8Array(buffer)))
+        .then((saved) => {
+          setAttachment(saved);
+          // A trailing space, so the next thing typed does not run into the
+          // path — and no newline: this is the person's prompt to submit, the
+          // same rule voice dictation follows (§54).
+          return writeSession(sessionId, `${quoteIfNeeded(saved.path)} `);
+        })
+        .catch((cause) => setPasteError(String(cause)));
+    };
+
+    host.addEventListener("paste", onPaste, { capture: true });
+    return () => host.removeEventListener("paste", onPaste, { capture: true });
+  }, [sessionId]);
+
   const paintedFor = useRef(resolved);
   useEffect(() => {
     const search = searchRef.current;
@@ -346,6 +434,25 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
   return (
     <div className="terminal-pane">
       <div className="terminal" ref={hostRef} />
+
+      {attachment && (
+        <PastedImage
+          sessionId={sessionId}
+          attachment={attachment}
+          // Dismisses the chip only. The path is already typed at the prompt
+          // and the file is already on disk — removing them would mean editing
+          // the shell's input line from underneath the person, which is theirs
+          // to edit. This says "stop showing me the picture", nothing more.
+          onRemove={() => setAttachment(null)}
+        />
+      )}
+
+      {pasteError && (
+        <p className="terminal__paste-error" role="alert">
+          {pasteMessage(t, pasteError)}
+        </p>
+      )}
+
       {find !== null && (
         <TerminalFind
           state={find}

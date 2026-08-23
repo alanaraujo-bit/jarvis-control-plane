@@ -129,6 +129,13 @@ export const ptBR: Record<MessageKey, string> = {
   "terminal.split.columns": "Lado a lado",
   "terminal.split.rows": "Empilhados",
   "terminal.split.grid": "Grade",
+  "terminal.paste.attached": "Imagem anexada",
+  "terminal.paste.remove": "Ocultar prévia",
+  "terminal.paste.tooLarge": "Essa imagem é grande demais para anexar.",
+  "terminal.paste.unsupported": "Isso não é uma imagem que o J.A.R.V.I.S. consiga anexar.",
+  "terminal.paste.empty": "A imagem da área de transferência estava vazia.",
+  "terminal.paste.outsideSession": "Esse arquivo não pertence a esta sessão.",
+  "terminal.paste.failed": "Não foi possível anexar a imagem.",
 
 
   "conversation.title": "Conversa",

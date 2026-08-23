@@ -109,3 +109,27 @@ export async function listSessions(projectId: string): Promise<SessionInfo[]> {
   if (!isTauri()) return [];
   return invoke<SessionInfo[]>("session_list", { projectId });
 }
+
+/** An image pasted into a session (§22). */
+export interface Attachment {
+  /** Absolute path on disk — this is what gets typed at the prompt. */
+  path: string;
+  name: string;
+  bytes: number;
+  mime: string;
+}
+
+/**
+ * Save a pasted image into the session's own directory.
+ *
+ * The core decides where it lands; this passes a session, never a path.
+ */
+export async function saveAttachment(sessionId: string, data: Uint8Array): Promise<Attachment> {
+  return invoke<Attachment>("session_save_attachment", { sessionId, data: Array.from(data) });
+}
+
+/** Read a pasted image back, for the preview. */
+export async function readAttachment(sessionId: string, path: string): Promise<Uint8Array> {
+  const body = await invoke<ArrayBuffer>("session_read_attachment", { sessionId, path });
+  return new Uint8Array(body);
+}

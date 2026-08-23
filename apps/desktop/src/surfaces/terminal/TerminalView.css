@@ -32,3 +32,19 @@
   border: 3px solid transparent;
   background-clip: content-box;
 }
+
+/* A paste that could not be attached (§22). Above the prompt, where the chip
+   would have appeared, so the answer arrives where the picture was expected. */
+.terminal__paste-error {
+  position: absolute;
+  left: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 4;
+  max-width: 60%;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--state-danger-bg);
+  border: 1px solid var(--state-danger);
+  color: var(--state-danger);
+  font-size: var(--text-xs);
+}
