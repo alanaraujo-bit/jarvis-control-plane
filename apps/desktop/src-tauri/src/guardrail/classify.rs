@@ -45,6 +45,12 @@ pub enum Operation {
     GitHistoryRewrite,
     /// Deleting a branch — locally with force, or on a remote at all.
     GitBranchDelete,
+    /// Throwing away uncommitted work: `restore`, `checkout -- <path>`,
+    /// `stash drop`. Its own class rather than a corner of
+    /// `GitHistoryRewrite`, because what it destroys was never in history —
+    /// there is no reflog to recover it from, which makes it the least
+    /// reversible thing Git does.
+    GitDiscardChanges,
     /// Removing a directory tree, or untracked files, without confirmation.
     RecursiveDelete,
     /// Touching a file whose whole purpose is to hold a credential.
@@ -62,6 +68,7 @@ pub const ALL: &[Operation] = &[
     Operation::GitForcePush,
     Operation::GitHistoryRewrite,
     Operation::GitBranchDelete,
+    Operation::GitDiscardChanges,
     Operation::RecursiveDelete,
     Operation::SecretAccess,
     Operation::ProductionDeploy,
@@ -77,6 +84,7 @@ impl Operation {
             Self::GitForcePush => "git.force-push",
             Self::GitHistoryRewrite => "git.history-rewrite",
             Self::GitBranchDelete => "git.branch-delete",
+            Self::GitDiscardChanges => "git.discard-changes",
             Self::RecursiveDelete => "fs.recursive-delete",
             Self::SecretAccess => "secrets.access",
             Self::ProductionDeploy => "deploy.production",
@@ -277,6 +285,43 @@ fn git_subcommand(segment: &Segment) -> Option<(&str, &[String])> {
     None
 }
 
+/// Whether a `git restore` would write over the working tree.
+///
+/// `git restore --staged -- x` moves nothing but the index: the file on disk is
+/// untouched and the content is still there to stage again. `git restore x`
+/// **overwrites the file** with the index's copy, and `--source=HEAD` overwrites
+/// it with the commit's. Only the second kind destroys anything.
+///
+/// Verified against Git 2.55 rather than read from the manual, because the
+/// default is the part that matters: with neither `--staged` nor `--worktree`
+/// given, restore acts on the **worktree**, so the plain spelling — the one an
+/// agent is most likely to use — is the destructive one.
+fn restore_touches_the_worktree(rest: &[String]) -> bool {
+    let worktree = rest.iter().any(|a| a == "--worktree" || a == "-W");
+    let staged = rest.iter().any(|a| a == "--staged" || a == "-S");
+    worktree || !staged
+}
+
+/// Whether a `git checkout` is being used to throw a file away rather than to
+/// move between branches.
+///
+/// Git overloads this verb, and the two meanings are told apart by the `--`
+/// separator: `git checkout -- src/x.ts` discards, `git checkout main` does not.
+/// The spelling without a separator (`git checkout HEAD src/x.ts`) also
+/// discards and is deliberately **not** matched — telling it apart from a
+/// branch name needs to resolve the ref, which this module does not do. That is
+/// the module's standing caveat rather than an oversight: a command that did
+/// not match has not been proven safe.
+fn checkout_discards(rest: &[String]) -> Option<String> {
+    if rest.iter().any(|a| a == "--force" || a == "-f") {
+        return Some("git checkout --force".into());
+    }
+    // A `--` with something after it is a pathspec, which makes this the
+    // file-restoring form of the command.
+    let separator = rest.iter().position(|a| a == "--")?;
+    (rest.len() > separator + 1).then(|| "git checkout --".into())
+}
+
 /// Whether a `git push` is forcing, and which spelling said so.
 ///
 /// `--force-with-lease` is excluded on purpose: it refuses to run when the
@@ -353,6 +398,62 @@ fn classify_git(segment: &Segment, found: &mut Vec<Match>) {
 
         "filter-branch" | "filter-repo" => {
             record(found, Operation::GitHistoryRewrite, format!("git {sub}"));
+        }
+
+        // Uncommitted work is the one thing Git keeps no copy of. Everything
+        // above this line can be recovered from the reflog by someone who knows
+        // it exists; a discarded working-tree change cannot be recovered by
+        // anyone.
+        "restore" => {
+            if restore_touches_the_worktree(rest) {
+                record(found, Operation::GitDiscardChanges, "git restore".into());
+            }
+        }
+
+        "checkout" => {
+            if let Some(fragment) = checkout_discards(rest) {
+                record(found, Operation::GitDiscardChanges, fragment);
+            }
+        }
+
+        // `git switch` cannot restore a single file, so only the flags that
+        // throw away local modifications while moving are of interest.
+        "switch" => {
+            if rest
+                .iter()
+                .any(|a| a == "--discard-changes" || a == "--force" || a == "-f")
+            {
+                record(
+                    found,
+                    Operation::GitDiscardChanges,
+                    "git switch --discard-changes".into(),
+                );
+            }
+        }
+
+        // `git stash` and `git stash pop` keep the work. `drop` and `clear`
+        // are what remove it.
+        "stash" => {
+            if let Some(action) = rest.iter().find(|a| *a == "drop" || *a == "clear") {
+                record(
+                    found,
+                    Operation::GitDiscardChanges,
+                    format!("git stash {action}"),
+                );
+            }
+        }
+
+        // `git rm -r` removes a directory tree from disk, which is the same
+        // consequence as `rm -rf` and belongs in the same class. `--cached`
+        // only forgets the files, leaving them where they are.
+        "rm" => {
+            let cached = rest.iter().any(|a| a == "--cached");
+            let recursive = rest
+                .iter()
+                .any(|a| a == "--recursive" || cluster_has(a, 'r') || cluster_has(a, 'R'));
+            if recursive && !cached {
+                record(found, Operation::RecursiveDelete, "git rm -r".into());
+            }
         }
 
         // Untracked files are not in history, so this is the one deletion Git
@@ -683,6 +784,56 @@ mod tests {
         assert_eq!(ops("git branch -D feature"), vec![GitBranchDelete]);
         assert_eq!(ops("git push origin --delete feature"), vec![GitBranchDelete]);
         assert_eq!(ops("git push origin :feature"), vec![GitBranchDelete]);
+    }
+
+    /// The class the classifier was blind to until §44.
+    ///
+    /// Worth stating why it matters more than the ones above it: a force push,
+    /// a hard reset and a rebase all leave the old commits in the reflog for
+    /// thirty days. Uncommitted work has never been written to an object, so
+    /// when `git restore` overwrites it there is nothing anywhere to recover
+    /// it from — not for us, not for the user, not for Git.
+    #[test]
+    fn discarding_uncommitted_work_is_recognised() {
+        assert_eq!(ops("git restore src/app.ts"), vec![GitDiscardChanges]);
+        assert_eq!(
+            ops("git restore --source=HEAD --staged --worktree -- src/app.ts"),
+            vec![GitDiscardChanges]
+        );
+        assert_eq!(ops("git checkout -- src/app.ts"), vec![GitDiscardChanges]);
+        assert_eq!(ops("git checkout --force main"), vec![GitDiscardChanges]);
+        assert_eq!(ops("git switch --discard-changes main"), vec![GitDiscardChanges]);
+        assert_eq!(ops("git stash drop"), vec![GitDiscardChanges]);
+        assert_eq!(ops("git stash clear"), vec![GitDiscardChanges]);
+    }
+
+    /// The negative cases are the ones that decide whether this class is
+    /// tolerable to live with.
+    #[test]
+    fn moving_around_and_staging_are_not_discarding() {
+        // Unstaging leaves the file on disk exactly as it was.
+        assert!(ops("git restore --staged -- src/app.ts").is_empty());
+        assert!(ops("git restore -S src/app.ts").is_empty());
+        // Ordinary navigation.
+        assert!(ops("git checkout main").is_empty());
+        assert!(ops("git checkout -b feature").is_empty());
+        assert!(ops("git switch main").is_empty());
+        // Stashing and unstashing both keep the work.
+        assert!(ops("git stash").is_empty());
+        assert!(ops("git stash push -m wip").is_empty());
+        assert!(ops("git stash pop").is_empty());
+        // A bare `--` with nothing after it names no path.
+        assert!(ops("git checkout main --").is_empty());
+    }
+
+    #[test]
+    fn git_rm_is_a_deletion_only_when_it_removes_a_tree_from_disk() {
+        assert_eq!(ops("git rm -r src/legacy"), vec![RecursiveDelete]);
+        assert_eq!(ops("git rm -rf src/legacy"), vec![RecursiveDelete]);
+        // `--cached` forgets the files and leaves them on disk.
+        assert!(ops("git rm -r --cached src/legacy").is_empty());
+        // A single file is recoverable from the commit it was in.
+        assert!(ops("git rm src/app.ts").is_empty());
     }
 
     #[test]

@@ -143,7 +143,7 @@ pub enum Choice {
 
 impl Choice {
     /// The reason code stored on the settled event, for the UI to localise.
-    fn reason(self) -> &'static str {
+    pub(crate) fn reason(self) -> &'static str {
         match self {
             Self::AllowOnce => "allowedOnce",
             Self::AllowForProject => "allowedForProject",

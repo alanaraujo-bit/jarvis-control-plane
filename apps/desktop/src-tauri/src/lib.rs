@@ -126,6 +126,8 @@ pub fn run() {
             files::write_file,
             review::review_report,
             review::review_file_diff,
+            review::actions::review_git_action,
+            review::actions::review_commit,
             providers::list_providers,
             activity::list_activity,
             analytics::analytics_report,

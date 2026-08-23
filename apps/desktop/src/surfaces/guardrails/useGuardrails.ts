@@ -13,6 +13,7 @@ export type Operation =
   | "git.force-push"
   | "git.history-rewrite"
   | "git.branch-delete"
+  | "git.discard-changes"
   | "fs.recursive-delete"
   | "secrets.access"
   | "deploy.production"
@@ -40,7 +41,8 @@ export interface GuardrailEvent {
   sessionId: string | null;
   missionId: string | null;
   criterionId: string | null;
-  origin: "agent" | "verification";
+  /** `surface` is an operation the user asked a surface to perform (§44). */
+  origin: "agent" | "verification" | "surface";
   operation: Operation;
   /** The text that matched, verbatim. */
   fragment: string;

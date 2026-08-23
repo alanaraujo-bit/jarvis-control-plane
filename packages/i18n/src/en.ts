@@ -180,6 +180,47 @@ export const en = {
   "review.kind.untracked": "N",
   "review.kind.conflicted": "!",
 
+  // ---- Acting on a change (§44) --------------------------------------------
+  "review.stage": "Stage",
+  "review.unstage": "Unstage",
+  "review.staged": "Staged",
+  "review.partlyStaged": "Partly staged",
+  // The same operation, named for what it does to *this* file. Returning a
+  // deleted file to HEAD brings it back; returning a modified one throws work
+  // away. One word for both would be wrong half the time.
+  "review.discard": "Discard",
+  "review.restore": "Restore",
+  "review.discardTitle": "Throw away the changes to {file}",
+  "review.restoreTitle": "Bring {file} back as it was committed",
+  "review.stageAll": "Stage everything",
+  "review.unstageAll": "Unstage everything",
+
+  "review.commit.title": "Commit",
+  "review.commit.staged": "{count} staged",
+  "review.commit.staged_one": "{count} staged",
+  "review.commit.placeholder": "What changed, and why",
+  "review.commit.action": "Commit staged changes",
+  "review.commit.nothingStaged": "Stage something first — a commit takes what is in the index.",
+  "review.commit.done": "Committed.",
+
+  // The confirmation. It says what will run, because approving a paraphrase is
+  // not approving anything (§35).
+  "review.confirm.discardTitle": "Discard the changes to {file}?",
+  "review.confirm.restoreTitle": "Restore {file}?",
+  "review.confirm.body":
+    "Uncommitted work is the one thing Git keeps no copy of. Once this runs there is nothing to recover it from.",
+  // Restoring a deleted file is the case where this command *recovers*. The
+  // discard wording would frighten someone out of the one action they want,
+  // and it would also be untrue: what is thrown away is the deletion.
+  "review.confirm.bodyDeleted":
+    "The file comes back exactly as it was committed. Anything uncommitted about it — the deletion included — is thrown away.",
+  "review.confirm.bodyUntracked":
+    "Git has never seen this file, so there is no committed version to go back to. It will be removed from disk.",
+  "review.confirm.willRun": "This will run",
+  "review.confirm.cancel": "Cancel",
+  "review.refused":
+    "A guardrail refuses this. Change the rule in Settings if you meant it.",
+
 
   // ---- Updates (§62) -------------------------------------------------------
   "update.title": "Updates",
@@ -308,6 +349,9 @@ export const en = {
   "guardrail.op.git.history-rewrite.detail": "reset --hard, rebase, filter-branch.",
   "guardrail.op.git.branch-delete": "Delete a branch",
   "guardrail.op.git.branch-delete.detail": "Deleting a remote branch, or forcing a local one.",
+  "guardrail.op.git.discard-changes": "Throw away uncommitted work",
+  "guardrail.op.git.discard-changes.detail":
+    "git restore, checkout -- <file>, stash drop. The only thing Git keeps no copy of.",
   "guardrail.op.fs.recursive-delete": "Delete a directory tree",
   "guardrail.op.fs.recursive-delete.detail": "rm -rf, Remove-Item -Recurse, git clean -f.",
   "guardrail.op.secrets.access": "Read a credential file",
@@ -338,6 +382,7 @@ export const en = {
   "guardrail.status.asked": "Asked",
   "guardrail.origin.agent": "Agent",
   "guardrail.origin.verification": "Verification",
+  "guardrail.origin.surface": "You asked for it",
   "guardrail.reason.policyDenies": "A rule says never",
   "guardrail.reason.nobodyToAsk": "Needed approval, nobody was attached",
   "guardrail.reason.askedHuman": "Put to you",
@@ -354,6 +399,10 @@ export const en = {
   "guardrail.coverage.note":
     "Guardrails govern agents, not what you type yourself. Verification commands J.A.R.V.I.S. runs are always enforced.",
 
+  "activity.kind.git.staged": "Staged a change",
+  "activity.kind.git.unstaged": "Unstaged a change",
+  "activity.kind.git.discarded": "Discarded uncommitted work",
+  "activity.kind.git.committed": "Committed",
   "activity.kind.guardrail.denied": "Guardrail refused an operation",
   "activity.kind.guardrail.allowed": "Guardrail approved an operation",
 

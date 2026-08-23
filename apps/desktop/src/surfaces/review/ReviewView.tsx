@@ -1,7 +1,8 @@
-import { useEffect } from "react";
-import { GitBranch, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { GitBranch, Minus, Plus, RefreshCw, RotateCcw, ShieldAlert, Undo2 } from "lucide-react";
 import { useT } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
+import type { Choice } from "../guardrails/useGuardrails";
 import { DiffView } from "./DiffView";
 import { reviewDiffKey, useReview, type ChangeKind, type ReviewFile } from "./useReview";
 import "./ReviewView.css";
@@ -43,9 +44,9 @@ const KIND_FULL: Record<ChangeKind, MessageKey> = {
  * were watching changed are still listed — that is a fact about the working
  * tree, not an omission.
  *
- * Read-only. Staging, discarding and restoring are destructive Git operations
- * and belong behind the guardrail (D11), which is Git's own milestone (§44),
- * not this one. §81 applies: they are absent rather than disabled decoration.
+ * Since §44 it also acts. Staging and unstaging move the index and are
+ * ordinary; **discarding goes through the guardrail** (D11), because what it
+ * destroys was never committed and nothing anywhere can bring it back.
  */
 export function ReviewView({ projectId }: ReviewViewProps) {
   const t = useT();
@@ -57,6 +58,11 @@ export function ReviewView({ projectId }: ReviewViewProps) {
   const diffLoading = useReview((state) => state.diffLoading);
   const refresh = useReview((state) => state.refresh);
   const select = useReview((state) => state.select);
+  const act = useReview((state) => state.act);
+  const confirming = useReview((state) => state.confirming);
+  const confirm = useReview((state) => state.confirm);
+  const cancelConfirm = useReview((state) => state.cancelConfirm);
+  const refused = useReview((state) => state.refused[projectId]);
 
   // Re-read on every visit. An agent may have been working the whole time the
   // user was on another surface, and a stale diff is worse than a slow one.
@@ -132,11 +138,12 @@ export function ReviewView({ projectId }: ReviewViewProps) {
 
         <ul className="review__files">
           {files.map((file) => (
-            <li key={file.path}>
+            <li key={file.path} className="review__row">
               <button
                 type="button"
                 className="review__file"
                 data-selected={file.path === selected || undefined}
+                data-staged={file.staged || undefined}
                 onClick={() => void select(projectId, file)}
                 title={file.path}
               >
@@ -144,8 +151,11 @@ export function ReviewView({ projectId }: ReviewViewProps) {
                   <span
                     className="review__kind"
                     data-kind={file.kind}
-                    title={t(KIND_FULL[file.kind])}
-                    aria-label={t(KIND_FULL[file.kind])}
+                    // Staged is shown as a chip on this letter, so the word for
+                    // it has to travel here too — otherwise the only cue that a
+                    // file is staged is a colour.
+                    title={kindLabel(t, file)}
+                    aria-label={kindLabel(t, file)}
                   >
                     {t(KIND_LABEL[file.kind])}
                   </span>
@@ -172,9 +182,15 @@ export function ReviewView({ projectId }: ReviewViewProps) {
                 </span>
                 <Attribution file={file} />
               </button>
+              <RowActions
+                file={file}
+                onAct={(action) => void act(projectId, action, [file])}
+              />
             </li>
           ))}
         </ul>
+
+        <CommitBox projectId={projectId} files={files} />
       </aside>
 
       <section className="review__diff">
@@ -188,6 +204,24 @@ export function ReviewView({ projectId }: ReviewViewProps) {
                 {active.path}
               </span>
             </header>
+            {/* The confirmation sits above the diff rather than in a modal, so
+                the change being thrown away is still on screen while the
+                decision is made. A dialog that covers the evidence is asking
+                someone to decide blind. */}
+            {confirming && confirming.projectId === projectId && (
+              <DiscardConfirmation
+                file={confirming.file}
+                command={confirming.command}
+                onChoose={(choice) => void confirm(choice)}
+                onCancel={cancelConfirm}
+              />
+            )}
+            {refused && (
+              <p className="review__refused">
+                <ShieldAlert size={13} strokeWidth={1.9} aria-hidden="true" />
+                {t("review.refused")}
+              </p>
+            )}
             <div className="review__diff-body">
               {activeDiff ? (
                 <DiffView diff={activeDiff} />
@@ -206,6 +240,220 @@ export function ReviewView({ projectId }: ReviewViewProps) {
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * The change type, and whether it is staged, as one readable phrase.
+ *
+ * "Partly staged" is a real state, not a rounding of one of the others: `MM` in
+ * porcelain means some of the change is in the index and some is not, and both
+ * buttons are offered for exactly that reason.
+ */
+function kindLabel(t: ReturnType<typeof useT>, file: ReviewFile): string {
+  const kind = t(KIND_FULL[file.kind]);
+  if (!file.staged) return kind;
+  return `${kind} · ${t(file.unstaged ? "review.partlyStaged" : "review.staged")}`;
+}
+
+/**
+ * What can be done to one file (§44).
+ *
+ * Stage and unstage are both offered when a file is partly staged, because it
+ * genuinely is both — `MM` in porcelain — and offering only one would hide half
+ * the file's state behind a button that then does something unexpected.
+ *
+ * The discard button carries the word for what it does to *this* file: for a
+ * deleted file the same Git command is a recovery, and calling that "discard"
+ * would frighten someone out of the one action they want.
+ */
+function RowActions({
+  file,
+  onAct,
+}: {
+  file: ReviewFile;
+  onAct: (action: "stage" | "unstage" | "discard") => void;
+}) {
+  const t = useT();
+  const name = basename(file.path);
+  const restoring = file.kind === "deleted";
+
+  return (
+    <span className="review__actions">
+      {file.unstaged && (
+        <button
+          type="button"
+          className="review__action"
+          onClick={() => onAct("stage")}
+          title={t("review.stage")}
+          aria-label={`${t("review.stage")}: ${name}`}
+        >
+          <Plus size={13} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+      )}
+      {file.staged && (
+        <button
+          type="button"
+          className="review__action"
+          onClick={() => onAct("unstage")}
+          title={t("review.unstage")}
+          aria-label={`${t("review.unstage")}: ${name}`}
+        >
+          <Minus size={13} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+      )}
+      <button
+        type="button"
+        className="review__action review__action--discard"
+        onClick={() => onAct("discard")}
+        title={t(restoring ? "review.restoreTitle" : "review.discardTitle", { file: name })}
+        aria-label={t(restoring ? "review.restoreTitle" : "review.discardTitle", {
+          file: name,
+        })}
+      >
+        {restoring ? (
+          <RotateCcw size={13} strokeWidth={2.1} aria-hidden="true" />
+        ) : (
+          <Undo2 size={13} strokeWidth={2.1} aria-hidden="true" />
+        )}
+      </button>
+    </span>
+  );
+}
+
+/**
+ * The guardrail asking before a discard (§35, D11).
+ *
+ * The four answers are §35's, unchanged, because this is the same question the
+ * guardrail asks anywhere else and answering it here should mean the same
+ * thing. The command is shown verbatim: approving a paraphrase is not
+ * approving anything.
+ */
+function DiscardConfirmation({
+  file,
+  command,
+  onChoose,
+  onCancel,
+}: {
+  file: ReviewFile;
+  command: string;
+  onChoose: (choice: Choice) => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const name = basename(file.path);
+  const restoring = file.kind === "deleted";
+  const untracked = file.kind === "untracked";
+
+  return (
+    <section className="review__confirm" role="alertdialog" aria-label={name}>
+      <header className="review__confirm-head">
+        <ShieldAlert size={14} strokeWidth={1.9} aria-hidden="true" />
+        <h3 className="review__confirm-title">
+          {t(restoring ? "review.confirm.restoreTitle" : "review.confirm.discardTitle", {
+            file: name,
+          })}
+        </h3>
+      </header>
+
+      <p className="review__confirm-body">
+        {t(
+          untracked
+            ? "review.confirm.bodyUntracked"
+            : restoring
+              ? "review.confirm.bodyDeleted"
+              : "review.confirm.body",
+        )}
+      </p>
+
+      <p className="review__confirm-willrun">
+        {t("review.confirm.willRun")}: <code className="selectable">{command}</code>
+      </p>
+
+      <div className="review__confirm-choices">
+        {(["allowOnce", "allowForProject", "alwaysAllow", "neverAllow"] as Choice[]).map(
+          (choice) => (
+            <button
+              key={choice}
+              type="button"
+              className="review__confirm-choice"
+              data-choice={choice}
+              onClick={() => onChoose(choice)}
+            >
+              {t(`guardrail.choice.${choice}` as MessageKey)}
+            </button>
+          ),
+        )}
+        <button type="button" className="review__confirm-cancel" onClick={onCancel}>
+          {t("review.confirm.cancel")}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Committing what is staged (§44).
+ *
+ * Absent entirely when nothing is staged, rather than present and disabled
+ * (§81/§18): an empty box with a dead button is a permanent reminder of a thing
+ * that is not happening. Staging a file makes it appear, which is also the
+ * clearest possible feedback that staging worked — the diff beside it does not
+ * change, because Review compares against `HEAD` with the index and the working
+ * tree together (§43).
+ */
+function CommitBox({ projectId, files }: { projectId: string; files: ReviewFile[] }) {
+  const t = useT();
+  const [message, setMessage] = useState("");
+  const commit = useReview((state) => state.commit);
+  const committing = useReview((state) => state.committing[projectId]);
+
+  const staged = files.filter((file) => file.staged);
+  if (staged.length === 0) return null;
+
+  const send = async () => {
+    if (!message.trim() || committing) return;
+    if (await commit(projectId, message)) setMessage("");
+  };
+
+  return (
+    <form
+      className="review__commit"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void send();
+      }}
+    >
+      <label className="review__commit-label" htmlFor={`commit-${projectId}`}>
+        {t("review.commit.title")}
+        <span className="review__commit-count">
+          {t("review.commit.staged", { count: staged.length })}
+        </span>
+      </label>
+      <textarea
+        id={`commit-${projectId}`}
+        className="review__commit-message"
+        value={message}
+        placeholder={t("review.commit.placeholder")}
+        rows={2}
+        onChange={(event) => setMessage(event.target.value)}
+        onKeyDown={(event) => {
+          // The convention every commit box uses. Enter alone has to stay a
+          // newline: a commit message has a body.
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void send();
+          }
+        }}
+      />
+      <button
+        type="submit"
+        className="review__commit-action"
+        disabled={!message.trim() || committing}
+      >
+        {t("review.commit.action")}
+      </button>
+    </form>
   );
 }
 

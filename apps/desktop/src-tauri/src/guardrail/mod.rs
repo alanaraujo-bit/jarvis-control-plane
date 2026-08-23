@@ -45,6 +45,7 @@ pub mod commands;
 pub mod guard;
 pub mod policy;
 pub mod sessions;
+pub mod surface;
 
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,14 @@ pub enum Origin {
     Agent,
     /// A command J.A.R.V.I.S. was about to run to verify a mission (§30).
     Verification,
+    /// An operation the user asked a surface to perform — staging a file,
+    /// discarding a change, removing a worktree (§44/§45).
+    ///
+    /// Distinct from `Agent` because nothing was intercepted: the product was
+    /// asked to do something destructive and asked itself first. Distinct from
+    /// `Verification` because there is nothing to resume — the person is at the
+    /// screen, so the question is answered there and then. See `surface`.
+    Surface,
 }
 
 impl Origin {
@@ -70,11 +79,13 @@ impl Origin {
         match self {
             Self::Agent => "agent",
             Self::Verification => "verification",
+            Self::Surface => "surface",
         }
     }
     pub fn parse(text: &str) -> Self {
         match text {
             "verification" => Self::Verification,
+            "surface" => Self::Surface,
             _ => Self::Agent,
         }
     }
@@ -347,7 +358,7 @@ mod tests {
         for status in [Status::Pending, Status::Allowed, Status::Denied, Status::Asked] {
             assert_eq!(Status::parse(status.as_str()), status);
         }
-        for origin in [Origin::Agent, Origin::Verification] {
+        for origin in [Origin::Agent, Origin::Verification, Origin::Surface] {
             assert_eq!(Origin::parse(origin.as_str()), origin);
         }
     }

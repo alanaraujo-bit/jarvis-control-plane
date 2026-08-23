@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { invoke, isTauri } from "../../app/platform";
+import type { Choice, Operation } from "../guardrails/useGuardrails";
 
 export type ChangeKind =
   | "added"
@@ -24,6 +25,13 @@ export interface ReviewFile {
   path: string;
   fromPath: string | null;
   kind: ChangeKind;
+  /**
+   * Both are sent because a file can be both at once (`MM` in porcelain):
+   * part of the change staged, part of it not. The row has to be able to say
+   * so, or the stage button misdescribes what it is about to do.
+   */
+  staged: boolean;
+  unstaged: boolean;
   insertions: number;
   deletions: number;
   binary: boolean;
@@ -67,6 +75,30 @@ export interface FileDiff {
   truncated: boolean;
 }
 
+/** Mirrors `review::actions::GitAction`. */
+export type GitAction = "stage" | "unstage" | "discard";
+
+/**
+ * Mirrors `review::actions::ActionOutcome`, which is internally tagged.
+ *
+ * `needsApproval` means **nothing happened**. The core recorded nothing and
+ * changed nothing; it is waiting for the person to answer the §35 choices and
+ * for the same call to be made again with their answer.
+ */
+export type ActionOutcome =
+  | { status: "done" }
+  | { status: "needsApproval"; operation: Operation; command: string }
+  | { status: "refused"; operation: Operation; reason: string };
+
+/** A discard the guardrail is holding until the person answers. */
+export interface PendingDiscard {
+  projectId: string;
+  file: ReviewFile;
+  operation: Operation;
+  /** Verbatim, so what is approved is what runs. */
+  command: string;
+}
+
 interface ReviewState {
   report: Record<string, ReviewReport | undefined>;
   loading: Record<string, boolean>;
@@ -74,9 +106,23 @@ interface ReviewState {
   diffs: Record<string, FileDiff | undefined>;
   diffLoading: Record<string, boolean>;
   selected: Record<string, string | undefined>;
+  /** At most one at a time: it is a question about the file in front of you. */
+  confirming: PendingDiscard | null;
+  /** A guardrail refused the last attempt, keyed by project. */
+  refused: Record<string, string | undefined>;
+  committing: Record<string, boolean>;
 
   refresh: (projectId: string) => Promise<void>;
   select: (projectId: string, file: ReviewFile) => Promise<void>;
+  act: (
+    projectId: string,
+    action: GitAction,
+    files: ReviewFile[],
+    choice?: Choice,
+  ) => Promise<void>;
+  confirm: (choice: Choice) => Promise<void>;
+  cancelConfirm: () => void;
+  commit: (projectId: string, message: string) => Promise<boolean>;
 }
 
 const diffKey = (projectId: string, path: string) => `${projectId} ${path}`;
@@ -88,6 +134,9 @@ export const useReview = create<ReviewState>((set, get) => ({
   diffs: {},
   diffLoading: {},
   selected: {},
+  confirming: null,
+  refused: {},
+  committing: {},
 
   refresh: async (projectId) => {
     if (!isTauri()) return;
@@ -152,6 +201,91 @@ export const useReview = create<ReviewState>((set, get) => ({
         diffLoading: { ...state.diffLoading, [id]: false },
         error: { ...state.error, [projectId]: String(cause) },
       }));
+    }
+  },
+  /**
+   * Perform a Git action (§44).
+   *
+   * `choice` is the person's answer to a guardrail question, passed straight
+   * back to the core — which resolves policy again and decides for itself. The
+   * webview never carries permission, only an answer.
+   */
+  act: async (projectId, action, files, choice) => {
+    if (!isTauri() || files.length === 0) return;
+    set((state) => ({ refused: { ...state.refused, [projectId]: undefined } }));
+
+    try {
+      const outcome = await invoke<ActionOutcome>("review_git_action", {
+        projectId,
+        action,
+        targets: files.map((file) => ({
+          path: file.path,
+          // A rename is one change with two names and both have to travel, or
+          // discarding it leaves the original deleted.
+          fromPath: file.fromPath,
+          kind: file.kind,
+        })),
+        choice: choice ?? null,
+      });
+
+      if (outcome.status === "needsApproval") {
+        // Nothing has happened yet. Ask, then call back with the answer.
+        set({
+          confirming: {
+            projectId,
+            file: files[0],
+            operation: outcome.operation,
+            command: outcome.command,
+          },
+        });
+        return;
+      }
+
+      set({ confirming: null });
+      if (outcome.status === "refused") {
+        set((state) => ({
+          refused: { ...state.refused, [projectId]: outcome.reason },
+        }));
+        return;
+      }
+
+      // The working tree moved, so everything read from it is stale.
+      await get().refresh(projectId);
+    } catch (cause) {
+      set((state) => ({
+        confirming: null,
+        error: { ...state.error, [projectId]: String(cause) },
+      }));
+    }
+  },
+
+  confirm: async (choice) => {
+    const pending = get().confirming;
+    if (!pending) return;
+    await get().act(pending.projectId, "discard", [pending.file], choice);
+  },
+
+  cancelConfirm: () => set({ confirming: null }),
+
+  commit: async (projectId, message) => {
+    if (!isTauri()) return false;
+    set((state) => ({ committing: { ...state.committing, [projectId]: true } }));
+    try {
+      await invoke("review_commit", { projectId, message });
+      set((state) => ({
+        committing: { ...state.committing, [projectId]: false },
+        error: { ...state.error, [projectId]: null },
+      }));
+      await get().refresh(projectId);
+      return true;
+    } catch (cause) {
+      // A failing `pre-commit` hook lands here, and its text is the useful
+      // part — it is the user's own hook telling them what is wrong.
+      set((state) => ({
+        committing: { ...state.committing, [projectId]: false },
+        error: { ...state.error, [projectId]: String(cause) },
+      }));
+      return false;
     }
   },
 }));

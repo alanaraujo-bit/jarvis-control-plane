@@ -10,10 +10,11 @@
 //!   everything else reads, D2), so attribution is a join rather than an
 //!   invention.
 //!
-//! Read-only, deliberately. Staging, discarding or restoring a file is the
-//! product running a destructive Git operation on the user's behalf, which by
-//! D11 has to go through the guardrail rather than sit behind a plain button.
-//! That belongs with Git proper (§44), not with reading a diff.
+//! Reading is here; **acting is in `actions`** (§44). Staging, discarding and
+//! restoring are the product running Git on the user's behalf, and discarding
+//! in particular destroys work nothing can recover — so by D11 it goes through
+//! the guardrail rather than sitting behind a plain button. That gate is the
+//! whole of what `actions` adds; this module still only ever reads.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -28,6 +29,8 @@ use crate::git::{
     status::ChangeKind,
 };
 use crate::AppState;
+
+pub mod actions;
 
 pub type Result<T> = std::result::Result<T, FileError>;
 
@@ -51,9 +54,22 @@ pub struct ReviewFile {
     pub path: String,
     pub from_path: Option<String>,
     pub kind: ChangeKind,
-    // Whether a change is staged is parsed and tested (`ChangedFile`), but not
-    // sent: Review is read-only, so nothing here can act on it. §44 adds it
-    // back when there is a stage button to attach it to.
+    /// The change is in the index.
+    ///
+    /// Both of these are sent because a file can be **both**: `MM` means part
+    /// of the change is staged and part is not. Collapsing that into one
+    /// boolean would render a half-staged file as fully one or the other, and
+    /// the stage button would then be lying about what it is going to do.
+    ///
+    /// Worth knowing when reading the row: the diff beside it does not change
+    /// when a file is staged. `file_diff` compares against `HEAD` with the
+    /// index and the working tree together (§43), because "what is different
+    /// from the last commit" is the reviewer's question — so staging has to
+    /// report itself *here*, on the row, or it looks as though nothing
+    /// happened.
+    pub staged: bool,
+    /// The change is in the working tree but not the index.
+    pub unstaged: bool,
     pub insertions: u32,
     pub deletions: u32,
     pub binary: bool,
@@ -257,6 +273,26 @@ fn untracked_counts(root: &Path, project_path: &str) -> UntrackedCounts {
     }
 }
 
+/// What a row can be asked to do: `(staged, unstaged)`.
+///
+/// Almost always just the two porcelain status columns, with one correction
+/// that matters. An untracked file reports `??`, so `ChangedFile` has it as
+/// **neither** staged nor unstaged — a faithful reading of the columns and the
+/// wrong answer for a row with a stage button on it. There plainly *is*
+/// something here that is not in the index; that is what untracked means.
+///
+/// Left uncorrected it removes the stage button from every new file, so
+/// nothing an agent creates could ever be staged or committed from this
+/// surface. Nothing errored, no test noticed, and the row looked entirely
+/// normal — it was found by hovering one in the real application and counting
+/// the buttons.
+fn staging_state(change: &git::status::ChangedFile) -> (bool, bool) {
+    (
+        change.staged,
+        change.unstaged || change.kind == ChangeKind::Untracked,
+    )
+}
+
 /// Everything that differs from `HEAD` in one project.
 pub fn report(state: &AppState, project_id: &str) -> Result<ReviewReport> {
     let root = files::project_root(state, project_id)?;
@@ -318,11 +354,15 @@ pub fn report(state: &AppState, project_id: &str) -> Result<ReviewReport> {
             }
         };
 
+        let (staged, unstaged) = staging_state(&change);
+
         files_out.push(ReviewFile {
             sessions: touched.get(&path).cloned().unwrap_or_default(),
             path,
             from_path,
             kind: change.kind,
+            staged,
+            unstaged,
             insertions,
             deletions,
             binary,

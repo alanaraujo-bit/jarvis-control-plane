@@ -14,6 +14,7 @@
 
 pub mod diff;
 pub mod status;
+pub mod write;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

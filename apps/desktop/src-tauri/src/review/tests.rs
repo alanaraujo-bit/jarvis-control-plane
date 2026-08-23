@@ -353,3 +353,34 @@ fn a_recorded_change_is_matched_through_the_session_working_directory() {
     // And one that touched something outside the project entirely.
     assert_eq!(project_relative(root, cwd, r"other\file.rs"), None);
 }
+
+/// Every row must be able to offer the action its state implies (§44).
+///
+/// The untracked case is the one that was wrong in the real app: `??` means
+/// neither status column is set, so a new file arrived with no stage button and
+/// nothing an agent created could be committed from Review. Found by looking,
+/// not by a test — this is that test.
+#[test]
+fn a_new_file_can_be_staged() {
+    let changes = parse_status(
+        "?? new.rs\0 M unstaged.rs\0M  staged.rs\0MM both.rs\0UU conflicted.rs\0 D gone.rs\0",
+    );
+    let state: Vec<(&str, (bool, bool))> = changes
+        .iter()
+        .map(|c| (c.path.as_str(), staging_state(c)))
+        .collect();
+
+    assert_eq!(
+        state,
+        vec![
+            // The correction: untracked is stageable.
+            ("new.rs", (false, true)),
+            ("unstaged.rs", (false, true)),
+            ("staged.rs", (true, false)),
+            // Half staged is genuinely both, and both buttons are offered.
+            ("both.rs", (true, true)),
+            ("conflicted.rs", (true, true)),
+            ("gone.rs", (false, true)),
+        ]
+    );
+}

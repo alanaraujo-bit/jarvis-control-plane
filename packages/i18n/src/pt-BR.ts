@@ -160,6 +160,39 @@ export const ptBR: Record<MessageKey, string> = {
   "review.kind.untracked": "N",
   "review.kind.conflicted": "!",
 
+  "review.stage": "Adicionar",
+  "review.unstage": "Tirar",
+  "review.staged": "Preparado",
+  "review.partlyStaged": "Preparado em parte",
+  "review.discard": "Descartar",
+  "review.restore": "Restaurar",
+  "review.discardTitle": "Jogar fora as mudanças em {file}",
+  "review.restoreTitle": "Trazer {file} de volta como foi commitado",
+  "review.stageAll": "Adicionar tudo",
+  "review.unstageAll": "Tirar tudo",
+
+  "review.commit.title": "Commit",
+  "review.commit.staged": "{count} preparados",
+  "review.commit.staged_one": "{count} preparado",
+  "review.commit.placeholder": "O que mudou, e por quê",
+  "review.commit.action": "Commitar o que está preparado",
+  "review.commit.nothingStaged":
+    "Prepare alguma coisa antes — um commit leva o que está no índice.",
+  "review.commit.done": "Commit feito.",
+
+  "review.confirm.discardTitle": "Descartar as mudanças em {file}?",
+  "review.confirm.restoreTitle": "Restaurar {file}?",
+  "review.confirm.body":
+    "Trabalho não commitado é a única coisa da qual o Git não guarda cópia. Depois que isso rodar, não há de onde recuperar.",
+  "review.confirm.bodyDeleted":
+    "O arquivo volta exatamente como foi commitado. Tudo que não estava commitado nele — inclusive a exclusão — vai embora.",
+  "review.confirm.bodyUntracked":
+    "O Git nunca viu este arquivo, então não existe versão commitada para onde voltar. Ele vai sair do disco.",
+  "review.confirm.willRun": "Isto vai rodar",
+  "review.confirm.cancel": "Cancelar",
+  "review.refused":
+    "Um guardrail recusa isso. Mude a regra em Configurações se era mesmo a intenção.",
+
 
   "update.title": "Atualizações",
   "update.current": "Você está na versão {version}.",
@@ -287,6 +320,9 @@ export const ptBR: Record<MessageKey, string> = {
   "guardrail.op.git.history-rewrite.detail": "reset --hard, rebase, filter-branch.",
   "guardrail.op.git.branch-delete": "Apagar um branch",
   "guardrail.op.git.branch-delete.detail": "Apagar um branch remoto, ou forçar um local.",
+  "guardrail.op.git.discard-changes": "Jogar fora trabalho não commitado",
+  "guardrail.op.git.discard-changes.detail":
+    "git restore, checkout -- <arquivo>, stash drop. A única coisa da qual o Git não guarda cópia.",
   "guardrail.op.fs.recursive-delete": "Apagar uma pasta inteira",
   "guardrail.op.fs.recursive-delete.detail": "rm -rf, Remove-Item -Recurse, git clean -f.",
   "guardrail.op.secrets.access": "Ler um arquivo de credencial",
@@ -317,6 +353,7 @@ export const ptBR: Record<MessageKey, string> = {
   "guardrail.status.asked": "Perguntado",
   "guardrail.origin.agent": "Agente",
   "guardrail.origin.verification": "Verificação",
+  "guardrail.origin.surface": "Você pediu",
   "guardrail.reason.policyDenies": "Uma regra diz que nunca",
   "guardrail.reason.nobodyToAsk": "Precisava de aprovação, ninguém estava acompanhando",
   "guardrail.reason.askedHuman": "Perguntado a você",
@@ -333,6 +370,10 @@ export const ptBR: Record<MessageKey, string> = {
   "guardrail.coverage.note":
     "As proteções governam os agentes, não o que você digita. Comandos de verificação que o J.A.R.V.I.S. roda são sempre impedidos.",
 
+  "activity.kind.git.staged": "Preparou uma mudança",
+  "activity.kind.git.unstaged": "Tirou uma mudança do índice",
+  "activity.kind.git.discarded": "Descartou trabalho não commitado",
+  "activity.kind.git.committed": "Fez um commit",
   "activity.kind.guardrail.denied": "Proteção recusou uma operação",
   "activity.kind.guardrail.allowed": "Proteção aprovou uma operação",
 

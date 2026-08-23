@@ -326,3 +326,221 @@
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
+
+/* ---- Acting on a change (§44) --------------------------------------------
+   The row becomes a container so the select button and the actions can be
+   siblings — a <button> cannot hold buttons, and making the whole row a
+   button was what kept Review read-only-shaped. */
+
+.review__row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.review__row .review__file { flex: 1 1 auto; min-width: 0; }
+
+/* Staged reads as a chip around the change letter, not as a second marker
+   somewhere else on the row. The letter is already the thing that says what
+   kind of change this is, so "the change is in the index" belongs on it — and
+   at the left edge it would have collided with the selected row's accent
+   border, which is a different fact entirely.
+
+   The word travels with it in the tooltip and the accessible name, so this is
+   never colour alone. */
+.review__file[data-staged] .review__kind {
+  width: auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--state-success-bg);
+  box-shadow: inset 0 0 0 1px rgba(111, 191, 142, 0.3);
+}
+
+/* Hidden until the row is hovered or something inside it has focus. Quiet
+   Intelligence (§6): a list of forty files with three buttons on every row is
+   a toolbar, not a list. Keyboard users get them from focus-within, so this is
+   not a mouse-only affordance. */
+.review__actions {
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-instant) var(--ease-out);
+}
+.review__row:hover .review__actions,
+.review__row:focus-within .review__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.review__action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  transition:
+    color var(--duration-instant) var(--ease-out),
+    background-color var(--duration-instant) var(--ease-out);
+}
+.review__action:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+/* The one that cannot be undone is the one that is coloured. */
+.review__action--discard:hover {
+  color: var(--state-danger);
+  background: var(--state-danger-bg);
+}
+
+/* ---- The guardrail asking (§35) ------------------------------------------ */
+
+.review__confirm {
+  margin: var(--space-5) var(--space-6) 0;
+  padding: var(--space-5);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  background: var(--accent-muted);
+}
+.review__confirm-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--accent);
+}
+.review__confirm-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-tight);
+}
+.review__confirm-body {
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
+}
+.review__confirm-willrun {
+  margin-top: var(--space-4);
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+}
+.review__confirm-willrun code {
+  display: block;
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+  overflow-x: auto;
+  white-space: pre;
+}
+.review__confirm-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+.review__confirm-choice,
+.review__confirm-cancel {
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  transition:
+    border-color var(--duration-instant) var(--ease-out),
+    background-color var(--duration-instant) var(--ease-out);
+}
+.review__confirm-choice:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+.review__confirm-choice[data-choice="neverAllow"] { color: var(--state-danger); }
+.review__confirm-cancel {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+.review__confirm-cancel:hover { color: var(--text-primary); }
+
+.review__refused {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-5) var(--space-6) 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--state-danger-bg);
+  font-size: var(--text-xs);
+  color: var(--state-danger);
+}
+
+/* ---- Committing ---------------------------------------------------------- */
+
+/* Sticks to the foot of the list: the file list scrolls and a commit box that
+   scrolled away with it would be missing exactly when it is wanted. */
+.review__commit {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+.review__commit-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+}
+.review__commit-count {
+  font-weight: var(--weight-normal);
+  text-transform: none;
+  letter-spacing: var(--tracking-normal);
+  color: var(--state-success);
+}
+.review__commit-message {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  resize: vertical;
+}
+.review__commit-message:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+}
+.review__commit-action {
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-muted);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  transition: opacity var(--duration-instant) var(--ease-out);
+}
+.review__commit-action:hover:not(:disabled) { background: var(--bg-active); }
+.review__commit-action:disabled { opacity: 0.4; cursor: default; }
