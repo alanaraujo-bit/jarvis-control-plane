@@ -15,6 +15,7 @@ export const en = {
   // ---- Voice dictation (§54) ------------------------------------------------
   "voice.start": "Dictate into the terminal",
   "voice.recording": "Listening — click to stop",
+  "voice.listening": "Listening…",
   "voice.transcribing": "Transcribing…",
   "voice.error": "Voice dictation failed",
   "voice.downloadNeeded": "Download voice dictation to use it",

@@ -17,6 +17,7 @@ export const ptBR: Record<MessageKey, string> = {
   // ---- Ditado por voz (§54) --------------------------------------------------
   "voice.start": "Ditar no terminal",
   "voice.recording": "Ouvindo — clique para parar",
+  "voice.listening": "Ouvindo…",
   "voice.transcribing": "Transcrevendo…",
   "voice.error": "O ditado por voz falhou",
   "voice.downloadNeeded": "Baixe o ditado por voz para usá-lo",
