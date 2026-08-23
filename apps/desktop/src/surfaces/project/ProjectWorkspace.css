@@ -262,6 +262,99 @@
 }
 .workspace__pane[data-visible] { visibility: visible; pointer-events: auto; }
 
+/* ---- Split panes (§20) ---------------------------------------------------
+   The body becomes a grid and the panes stop being absolutely positioned.
+   Crucially this is the *only* thing that changes: each pane keeps its place
+   in the DOM, so no terminal is ever re-parented and no scrollback is lost.
+
+   Hidden panes are removed from the grid entirely with `display: none`. Left
+   as `visibility: hidden` they would still occupy a cell, and a two-way split
+   with five tabs open would lay out as five cells with three blank. */
+.workspace__body[data-split] {
+  display: grid;
+  gap: 1px;
+  background: var(--border-default);
+}
+
+.workspace__body[data-split] .workspace__pane {
+  position: relative;
+  inset: auto;
+  min-width: 0;
+  min-height: 0;
+  display: none;
+}
+
+.workspace__body[data-split] .workspace__pane[data-visible] {
+  display: block;
+}
+
+.workspace__body[data-split="columns"] { grid-auto-flow: column; }
+.workspace__body[data-split="rows"] { grid-auto-flow: row; }
+.workspace__body[data-split="grid"] {
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+}
+
+/* Which pane the keyboard is going to.
+   A 1px grid gap painted with the border colour already separates the panes;
+   the focused one gets a brighter inset edge rather than a heavy outline —
+   the terminal's own content is what should hold the eye, and four panes
+   ringed in amber would turn the colour of agent work into decoration (§6). */
+.workspace__body[data-split] .workspace__pane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.workspace__body[data-split] .workspace__pane[data-focused]::after {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace__body[data-split] .workspace__pane::after { transition: none; }
+}
+
+/* Closing a pane is a per-pane action, so it lives in the pane. It appears on
+   hover or focus only: four always-visible close buttons would be four
+   invitations to dismantle a layout you just built. */
+.workspace__pane-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-overlay);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.workspace__pane:hover .workspace__pane-close,
+.workspace__pane-close:focus-visible {
+  opacity: 1;
+}
+
+.workspace__pane-close:hover { color: var(--text-primary); }
+
+.workspace__pane-close:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace__pane-close { transition: none; }
+}
+
 .workspace__error {
   position: absolute;
   top: var(--space-5);
@@ -342,6 +435,88 @@
   background: var(--bg-overlay);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
+}
+
+/* ---- Split controls (§20) ------------------------------------------------
+   The split button sits where the view toggle does and the layout control
+   replaces it, so the right-hand end of the tab strip never has two competing
+   groups of controls. The layout control is the same segmented shape as the
+   view toggle above, because it is the same kind of choice. */
+/* `margin-left: auto` on **two** flex siblings does not push both right — the
+   free space is divided between them, so the split button landed in the middle
+   of the tab strip with the view toggle still at the end. Only the first
+   right-aligned control claims the space; the rest sit beside it. Found on
+   screen; it looked like a stray button floating in the middle of nothing. */
+.workspace__split-button ~ .workspace__view-toggle,
+.workspace__split-controls ~ .workspace__view-toggle {
+  margin-left: var(--space-2);
+}
+
+.workspace__split-button {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.workspace__split-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace__split-controls {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  align-self: center;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.workspace__split-option {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 20px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.workspace__split-option:hover:not([data-active]) { color: var(--text-secondary); }
+
+.workspace__split-option[data-active] {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace__split-button:focus-visible,
+.workspace__split-option:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace__split-button,
+  .workspace__split-option { transition: none; }
 }
 
 /* ---- Voice dictation (§54) ------------------------------------------------

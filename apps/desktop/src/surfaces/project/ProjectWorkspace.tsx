@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, GitBranch, Plus, X } from "lucide-react";
+import { ChevronLeft, Columns2, GitBranch, Grid2x2, Plus, Rows2, X } from "lucide-react";
 import { ConversationView } from "../conversation/ConversationView";
 import { Popover } from "../../design/Popover";
 import { FilesView } from "../files/FilesView";
@@ -14,7 +14,7 @@ import type { MessageKey } from "@jarvis/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
 import { useEnvironment } from "../environment/useEnvironment";
 import { TerminalView } from "../terminal/TerminalView";
-import { useTerminals } from "../terminal/useTerminals";
+import { useTerminals, type SplitDirection } from "../terminal/useTerminals";
 import type { Project } from "../projects/useProjects";
 import { VoiceButton } from "./VoiceButton";
 import "./ProjectWorkspace.css";
@@ -54,6 +54,27 @@ const AREA_LABEL: Record<Area, MessageKey> = {
   settings: "project.settings",
 };
 
+/**
+ * The three ways panes can share the screen (§20).
+ *
+ * Presets, not a resizable tree. A draggable split tree is a large amount of
+ * machinery — drag state, minimum sizes, persistence, a resize storm through
+ * every PTY — in service of a choice most people make once. Three layouts and
+ * a four-pane ceiling cover what a person actually does with several agents,
+ * and can be read at a glance from the icon.
+ */
+const SPLIT_LAYOUTS = [
+  { id: "columns", Icon: Columns2 },
+  { id: "rows", Icon: Rows2 },
+  { id: "grid", Icon: Grid2x2 },
+] as const;
+
+const SPLIT_LABEL: Record<SplitDirection, MessageKey> = {
+  columns: "terminal.split.columns",
+  rows: "terminal.split.rows",
+  grid: "terminal.split.grid",
+};
+
 /** Which agents can actually be launched, from the real environment scan (§14). */
 const AGENT_TOOL_ID: Record<Exclude<SessionKind, "shell">, string> = {
   "claude-code": "claude",
@@ -77,10 +98,37 @@ export function ProjectWorkspace({
 }: ProjectWorkspaceProps) {
   const { t, locale } = useI18n();
   const { report } = useEnvironment();
-  const { tabs, activeTab, openTerminal, openHistorical, closeTerminal, setActive, adopt, error } =
-    useTerminals();
+  const {
+    tabs,
+    activeTab,
+    slots,
+    direction,
+    openTerminal,
+    openHistorical,
+    closeTerminal,
+    setActive,
+    adopt,
+    addToSplit,
+    removeFromSplit,
+    setDirection,
+    error,
+  } = useTerminals();
 
   const projectTabs = tabs[project.id] ?? [];
+  // Only sessions that are still tabs, **in tab order**. Filtering here rather
+  // than trusting the store means a stale id can never render an empty pane.
+  //
+  // Tab order, not the order they were added to the split: on screen the first
+  // attempt put the active terminal on the left and the one it was split with
+  // on the right, so the panes read `Shell 2 | Shell` while the strip above
+  // read `Shell | Shell 2`. Two orderings of the same four things, and the
+  // tab strip is the one the user is already reading. Found by splitting in
+  // the real app and having to look twice to tell which pane was which.
+  const split = projectTabs
+    .map((tab) => tab.sessionId)
+    .filter((id) => (slots[project.id] ?? []).includes(id));
+  const splitting = split.length > 1;
+  const layout = direction[project.id] ?? "columns";
   const active = activeTab[project.id];
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLButtonElement | null>(null);
@@ -181,6 +229,17 @@ export function ProjectWorkspace({
               type="button"
               className="workspace__tab-label"
               onClick={() => setActive(project.id, tab.sessionId)}
+              // Alt+click puts this tab on screen beside what is already
+              // there, the same gesture as the split button but aimed at a
+              // specific terminal rather than the next one along. Discovered
+              // through the tooltip rather than guessed at.
+              title={tab.historical ? undefined : t("terminal.split.addThis")}
+              onMouseDown={(event) => {
+                if (event.altKey && !tab.historical) {
+                  event.preventDefault();
+                  addToSplit(project.id, tab.sessionId);
+                }
+              }}
             >
               <span className="workspace__tab-dot" data-kind={tab.kind} aria-hidden="true" />
               {tab.title}
@@ -256,7 +315,57 @@ export function ProjectWorkspace({
           <VoiceButton projectId={project.id} sessionId={activeTab_.sessionId} locale={locale} />
         )}
 
-        {activeTab_ && !activeTab_.historical && (
+        {/* Split controls (§20).
+            Shown only with something to split — a layout control beside a
+            single terminal is an option that cannot do anything. Splitting
+            is offered while there is room; the direction control replaces it
+            once panes are on screen, because that is the choice that is
+            actually live at that point. */}
+        {!splitting && projectTabs.length > 1 && activeTab_ && !activeTab_.historical && (
+          <button
+            type="button"
+            className="workspace__split-button"
+            onClick={() => {
+              // The obvious partner: the next tab along, wrapping. Splitting
+              // should be one click, not a click and then a chooser.
+              const index = projectTabs.findIndex((tab) => tab.sessionId === active);
+              const next = projectTabs[(index + 1) % projectTabs.length];
+              if (next) addToSplit(project.id, next.sessionId);
+            }}
+            aria-label={t("terminal.split.add")}
+            title={t("terminal.split.add")}
+          >
+            <Columns2 size={13} strokeWidth={1.9} aria-hidden="true" />
+          </button>
+        )}
+
+        {splitting && (
+          <div
+            className="workspace__split-controls"
+            role="radiogroup"
+            aria-label={t("terminal.split.layout")}
+          >
+            {SPLIT_LAYOUTS.map(({ id, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={layout === id}
+                data-active={layout === id || undefined}
+                className="workspace__split-option"
+                onClick={() => setDirection(project.id, id)}
+                aria-label={t(SPLIT_LABEL[id])}
+                title={t(SPLIT_LABEL[id])}
+              >
+                <Icon size={13} strokeWidth={1.9} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Terminal/Conversation is meaningless in a split — see the note by
+            the conversation projection below. */}
+        {activeTab_ && !activeTab_.historical && !splitting && (
           <div className="workspace__view-toggle" role="radiogroup" aria-label={t("view.terminal")}>
             {(["terminal", "conversation"] as const).map((mode) => (
               <button
@@ -275,7 +384,13 @@ export function ProjectWorkspace({
         )}
         </div>
 
-        <div className="workspace__body">
+        {/* Split panes (§20).
+            `data-split` switches `.workspace__body` from a stack of absolutely
+            positioned panes to a grid. Each pane keeps its **place in the DOM**
+            either way — only its CSS box changes. Re-parenting a terminal to
+            move it into a layout would remount it, and remounting is how you
+            lose a session's whole scrollback. */}
+        <div className="workspace__body" data-split={splitting ? layout : undefined}>
         {error && <p className="workspace__error">{error}</p>}
 
         {projectTabs.length === 0 ? (
@@ -293,7 +408,28 @@ export function ProjectWorkspace({
             <div
               key={tab.sessionId}
               className="workspace__pane"
-              data-visible={tab.sessionId === active || undefined}
+              // In a split, every session in the layout is visible at once and
+              // `active` narrows to which one holds the keyboard. Outside one,
+              // visible and active are the same thing.
+              data-visible={
+                (splitting ? split.includes(tab.sessionId) : tab.sessionId === active) || undefined
+              }
+              // Which slot this pane occupies, so the grid can order panes by
+              // the layout rather than by tab order — the two differ as soon
+              // as you split with anything but the leftmost tabs.
+              style={
+                splitting && split.includes(tab.sessionId)
+                  ? { order: split.indexOf(tab.sessionId) }
+                  : undefined
+              }
+              // Only meaningful with more than one pane on screen: it says
+              // which of them the keyboard is going to.
+              data-focused={(splitting && tab.sessionId === active) || undefined}
+              // Clicking anywhere in a pane moves focus to it, which is what
+              // every split terminal does and what the click was for anyway.
+              onMouseDown={() => {
+                if (splitting && tab.sessionId !== active) setActive(project.id, tab.sessionId);
+              }}
             >
               {tab.historical ? (
                 // Opened by Global Search (§51) against a session this window
@@ -310,21 +446,46 @@ export function ProjectWorkspace({
                       switching views must never cost the user their history. */}
                   <div
                     className="workspace__projection"
-                    data-visible={view === "terminal" || undefined}
+                    data-visible={view === "terminal" || splitting || undefined}
                   >
                     <TerminalView
                       sessionId={tab.sessionId}
                       // Also gated on the area: a terminal that is off screen
                       // behind Files or Review must not hold the keyboard.
+                      // In a split several terminals are visible and exactly
+                      // one is focused, so this stays `=== active` — four
+                      // panes all claiming focus would fight over every
+                      // keystroke, and Ctrl+F would open four find bars.
                       autoFocus={
-                        area === "sessions" && tab.sessionId === active && view === "terminal"
+                        area === "sessions" &&
+                        tab.sessionId === active &&
+                        (view === "terminal" || splitting)
                       }
                     />
                   </div>
-                  {view === "conversation" && (
+                  {/* Conversation is a single-session reading view, so a
+                      split shows terminals only. Rendering four conversations
+                      side by side would be four columns of prose too narrow
+                      to read — the toggle is hidden in a split for the same
+                      reason. */}
+                  {view === "conversation" && !splitting && (
                     <div className="workspace__projection" data-visible>
                       <ConversationView sessionId={tab.sessionId} live />
                     </div>
+                  )}
+                  {splitting && (
+                    <button
+                      type="button"
+                      className="workspace__pane-close"
+                      // Closes the *pane*, never the session: the terminal
+                      // stays a tab and keeps running. Conflating the two
+                      // would make tidying a layout kill an agent mid-task.
+                      onClick={() => removeFromSplit(project.id, tab.sessionId)}
+                      aria-label={t("terminal.split.remove")}
+                      title={t("terminal.split.remove")}
+                    >
+                      <X size={11} strokeWidth={2.2} aria-hidden="true" />
+                    </button>
                   )}
                 </>
               )}

@@ -122,6 +122,13 @@ export const ptBR: Record<MessageKey, string> = {
   "terminal.find.close": "Fechar busca",
   "terminal.find.noResults": "Nenhum resultado",
   "terminal.find.manyResults": "1000+",
+  "terminal.split.add": "Mostrar dois terminais lado a lado",
+  "terminal.split.addThis": "Alt+clique para mostrar este terminal ao lado",
+  "terminal.split.remove": "Fechar este painel — a sessão continua rodando",
+  "terminal.split.layout": "Disposição",
+  "terminal.split.columns": "Lado a lado",
+  "terminal.split.rows": "Empilhados",
+  "terminal.split.grid": "Grade",
 
 
   "conversation.title": "Conversa",

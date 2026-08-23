@@ -137,6 +137,13 @@ export const en = {
   // xterm stops counting past its highlight limit. Saying "1000+" is honest;
   // a total that is quietly wrong is not.
   "terminal.find.manyResults": "1000+",
+  "terminal.split.add": "Show two terminals side by side",
+  "terminal.split.addThis": "Alt+click to show this terminal alongside",
+  "terminal.split.remove": "Close this pane — the session keeps running",
+  "terminal.split.layout": "Layout",
+  "terminal.split.columns": "Side by side",
+  "terminal.split.rows": "Stacked",
+  "terminal.split.grid": "Grid",
 
 
   // ---- Conversation (§24) --------------------------------------------------
