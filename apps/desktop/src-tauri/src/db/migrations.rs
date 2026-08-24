@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 12;
+pub const SCHEMA_VERSION: u32 = 13;
 
 struct Migration {
     version: u32,
@@ -601,6 +601,56 @@ const MIGRATIONS: &[Migration] = &[Migration {
     CREATE INDEX idx_notifications_unseen ON notifications (seen_at, ts_ms DESC);
     CREATE INDEX idx_notifications_session ON notifications (session_id, ts_ms DESC);
 "#,
+    },
+    Migration {
+        version: 13,
+        sql: r#"
+    -- ---- Session History (§88, D36–D39) -------------------------------------
+    --
+    -- `sessions.title` has existed since migration 1 and nothing has ever
+    -- written to it. This migration is what makes it mean something.
+    --
+    -- ## Why a title needs a source
+    --
+    -- Three different things can name a session, and they are not equally
+    -- trustworthy: the person renamed it, the provider named it itself (Claude
+    -- Code writes an `ai-title` line into its own transcript — 89 of the 124
+    -- transcripts on this machine carry one), or we cut it out of the first
+    -- thing that was typed. Showing all three identically would assert
+    -- something the product does not know, which is the same mistake §28 exists
+    -- to prevent for a token count.
+    --
+    -- Precedence is user > provider > derived, and it is enforced in
+    -- `session::title`, not here: a rename that a later `ai-title` silently
+    -- overwrote would be the product ignoring the one input it was given.
+    --
+    -- NULL means the session has no title yet, which is the honest state for a
+    -- shell that has never been named and never will be.
+    ALTER TABLE sessions ADD COLUMN title_source TEXT;
+
+    -- The backfill's bookmark, and only a bookmark — same shape and same
+    -- reasoning as migration 10's (D30, D38). The walk itself does not run
+    -- here: a migration is the one place where failing halfway leaves a
+    -- database claiming a version it does not have.
+    --
+    -- Unlike D30's, this backfill reads `session_events` rather than the logs
+    -- on disk, because that table already holds every user message of every
+    -- session — D30's own walk put them there.
+    ALTER TABLE sessions ADD COLUMN title_backfilled_at INTEGER;
+
+    -- History is a question about *this machine*, not about one project, and
+    -- the only index on `sessions.created_at` is `(project_id, created_at DESC)`
+    -- — a prefix that a cross-project ORDER BY cannot use, so the query would
+    -- sort every session on every page.
+    CREATE INDEX idx_sessions_recent ON sessions (created_at DESC);
+
+    -- A history row states what a session cost, which is `SUM(...) WHERE
+    -- session_id = ?` once per row. Every index on this table so far is by
+    -- time, project or account — none of them has `session_id` as a prefix, so
+    -- that sum would scan every usage sample ever recorded, once per row on
+    -- the page.
+    CREATE INDEX idx_usage_session ON usage_samples (session_id);
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -711,6 +761,7 @@ mod tests {
             (10, 0xee5e_755e_d603_e551),
             (11, 0xd1c1_2851_e515_228c),
             (12, 0x4ea3_d5cb_46cb_d4a8),
+            (13, 0xc7ca_954d_e678_f1bd),
         ];
 
         for migration in MIGRATIONS {

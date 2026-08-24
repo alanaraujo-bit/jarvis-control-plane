@@ -18,6 +18,7 @@ import {
 import { usePreferences } from "./surfaces/settings/usePreferences";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
+import { History, kindOf } from "./surfaces/history/History";
 import { Analytics } from "./surfaces/analytics/Analytics";
 import { Accounts } from "./surfaces/accounts/Accounts";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
@@ -48,6 +49,7 @@ const IMPLEMENTED: SurfaceId[] = [
   "projects",
   "missions",
   "activity",
+  "history",
   "analytics",
   "accounts",
   "settings",
@@ -440,6 +442,33 @@ export function App() {
               <Projects onOpen={(project) => openProjectDirect(project)} />
             ) : surface === "activity" ? (
               <Activity />
+            ) : surface === "history" ? (
+              <History
+                // Routed through the *same* path Global Search uses to reopen a
+                // past session (§51): the project workspace, the sessions area,
+                // and a read-only historical tab. A second mechanism for
+                // opening a session is exactly what §23 exists to prevent -- and
+                // `focusToken` is what makes it work when the project is
+                // already open (HANDOFF item 53).
+                onOpenSession={(entry) => {
+                  openProjectById(entry.projectId, {
+                    area: "sessions",
+                    sessionId: entry.id,
+                    // A live session is opened as itself; only a finished one
+                    // is reopened as a transcript. Passing the provider is what
+                    // marks a tab historical, and doing it for a running agent
+                    // would turn it into a read-only view of a session that is
+                    // still going.
+                    sessionProvider: entry.live ? undefined : kindOf(entry),
+                    sessionTitle: entry.title ?? undefined,
+                  });
+                }}
+                onOpenMission={(missionId) => {
+                  setOpenProject(null);
+                  setFocusMission(missionId);
+                  setSurface("missions");
+                }}
+              />
             ) : surface === "analytics" ? (
               <Analytics />
             ) : surface === "accounts" ? (

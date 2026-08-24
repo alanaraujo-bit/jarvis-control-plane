@@ -1,6 +1,7 @@
 import {
   Activity,
   ChartNoAxesColumn,
+  History,
   FolderGit2,
   Settings,
   Radar,
@@ -17,6 +18,7 @@ export type SurfaceId =
   | "projects"
   | "missions"
   | "activity"
+  | "history"
   | "analytics"
   | "accounts"
   | "settings";
@@ -41,6 +43,7 @@ export const RAIL_ITEMS: RailItem[] = [
   { id: "projects", icon: FolderGit2, label: "nav.projects" },
   { id: "missions", icon: Target, label: "nav.missions" },
   { id: "activity", icon: Activity, label: "nav.activity" },
+  { id: "history", icon: History, label: "nav.history" },
   { id: "analytics", icon: ChartNoAxesColumn, label: "nav.analytics" },
   { id: "accounts", icon: UsersRound, label: "nav.accounts" },
   { id: "settings", icon: Settings, label: "nav.settings", footer: true },

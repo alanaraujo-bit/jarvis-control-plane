@@ -58,6 +58,9 @@ export function useI18n(): I18nContextValue {
   return ctx;
 }
 
+/** The translate function itself, for components that take it as a prop. */
+export type Translate = I18nContextValue["t"];
+
 /** Convenience hook for the common case of only needing the translate function. */
 export function useT() {
   return useI18n().t;

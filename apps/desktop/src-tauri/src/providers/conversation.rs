@@ -125,6 +125,24 @@ pub enum ConversationItem {
         reason: String,
         ts_ms: i64,
     },
+    /// The provider named this session itself (§88, D36/D37).
+    ///
+    /// Claude Code writes an `ai-title` line into its own transcript once it
+    /// has enough of the conversation to summarise — 89 of the 124 transcripts
+    /// on this machine carry one. That is a title the *provider* stated, and it
+    /// is worth exactly as much more than one we cut out of the first sentence
+    /// as an Official token count is worth more than an estimate (§28).
+    ///
+    /// It is not something anybody said, so it is logged as a `Lifecycle` frame
+    /// and Conversation View never renders it as a bubble. It goes through the
+    /// log all the same, because §23 means everything does: the frame that
+    /// updates the row is on disk beside the conversation it names.
+    ///
+    /// The `ai-title` line carries **no timestamp of its own** — verified
+    /// against real transcripts — so `ts_ms` is when we read it, not when the
+    /// provider decided it. Nothing depends on the difference.
+    #[serde(rename_all = "camelCase")]
+    Title { text: String, ts_ms: i64 },
 }
 
 impl ConversationItem {
@@ -136,6 +154,7 @@ impl ConversationItem {
             | Self::ToolResult { ts_ms, .. }
             | Self::FileChange { ts_ms, .. }
             | Self::TurnEnded { ts_ms, .. }
+            | Self::Title { ts_ms, .. }
             | Self::Error { ts_ms, .. } => *ts_ms,
         }
     }

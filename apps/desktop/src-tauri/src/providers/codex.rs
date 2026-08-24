@@ -22,7 +22,7 @@ use serde_json::Value;
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use super::{
     BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
-    ProviderCapabilities, UsageReporting,
+    ProviderCapabilities, TitleSupport, UsageReporting,
 };
 use crate::session::event::Confidence;
 
@@ -52,6 +52,10 @@ impl Provider for Codex {
             // No out-of-band flag exists on 0.147.0.
             briefing: BriefingSupport::OpeningMessage,
             account_switching: true,
+            // 0.147.0 states no title anywhere in its rollout. `set_thread_title`
+            // is a tool *definition* inside the instructions, not an event it
+            // emits -- checked across every rollout on this machine.
+            titles: TitleSupport::Derived,
         }
     }
 

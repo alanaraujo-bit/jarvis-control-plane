@@ -26,7 +26,7 @@ pub type Result<T> = std::result::Result<T, String>;
 
 /// A query shorter than this is not a search, it is a browse — and a
 /// single-character `LIKE '%a%'` would return most of the database.
-const MIN_QUERY_CHARS: usize = 2;
+pub(crate) const MIN_QUERY_CHARS: usize = 2;
 
 /// How many rows each source contributes at most, before the combined list is
 /// sorted and shown. A search box is not a report; a handful of good matches
@@ -120,7 +120,7 @@ pub struct SearchResult {
     pub snippet: String,
 }
 
-fn like_pattern(query: &str) -> String {
+pub(crate) fn like_pattern(query: &str) -> String {
     // `%` and `_` are LIKE wildcards; a search for either character must match
     // it literally; `\` is the escape character chosen below and must itself
     // be escaped first, or a literal backslash in the query would escape the
@@ -136,7 +136,7 @@ fn like_pattern(query: &str) -> String {
 /// Byte offsets from `str::find` are mapped back to `char` boundaries before
 /// slicing — this project's text is read in Portuguese and English both, and
 /// slicing on a byte offset that lands mid-character panics.
-fn snippet_around(haystack: &str, needle: &str) -> String {
+pub(crate) fn snippet_around(haystack: &str, needle: &str) -> String {
     let haystack = haystack.trim();
     let chars: Vec<char> = haystack.chars().collect();
 
@@ -174,7 +174,7 @@ fn snippet_around(haystack: &str, needle: &str) -> String {
 /// query carrying a bare `"`, `:`, `-` or a boolean keyword can never be
 /// parsed as FTS5 query syntax (a column filter, `NEAR`, `OR`, …) — it is
 /// always just text to find.
-fn fts_query(query: &str) -> String {
+pub(crate) fn fts_query(query: &str) -> String {
     query
         .split_whitespace()
         .map(|token| format!("\"{}\"*", token.replace('"', "\"\"")))

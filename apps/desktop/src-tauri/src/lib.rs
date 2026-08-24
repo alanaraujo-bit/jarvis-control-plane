@@ -14,6 +14,7 @@ mod envscan;
 mod files;
 mod git;
 mod guardrail;
+mod history;
 mod mission;
 mod notify;
 mod onboarding;
@@ -175,6 +176,13 @@ pub fn run() {
                 Arc::new(std::sync::atomic::AtomicBool::new(false)),
             );
 
+            // Every session recorded before Session History existed is
+            // untitled, because nothing ever wrote `sessions.title` (§88).
+            // This gives each one a title derived from the first thing typed
+            // in it, reading the index the walk above fills rather than the
+            // logs a second time (D38).
+            session::title::spawn(Arc::clone(&db));
+
             // The mobile companion (§59), off unless the user turned it on.
             // Nothing local depends on it — see `relay`.
             relay::spawn(
@@ -289,6 +297,12 @@ pub fn run() {
             autopilot::commands::autopilot_start,
             autopilot::commands::autopilot_stop,
             search::global_search,
+            history::commands::history_page,
+            history::commands::history_entry,
+            history::commands::history_rename,
+            history::commands::history_delete,
+            history::commands::history_storage,
+            history::commands::history_providers,
             relay::relay_status,
             relay::relay_pair,
             relay::relay_unpair,

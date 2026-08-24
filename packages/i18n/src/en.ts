@@ -781,6 +781,58 @@ export const en = {
   "settings.notifications.testPreview": "Do you want to proceed?",
 
   // ---- Generic -------------------------------------------------------------
+
+  // ---- Session History (§88) -----------------------------------------------
+  "nav.history": "History",
+  "history.title": "History",
+  "history.storage": "{count} sessions · {size} on disk",
+  "history.storage_one": "1 session · {size} on disk",
+  "history.searchPlaceholder": "Search names, and everything said inside",
+  "history.untitled": "Untitled session",
+  "history.now": "now",
+  "history.running": "running",
+  "history.open": "Open {name}",
+  "history.rename": "Rename",
+  "history.delete": "Delete",
+  "history.delete.confirm": "Delete this session and its log?",
+  "history.delete.yes": "Delete",
+  "history.loadingMore": "Loading more…",
+  "history.turns": "{count} turns",
+  "history.turns_one": "1 turn",
+  "history.tokens": "{value} tokens",
+  "history.tokens_one": "1 token",
+
+  "history.source.provider": "named by the agent",
+  "history.source.provider.hint": "The provider chose this name itself.",
+  "history.source.derived": "from the first message",
+  "history.source.derived.hint": "Taken from the first thing typed in this session. Rename it to keep your own.",
+
+  "history.provider.claude-code": "Claude Code",
+  "history.provider.codex": "Codex",
+  "history.provider.shell": "Shell",
+
+  "history.filter.range": "When",
+  "history.filter.provider": "Agent",
+  "history.filter.project": "Project",
+  "history.filter.any": "Any",
+  "history.filter.allProjects": "All projects",
+  "history.range.all": "All",
+  "history.range.today": "Today",
+  "history.range.week": "7 days",
+  "history.range.month": "30 days",
+
+  "history.bucket.today": "Today",
+  "history.bucket.yesterday": "Yesterday",
+  "history.bucket.week": "This week",
+  "history.bucket.month": "This month",
+  "history.bucket.earlier": "Earlier",
+
+  "history.empty.title": "No sessions yet",
+  "history.empty.body": "Open a project and start an agent. Everything it does is recorded here, and stays on this machine.",
+  "history.empty.noMatch.title": "Nothing matched",
+  "history.empty.noMatch.body": "This searches session names and everything said inside them. Try fewer words, or widen the filters.",
+
+  "common.save": "Save",
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",
   "common.retry": "Retry",

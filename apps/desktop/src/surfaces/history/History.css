@@ -1,0 +1,444 @@
+/* ==========================================================================
+   Session History (§88)
+   --------------------------------------------------------------------------
+   A dense, scannable record. The unit is the row, and a row has to answer
+   "which one was that?" at a glance: a name, then the facts under it in one
+   quiet line.
+
+   Colour follows the rest of the product (§6/§7): amber means agent work and
+   nothing else, state is a single dot rather than a tinted row, and every
+   other affordance is neutral until it is hovered.
+   ========================================================================== */
+
+.hist { height: 100%; overflow-y: auto; }
+
+.hist__inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-9) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+/* ---- Header -------------------------------------------------------------- */
+.hist__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-7);
+}
+
+.hist__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hist__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+}
+
+/* What this machine is holding on to. Stated plainly, because nothing else in
+   the product ever says it and a person cannot decide about disk they cannot
+   see (D39). */
+.hist__storage {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 340px;
+  max-width: 46vw;
+  height: 30px;
+  padding: 0 var(--space-5);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+.hist__search:focus-within {
+  border-color: var(--border-focus);
+  background: var(--bg-surface);
+}
+
+.hist__search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+.hist__search-input::placeholder { color: var(--text-disabled); }
+/* The browser's own clear button is a Chromium widget that matches nothing
+   else here, and the field is cleared by selecting and deleting like any
+   other. */
+.hist__search-input::-webkit-search-cancel-button { display: none; }
+
+/* ---- Filters ------------------------------------------------------------- */
+.hist__filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.hist__segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.hist__segment {
+  height: 22px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.hist__segment:hover { color: var(--text-secondary); }
+.hist__segment[data-active] {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.hist__select select {
+  height: 26px;
+  padding: 0 var(--space-4);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  outline: none;
+}
+.hist__select select:focus { border-color: var(--border-focus); }
+
+.hist__error {
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--state-danger);
+  border-radius: var(--radius-md);
+  background: var(--state-danger-bg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+/* ---- Groups -------------------------------------------------------------- */
+.hist__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.hist__group { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.hist__group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.hist__group-count {
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-normal);
+  color: var(--text-disabled);
+}
+
+.hist__list {
+  list-style: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+/* ---- A row --------------------------------------------------------------- */
+.hist__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.hist__list li:last-child { border-bottom: none; }
+.hist__row:hover { background: var(--bg-hover); }
+
+/* The whole row is the hit target, laid under the content rather than around
+   it: a <button> wrapping this grid would swallow the rename field's own
+   keystrokes and nest the mission button inside a button. */
+.hist__open {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.hist__open:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+.hist__row > .status-dot {
+  position: relative;
+  z-index: 1;
+  margin-top: 5px;
+  pointer-events: none;
+}
+
+.hist__body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  pointer-events: none;
+}
+/* Only the things that are really interactive take the pointer back. */
+.hist__body button,
+.hist__body input { pointer-events: auto; }
+
+.hist__name-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.hist__name {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A session nobody and nothing ever named. Said, not blank (§81). */
+.hist__name[data-untitled] {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* Where the name came from (D36). Deliberately quiet — it qualifies the title,
+   it is not a badge competing with it. */
+.hist__source {
+  flex: none;
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-disabled);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0 4px;
+  line-height: 1.5;
+}
+
+.hist__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist__project { color: var(--text-secondary); }
+.hist__dot { color: var(--text-disabled); }
+
+/* The mission this session was working on (§86). Amber, because that thread —
+   mission to agent to terminal — is agent work. */
+.hist__mission {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  margin-top: var(--space-1);
+  padding: 1px var(--space-3) 1px var(--space-2);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-xs);
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: var(--text-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist__mission:hover { background: var(--bg-selected); }
+
+/* The line that matched a search — somebody's or an agent's own words. */
+.hist__snippet {
+  margin-top: var(--space-2);
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--border-default);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.hist__when {
+  position: relative;
+  z-index: 1;
+  margin-top: 2px;
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+  white-space: nowrap;
+  justify-self: end;
+  pointer-events: none;
+}
+/* A running agent, in the one colour that means that (§6). */
+.hist__row[data-live] .hist__when { color: var(--accent); }
+
+/* ---- Actions ------------------------------------------------------------- */
+.hist__actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: var(--space-2);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.hist__row:hover .hist__actions,
+.hist__row:focus-within .hist__actions { opacity: 1; }
+
+.hist__action {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.hist__action:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+.hist__action--danger:hover { color: var(--state-danger); }
+
+/* ---- Rename -------------------------------------------------------------- */
+.hist__rename {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hist__rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 var(--space-4);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  outline: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+/* ---- Delete confirmation -------------------------------------------------
+   Inline, in the row, rather than a modal: what is being deleted is the row
+   under the question, and a dialog that covers it makes you remember which one
+   you clicked. */
+.hist__confirm {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.hist__confirm-text {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hist__confirm-yes,
+.hist__confirm-no {
+  height: 22px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+.hist__confirm-no:hover { background: var(--bg-active); color: var(--text-primary); }
+.hist__confirm-yes {
+  border-color: var(--state-danger);
+  color: var(--state-danger);
+}
+.hist__confirm-yes:hover { background: var(--state-danger-bg); }
+
+/* ---- Paging and empty ---------------------------------------------------- */
+.hist__more {
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+}
+
+.hist__empty {
+  padding: var(--space-11) var(--space-8);
+  text-align: center;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.hist__empty-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.hist__empty-body {
+  max-width: 52ch;
+  margin: var(--space-4) auto 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}

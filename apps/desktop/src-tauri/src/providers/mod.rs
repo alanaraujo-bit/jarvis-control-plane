@@ -86,6 +86,31 @@ pub enum UsageReporting {
     None,
 }
 
+/// Where a session's name comes from (§88, D36).
+///
+/// The third genuine difference between these two providers, and it is the one
+/// Session History is built on. Claude Code names its own sessions: it writes
+/// an `ai-title` line into its transcript, and 89 of the 124 transcripts on
+/// this machine carry one. Codex 0.147.0 does not — `set_thread_title` appears
+/// in its rollouts only as a *tool definition inside the instructions*, never
+/// as an event it emitted, and enumerating every event type across a day of
+/// real rollouts finds no title at all.
+///
+/// Reported rather than smoothed over, for the same reason `UsageReporting` is:
+/// a title a provider chose and a title we cut out of the first sentence
+/// somebody typed are not the same claim, and a list that renders them
+/// identically is asserting something the product does not know.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TitleSupport {
+    /// The provider names the session itself, and we take that name.
+    Provider,
+    /// No title is ever stated, so one is derived from what was typed first.
+    Derived,
+    /// Nothing to name — a plain shell is not a conversation.
+    None,
+}
+
 /// What a provider can do. Rendered from, never assumed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,6 +138,8 @@ pub struct ProviderCapabilities {
     pub briefing: BriefingSupport,
     /// The signed-in account can be switched.
     pub account_switching: bool,
+    /// Where this provider's sessions get their names (§88).
+    pub titles: TitleSupport,
 }
 
 /// How a project brief can be handed to a session before it starts (§38).
@@ -219,6 +246,26 @@ mod tests {
             "one of these enforces on install and the other only after the user \
              trusts the hook; collapsing them would promise protection that is \
              not switched on yet"
+        );
+    }
+
+    /// The difference Session History's titles turn on (§88, D36).
+    ///
+    /// Claude Code names its own sessions and Codex 0.147.0 does not. If these
+    /// ever became equal, the surface would be free to present a title we cut
+    /// out of somebody's first sentence as one the provider chose.
+    #[test]
+    fn only_a_provider_that_names_its_own_sessions_claims_to() {
+        assert_eq!(
+            claude::ClaudeCode.capabilities().titles,
+            TitleSupport::Provider
+        );
+        assert_eq!(codex::Codex.capabilities().titles, TitleSupport::Derived);
+        assert_ne!(
+            claude::ClaudeCode.capabilities().titles,
+            codex::Codex.capabilities().titles,
+            "one of these writes its own title and the other never does; \
+             collapsing them would let a derived title be shown as a stated one"
         );
     }
 

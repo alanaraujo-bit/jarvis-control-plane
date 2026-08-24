@@ -23,7 +23,7 @@ use serde_json::Value;
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use super::{
     BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
-    ProviderCapabilities, UsageReporting,
+    ProviderCapabilities, TitleSupport, UsageReporting,
 };
 use crate::session::event::Confidence;
 
@@ -48,6 +48,9 @@ impl Provider for ClaudeCode {
             // Verified through a real PTY, not from --help.
             briefing: BriefingSupport::SystemPrompt,
             account_switching: true,
+            // It writes its own `ai-title` line. Verified against 124 real
+            // transcripts on this machine, 89 of which carry one.
+            titles: TitleSupport::Provider,
         }
     }
 
@@ -292,6 +295,13 @@ fn tool_summary(name: &str, input: &Value) -> String {
         .unwrap_or_default()
 }
 
+/// The longest a session title may be.
+///
+/// Claude Code's own titles run to a few words; this is a bound on a value
+/// read off disk, not a style choice. A row that wraps to three lines is not a
+/// list any more.
+pub const MAX_TITLE_CHARS: usize = 72;
+
 /// Convert one transcript line into conversation items.
 ///
 /// A single line can yield several items — an assistant turn commonly contains
@@ -300,6 +310,32 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
     let Ok(value) = serde_json::from_str::<Value>(line) else {
         return Vec::new();
     };
+
+    // The title is lifted **before** the noise filter, not by loosening it.
+    //
+    // `is_internal_noise` drops `ai-title` on purpose and is right to: §24 says
+    // Conversation View shows development, and a title is not something anybody
+    // said. It is, however, exactly what Session History needs to label a row
+    // with (§88, D36) — so the one reader that wants it takes it here, and the
+    // filter goes on meaning what it says for every other reader.
+    //
+    // The line carries no `timestamp` of its own, unlike every other entry in
+    // the transcript, so this item is stamped when it is read.
+    if value.get("type").and_then(Value::as_str) == Some("ai-title") {
+        let text = value
+            .get("aiTitle")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim();
+        if text.is_empty() {
+            return Vec::new();
+        }
+        return vec![ConversationItem::Title {
+            text: truncate(text, MAX_TITLE_CHARS),
+            ts_ms: crate::session::log::now_ms(),
+        }];
+    }
+
     if is_internal_noise(&value) {
         return Vec::new();
     }

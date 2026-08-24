@@ -52,6 +52,11 @@ fn kind_for(item: &ConversationItem) -> EventKind {
         ConversationItem::ToolResult { .. } => EventKind::ToolResult,
         ConversationItem::FileChange { .. } => EventKind::FileChange,
         ConversationItem::Error { .. } => EventKind::Message,
+        // A title is a fact about the session, not something anybody said
+        // (§88, D37). Filing it as a message would put a stray bubble in
+        // Conversation View, which reads `Message` frames and would have no
+        // idea this one is not part of the conversation.
+        ConversationItem::Title { .. } => EventKind::Lifecycle,
     }
 }
 
@@ -682,6 +687,23 @@ fn mirror(
         }
     }
 
+    // The provider named the session itself (§88, D36). `title::set` decides
+    // whether it is allowed to land — a rename outranks it and is never
+    // overwritten — so there is nothing to check here.
+    if let ConversationItem::Title { text, .. } = item {
+        if let Err(e) = crate::session::title::set(
+            db,
+            session_id,
+            crate::session::title::Source::Provider,
+            text,
+        ) {
+            tracing::warn!(error = %e, session = session_id, "could not record a provider title");
+        }
+        // Nothing further: a title is not conversation content and has no
+        // business in the search index as a thing that was said.
+        return;
+    }
+
     if let ConversationItem::FileChange { path, ts_ms } = item {
         let outcome = db.with(|conn| {
             conn.execute(
@@ -701,6 +723,27 @@ fn mirror(
     // Everything Global Search (§51) can find later: what was said, thought,
     // run, and got back — regardless of whether the same item also carried
     // usage above. `TurnEnded` carries no text worth indexing.
+    // The first thing a person types names the session until something better
+    // arrives (§88, D36). Written here rather than by re-reading the table a
+    // line later: `title::set` refuses a derived title over any existing one,
+    // so every message after the first is a no-op rather than a rename, and
+    // Codex — which never states a title of its own — gets one anyway.
+    if let ConversationItem::Message {
+        role: crate::providers::conversation::Role::User,
+        text,
+        ..
+    } = item
+    {
+        if !text.trim().is_empty() {
+            let _ = crate::session::title::set(
+                db,
+                session_id,
+                crate::session::title::Source::Derived,
+                text,
+            );
+        }
+    }
+
     if let Some((kind, label, text)) = search_event(item) {
         if !text.trim().is_empty() {
             let outcome = insert_search_event(
@@ -757,7 +800,12 @@ pub(crate) fn search_event(
             summary.clone(),
         )),
         ConversationItem::Error { message, .. } => Some(("error", None, message.clone())),
-        ConversationItem::FileChange { .. } | ConversationItem::TurnEnded { .. } => None,
+        // A title is the *name* of a conversation, not a line in it. Indexing
+        // it would make a session match a search for words nobody in it ever
+        // said — and Session History searches titles separately anyway (§88).
+        ConversationItem::FileChange { .. }
+        | ConversationItem::TurnEnded { .. }
+        | ConversationItem::Title { .. } => None,
     }
 }
 

@@ -9,6 +9,7 @@ pub mod commands;
 pub mod event;
 pub mod log;
 pub mod manager;
+pub mod title;
 pub mod transcript;
 pub mod typing;
 
