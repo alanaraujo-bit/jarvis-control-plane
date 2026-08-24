@@ -42,7 +42,7 @@ export function StatusBar() {
           // Rust core. It must never be mistaken for the real integration (§80).
           <span className="statusbar__item statusbar__badge">Preview — fixtures</span>
         )}
-        <span className="statusbar__item statusbar__item--muted">0.1.0</span>
+        <span className="statusbar__item statusbar__item--muted">0.2.0</span>
       </div>
     </footer>
   );

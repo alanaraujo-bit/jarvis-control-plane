@@ -9,6 +9,7 @@ import { GlobalSearch } from "./shell/GlobalSearch";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
 import { Analytics } from "./surfaces/analytics/Analytics";
+import { Accounts } from "./surfaces/accounts/Accounts";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
 import { Missions } from "./surfaces/missions/Missions";
 import { Onboarding } from "./surfaces/onboarding/Onboarding";
@@ -38,6 +39,7 @@ const IMPLEMENTED: SurfaceId[] = [
   "missions",
   "activity",
   "analytics",
+  "accounts",
   "settings",
 ];
 
@@ -65,6 +67,7 @@ export function App() {
   const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
   const [focusSessionProvider, setFocusSessionProvider] = useState<SessionKind | undefined>();
   const [focusSessionTitle, setFocusSessionTitle] = useState<string | undefined>();
+  const [accountsProjectId, setAccountsProjectId] = useState<string | null>(null);
 
   type Focus = {
     area?: Area;
@@ -139,11 +142,15 @@ export function App() {
     [openProjectById],
   );
 
-  const goTo = useCallback((id: SurfaceId) => {
-    setOpenProject(null);
-    setFocusMission(undefined);
-    setSurface(id);
-  }, []);
+  const goTo = useCallback(
+    (id: SurfaceId) => {
+      if (id === "accounts") setAccountsProjectId(openProject?.id ?? null);
+      setOpenProject(null);
+      setFocusMission(undefined);
+      setSurface(id);
+    },
+    [openProject],
+  );
 
   // Whether this machine has ever gotten past the welcome screen (§13).
   // Fetched once, up front, so the reveal below never shows the normal shell
@@ -317,6 +324,8 @@ export function App() {
               <Activity />
             ) : surface === "analytics" ? (
               <Analytics />
+            ) : surface === "accounts" ? (
+              <Accounts projectId={accountsProjectId} />
             ) : surface === "missions" ? (
               <Missions
                 initialMissionId={focusMission}

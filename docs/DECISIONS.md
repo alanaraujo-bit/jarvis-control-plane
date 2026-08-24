@@ -1233,3 +1233,38 @@ keeps wrapping at the old width and every long line breaks in the wrong place.
 
 Verified by changing the size against a *running* shell: the type grew, the
 scrollback was still there, and the next command ran in the same session.
+
+---
+
+## D34 — Uma conta de agente é um config dir; continuidade automática é um relé pelo Brain
+
+**Decisão:** contas Claude Code e Codex são diretórios persistentes e isolados,
+selecionados por `CLAUDE_CONFIG_DIR` e `CODEX_HOME`. A conta já presente na
+máquina é adotada com a variável ausente; nenhuma credencial é copiada ou
+reescrita. O isolamento de estado e transcripts foi comprovado contra os dois
+CLIs reais antes de ligar a feature às sessões.
+
+Uma sessão guarda a conta com que nasceu. Troca manual afeta somente sessões
+novas; tentar reautenticar um processo vivo seria mentir sobre o que ocorreu.
+Troca automática também inicia um processo novo, mas religa a run de autopilot:
+o estado persistido da missão, um novo brief do Brain e
+`plan::opening_instruction` reconstituem o contexto. O driver antigo para de
+dirigir e a sessão antiga permanece viva para inspeção ou tomada manual.
+
+`--resume` foi rejeitado deliberadamente: o transcript da conta A não existe no
+config dir da conta B. Copiar um arquivo interno do provedor entre contas seria
+frágil e faria o produto manipular um formato que não possui. O relé nunca copia
+transcript, preserva orçamento/progresso da run e checa antes a confiança da
+pasta na conta destino.
+
+**Cotas:** nenhum endpoint HTTP lembrado entra no desenho. Claude Code fornece
+uma recusa e seu reset, não um medidor ao vivo; tokens são Observed, uma
+porcentagem calibrada por recusas é Estimated e a ausência de franquia é
+Unknown. Codex fornece percentuais/reset Official e mantém as duas janelas.
+Confiança cruza o limite Tauri junto de todo número e muda a apresentação: barra
+Official sólida, Estimated hachurada, Unknown sem barra. Um reset já passado
+ainda ancora o cálculo histórico, mas não aparece como countdown atual.
+
+**Capacidades:** `account_switching` só passou a `true` nos adaptadores depois
+que registro, sessão, transcript, troca, relé, paridade Codex e superfície
+estavam implementados e testados.

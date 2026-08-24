@@ -27,13 +27,16 @@ pub fn autopilot_status(
     state: State<'_, AppState>,
     mission_id: String,
 ) -> IpcResult<Option<RunStatus>> {
-    Ok(state.autopilots.for_mission(&mission_id).map(|run| RunStatus {
-        session_id: run.session_id.clone(),
-        mission_id: run.mission_id.clone(),
-        state: run.state(),
-        turns: run.turns(),
-        budget: super::plan::turn_budget(&state.db),
-    }))
+    Ok(state
+        .autopilots
+        .for_mission(&mission_id)
+        .map(|run| RunStatus {
+            session_id: run.session_id.clone(),
+            mission_id: run.mission_id.clone(),
+            state: run.state(),
+            turns: run.turns(),
+            budget: run.budget(),
+        }))
 }
 
 /// Start an agent and drive it towards a mission until it is done (§32).
@@ -45,10 +48,11 @@ pub fn autopilot_status(
 #[tauri::command]
 pub fn autopilot_start(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     mission_id: String,
 ) -> IpcResult<RunStatus> {
-    let detail = crate::mission::store::detail(&state.db, &mission_id)
-        .map_err(|e| e.to_string())?;
+    let detail =
+        crate::mission::store::detail(&state.db, &mission_id).map_err(|e| e.to_string())?;
 
     if detail.effective_autonomy != Autonomy::Unattended {
         return Err("autopilot.requiresUnattended".into());
@@ -62,13 +66,13 @@ pub fn autopilot_start(
 
     // A run starts from a clean statement of what is actually true, so the
     // first instruction is not based on a stale verification (§30).
-    let detail = crate::mission::store::verify_mission(&state.db, &mission_id)
-        .map_err(|e| e.to_string())?;
+    let detail =
+        crate::mission::store::verify_mission(&state.db, &mission_id).map_err(|e| e.to_string())?;
 
     // Guardrails may already be holding something. Starting an agent that
     // cannot act would be the resource-burning §34 forbids.
-    let held = crate::guardrail::pending(&state.db, Some(&mission_id))
-        .map_err(|e| e.to_string())?;
+    let held =
+        crate::guardrail::pending(&state.db, Some(&mission_id)).map_err(|e| e.to_string())?;
     if !held.is_empty() {
         return Err("autopilot.awaitingApproval".into());
     }
@@ -88,7 +92,16 @@ pub fn autopilot_start(
     // security decision, and it is theirs to make in Claude Code's own
     // interface. An *unknown* answer proceeds — see `folder_is_trusted`.
     if let Ok(root) = crate::files::project_root(&state, &project_id) {
-        if crate::providers::claude::folder_is_trusted(&root) == Some(false) {
+        let trusted = crate::accounts::active(&state.db, "claude-code")
+            .map(|account| {
+                crate::providers::claude::folder_is_trusted_in(
+                    std::path::Path::new(&account.config_dir),
+                    account.adopted,
+                    &root,
+                )
+            })
+            .unwrap_or_else(|| crate::providers::claude::folder_is_trusted(&root));
+        if trusted == Some(false) {
             return Err("autopilot.folderNotTrusted".into());
         }
     }
@@ -104,12 +117,7 @@ pub fn autopilot_start(
     )
     .map_err(|e| e.to_string())?;
 
-    let _ = crate::mission::store::set_status(
-        &state.db,
-        &mission_id,
-        MissionStatus::Running,
-        None,
-    );
+    let _ = crate::mission::store::set_status(&state.db, &mission_id, MissionStatus::Running, None);
 
     let run = super::start(
         Arc::clone(&started.session),
@@ -117,6 +125,7 @@ pub fn autopilot_start(
         state.session_dir(&started.id),
         mission_id.clone(),
         project_id,
+        app,
     );
     state.autopilots.insert(Arc::clone(&run));
 
@@ -125,7 +134,7 @@ pub fn autopilot_start(
         mission_id,
         state: run.state(),
         turns: run.turns(),
-        budget: super::plan::turn_budget(&state.db),
+        budget: run.budget(),
     })
 }
 

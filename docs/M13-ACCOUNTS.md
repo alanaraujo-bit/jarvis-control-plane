@@ -1,6 +1,6 @@
 # M13 — Contas e cotas (§66)
 
-**Estado: em construção. Fundação no disco, superfície ainda não existe.**
+**Estado: concluído em 2026-08-24. Funcional, testado e validado visualmente.**
 
 Este documento é a fonte de verdade para quem continuar o M13. Foi escrito no
 meio da implementação, depois de uma fase de investigação empírica contra as
@@ -137,12 +137,10 @@ Verificado nos rollouts em `~/.codex/sessions/**.jsonl`. Todo evento
 }
 ```
 
-**Bug real, já identificado e ainda não corrigido no adaptador:**
-`providers/codex.rs` lê `resets_in_seconds`. Esta build do Codex escreve
-`resets_at` (unix **segundos**, absoluto). Resultado: `limit_resets_at` é sempre
-`None` nesta máquina — nada quebra, nada erra, o dado simplesmente não existe.
-`accounts::quota::codex_observations` já lê **as duas grafias**; o adaptador
-precisa da mesma correção.
+**Bug real, identificado e corrigido no adaptador:** `providers/codex.rs` lia
+apenas `resets_in_seconds`. Esta build do Codex escreve `resets_at` (unix
+**segundos**, absoluto). O adaptador e `accounts::quota::codex_observations`
+agora leem as duas grafias e preservam as duas janelas.
 
 Segundo ponto: o adaptador dobra `primary` e `secondary` numa só janela. Isso
 joga fora a janela que não está limitando no momento — que é justamente a que
@@ -184,20 +182,26 @@ Portanto: **uma conta é um diretório de configuração.**
 - Contas novas ganham `<data_dir>/accounts/<provider>/<id>/`, vazio, e a pessoa
   entra pelo fluxo de login do próprio provedor.
 
-### 2.6 O que ainda NÃO foi verificado — verifique antes de construir em cima
+### 2.6 `CLAUDE_CONFIG_DIR` e `CODEX_HOME` — verificados contra os CLIs reais
 
-Esta é a primeira tarefa de quem continuar, e ela **muda o desenho nos dois
-sentidos**. O shell desta sessão foi bloqueado pelo classificador de auto-mode
-ao tentar definir `CLAUDE_CONFIG_DIR`, então a verificação não aconteceu. O
-caminho abençoado neste repositório é um **teste `#[ignore]`d que roda o CLI
-real** (exatamente como `a_multibyte_sentence_survives_claude_codes_own_tui`),
-executado com `cargo test -- --ignored`.
+Verificado em 2026-08-24 por
+`pty::tests::provider_config_roots_isolate_state_and_transcripts`, um teste
+`#[ignore]`d que inicia Claude Code 2.1.241 e Codex 0.149.1 em PTYs reais, num
+repositório Git de scratch e com diretórios de configuração vazios. Nenhum
+arquivo de credencial é lido ou copiado. Execute com
+`cargo test provider_config_roots_isolate_state_and_transcripts -- --ignored`.
+
+Resultado medido: **o desenho por diretório está confirmado nos dois
+provedores**. `CLAUDE_CONFIG_DIR` leva consigo `.claude.json` e `projects/`;
+`CODEX_HOME` leva consigo `sessions/`. O teste também prova que um `CODEX_HOME`
+fornecido em `PtyOptions.env` sobrevive ao scrub de variáveis `CODEX_*`, porque
+o ambiente específico da conta é aplicado depois dele.
 
 Três perguntas, todas no mesmo teste:
 
 1. **Com `CLAUDE_CONFIG_DIR=<dir>`, o `.claude.json` vai para
    `<dir>/.claude.json` ou continua em `$HOME/.claude.json`?**
-   - Se **vai junto**: cada conta tem seu próprio `oauthAccount` (bom para
+   - **Vai junto.** Cada conta tem seu próprio `oauthAccount` (bom para
      identidade) **e seu próprio mapa `projects`** — ou seja, uma conta recém-
      adicionada tem **zero pastas confiadas**. Toda run Unattended na conta 2
      bate no item 25 do HANDOFF e é recusada com `autopilot.folderNotTrusted`.
@@ -205,18 +209,14 @@ Três perguntas, todas no mesmo teste:
      ("esta conta ainda não confia nesta pasta") e **não escreva confiança** —
      este código é explícito que isso é decisão da pessoa, na interface do
      próprio Claude Code.
-   - Se **fica**: confiança é compartilhada (bom), mas `oauthAccount` também é —
-     então o painel mostraria a identidade errada para a conta ativa, e a
-     identidade tem que vir de `claude auth status --json` rodado *com aquele
-     config dir*, que é o que `read_identity` já faz.
-2. **Os transcripts vão para `<config-dir>/projects/`?** Quase certamente sim, e
+2. **Os transcripts vão para `<config-dir>/projects/`?** **Sim**, e
    é por isso que `accounts::transcript_root` existe. Se a raiz do transcript
    não passar a ser por sessão — resolvida a partir da conta que iniciou a
    sessão — então **Conversation View, usage, evidência, Analytics e Global
    Search ficam silenciosamente vazios** para qualquer sessão numa conta
    alternativa. É exatamente a falha "não casa com nada e parece um estado
    vazio" contra a qual o HANDOFF avisa três vezes.
-3. **`CODEX_HOME` se comporta igual?** Mesmo teste, mesmo rigor. E atenção:
+3. **`CODEX_HOME` se comporta igual?** **Sim.** E atenção:
    `pty::SCRUBBED_ENV_PREFIXES` inclui `"CODEX_"`. A ordem em `pty::spawn`
    salva (o scrub roda antes do `options.env`), mas isso é frágil e merece um
    teste que fixe o comportamento.
@@ -225,8 +225,9 @@ Três perguntas, todas no mesmo teste:
 
 ## 3. O que já está no disco
 
-Tudo abaixo compila e a suíte está **verde: 415 testes Rust passando, 8
-`#[ignore]`d**.
+Tudo abaixo compila e a suíte está **verde: 431 testes Rust passando, 9
+`#[ignore]`d**. O teste real de isolamento dos dois CLIs também passou quando
+executado explicitamente com `--ignored`.
 
 ### 3.1 Migração 11 — aplicada e com fingerprint registrado
 
@@ -245,14 +246,11 @@ Tudo abaixo compila e a suíte está **verde: 415 testes Rust passando, 8
   linhas anteriores à feature atribuiria o gasto de outra pessoa a qualquer
   conta que estiver em primeiro na lista.
 
-> ⚠️ **Aviso operacional, leia antes de rodar o app.** A migração 11 ainda não
-> rodou em nenhum banco real. No instante em que uma build com ela abrir o
-> `jarvis.db` do Alan, **a cópia instalada mais antiga passa a recusar aquele
-> banco** (é o comportamento correto do §62, e o commit `bbbe0d1` fez essa
-> recusa ser explicada em vez de morrer em silêncio). Enquanto a migração não
-> tiver rodado de verdade, o texto dela ainda pode ser editado — mas então
-> **atualize o fingerprint junto**. Depois que rodar uma vez, ela está
-> congelada: acrescente a migração 12. Ver HANDOFF §5 item 9.
+> ⚠️ **Aviso operacional, leia antes de rodar o app.** A migração 11 rodou no
+> banco descartável do identificador `dev.jarvis.desktop.m13qa`; portanto está
+> **congelada** e nunca mais deve ser editada. Qualquer mudança de schema é uma
+> migração 12. Ela **não** foi aplicada ao `jarvis.db` do Alan: toda a QA visual
+> usou o identificador separado, enquanto a cópia instalada continuou aberta.
 
 ### 3.2 `accounts/mod.rs` — modelo e registro
 
@@ -300,12 +298,22 @@ trata saída diferente de zero como `None`, porque um `status` que falhou não
 disse nada, e tratar o texto de erro dele como resposta é como uma conta logada
 vira "deslogada" na tela.
 
-### 3.5 Ainda não existe
+### 3.5 Integração e superfície concluídas
 
-`accounts/commands.rs`, `accounts/switch.rs`, `accounts/tests.rs` são
-**referenciados por `accounts/mod.rs` e não foram escritos**. `mod accounts;`
-ainda **não** está em `lib.rs` — por isso a árvore compila: os arquivos são
-inertes. O primeiro passo de escrita é fechar esses três e registrar o módulo.
+`accounts/commands.rs`, `accounts/switch.rs` e `accounts/tests.rs` existem e o
+módulo está registrado em `lib.rs`. Sessões resolvem e gravam `account_id`,
+recebem o config dir correto, atribuem transcripts/usage à conta que as iniciou
+e mantêm o comportamento anterior quando ainda não existe registro.
+
+A superfície `Accounts` está no rail com identidade, estado de verificação,
+pausa/ativação, login do provedor, confiança por número, duas janelas, política
+automática e aviso explícito quando o limiar usa estimativa. A conta da máquina
+não oferece remoção; a última conta pronta não pode ser pausada.
+
+O relé de autopilot inicia uma sessão nova na conta destino, reconstitui o
+contexto pelo brief do Brain e `opening_instruction`, mantém orçamento/progresso
+da run e deixa o processo antigo vivo. Não copia transcript e não usa
+`--resume`. A confiança da pasta é checada na conta destino antes da troca.
 
 ---
 
@@ -314,10 +322,10 @@ inertes. O primeiro passo de escrita é fechar esses três e registrar o módulo
 Cada passo é verificável sozinho. Não pule para a superfície bonita antes do
 passo 2 estar provado — todo o resto se apoia nele.
 
-**1. Provar `CLAUDE_CONFIG_DIR` e `CODEX_HOME`** (seção 2.6), num teste
+**1. ✅ Provar `CLAUDE_CONFIG_DIR` e `CODEX_HOME`** (seção 2.6), num teste
 `#[ignore]`d que roda o CLI real. Ajustar o desenho ao que o teste disser.
 
-**2. Ligar o config dir na sessão.** `session::commands::launch` resolve
+**2. ✅ Ligar o config dir na sessão.** `session::commands::launch` resolve
 `accounts::active(&db, provider)`, grava `sessions.account_id`, chama
 `accounts::stamp_used`, e passa `accounts::session_env(&account)` em
 `PtyOptions.env`. `session::transcript::locate` e
@@ -326,28 +334,28 @@ vez de `home()/.claude/projects` fixo. **Sem conta registrada, tudo se comporta
 exatamente como antes** — nada em iniciar um agente pode depender de contas
 terem sido configuradas.
 
-**3. Registro + painel de identidade honesto.** `adopt_machine_account` no
+**3. ✅ Registro + painel de identidade honesto.** `adopt_machine_account` no
 startup (idempotente). Superfície `Accounts` no rail: cartões por conta, com
 e-mail, organização, plano, ativa/pausada, e um estado "não verificado" que é
 diferente de "deslogada".
 
-**4. Cota.** `observe_line` chamado do tailer de transcript com o `account_id`
+**4. ✅ Cota.** `observe_line` chamado do tailer de transcript com o `account_id`
 da sessão. Corrigir `providers/codex.rs` (`resets_at`, e as duas janelas).
 Barras com confiança visível: Official ≠ Observed ≠ Estimated ≠ Unknown, e uma
 janela sem calibração mostra **tokens**, não uma barra vazia. Contagem
 regressiva até o reset.
 
-**5. Troca manual.** `set_active`. **Sessões em execução não são tocadas** — não
+**5. ✅ Troca manual.** `set_active`. **Sessões em execução não são tocadas** — não
 dá para reautenticar um processo já rodando, ele tem as credenciais carregadas —
 e a tela precisa **dizer isso**, com a contagem de `live_sessions` que
 `AccountQuota` já traz.
 
-**6. Troca automática.** Preferência em `settings`: `off | onExhaustion |
+**6. ✅ Troca automática.** Preferência em `settings`: `off | onExhaustion |
 onThreshold`, com o limiar em `NEARING_PERCENT`. Gatilho oficial (uma recusa
 `quotaLimits`) é o piso que não pode falhar; o gatilho por limiar roda sobre a
 estimativa **e a interface tem que dizer que é uma estimativa**.
 
-**7. Continuidade da agente através da troca.** É aqui que mora a parte difícil,
+**7. ✅ Continuidade da agente através da troca.** É aqui que mora a parte difícil,
 e a decisão precisa ser tomada de propósito, não descoberta no meio:
 
 - Um processo Claude Code em execução **não pode** trocar de conta. Continuidade
@@ -367,13 +375,13 @@ e a decisão precisa ser tomada de propósito, não descoberta no meio:
   a troca "sem costura" abre uma sessão que estaciona no diálogo de confiança
   com ninguém para responder — o item 25 do HANDOFF, chegando por uma rota nova.
 
-**8. Paridade com o Codex.** `CODEX_HOME`, identidade por `auth.json`, e as
+**8. ✅ Paridade com o Codex.** `CODEX_HOME`, identidade por `auth.json`, e as
 janelas que ele já reporta oficialmente.
 
-**9. `account_switching: true`** nas capacidades — **só quando for verdade**
-(§26). Hoje está `false` nos dois adaptadores, corretamente.
+**9. ✅ `account_switching: true`** nas capacidades — **só quando for verdade**
+(§26). Está `true` nos dois adaptadores.
 
-**10. Superfície, i18n e verificação visual.** pt-BR e en, tema claro e escuro,
+**10. ✅ Superfície, i18n e verificação visual.** pt-BR e en, tema claro e escuro,
 animação nas barras e na contagem regressiva, e o loop do HANDOFF §3: rodar o
 app instalado, tirar screenshot, **olhar**, corrigir o que estiver errado de
 verdade. Lembre do item 42: não julgue cor por screenshot, amostre o pixel.
@@ -419,13 +427,31 @@ exercitada com a conta viva dele mais um config dir alternativo. Bloqueia apenas
 a verificação ponta a ponta de uma troca genuína entre duas contas reais.
 Registrado como **B6** em `docs/BLOCKERS.md`.
 
+### 6.1 Evidência de conclusão que não depende do B6
+
+- `cargo test --no-fail-fast -q`: 431 passaram, 0 falharam, 9 ignored.
+- teste `#[ignore]` real: Claude Code 2.1.241 e Codex 0.149.1 isolaram estado e
+  transcripts num repositório Git de scratch.
+- `pnpm typecheck`: cinco projetos do workspace verdes.
+- `pnpm tauri build --no-bundle`: executável release produzido.
+- QA real em `dev.jarvis.desktop.m13qa`, sem tocar na cópia instalada: pt-BR e
+  en, claro e escuro, Claude/Codex, formulário de adição, Unknown, Estimated e
+  Official. Screenshots em `.tmp/m13-qa/`.
+- pixels medidos, não inferidos da captura: fundo escuro `#141415`, fundo claro
+  `#FFFFFF`; barra Estimated alterna `#262116`/`#5F4F2F`, barra Official é
+  sólida `#D8D8DC`.
+
+O ciclo visual encontrou e corrigiu dois defeitos que não apareciam na suíte:
+`window_ready` retornava sucesso sem revelar a janela, e um reset histórico
+aparecia como “resetting now” para sempre. A segunda captura confirmou ambos.
+
 ---
 
 ## 7. Referências rápidas
 
 ```bash
 pnpm install
-cd apps/desktop/src-tauri && cargo test          # 415 passando, 8 ignored
+cd apps/desktop/src-tauri && cargo test          # 431 passando, 9 ignored
 cargo test -- --ignored                          # inclui os que rodam CLI real
 cd apps/desktop && pnpm tauri build --no-bundle  # a build que é o app de verdade (HANDOFF §5 item 31)
 ```

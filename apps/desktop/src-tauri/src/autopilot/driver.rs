@@ -104,6 +104,7 @@ pub struct Autopilot {
     pub mission_id: String,
     state: Mutex<RunState>,
     turns: AtomicU32,
+    budget: u32,
     stop: Arc<AtomicBool>,
 }
 
@@ -114,6 +115,10 @@ impl Autopilot {
 
     pub fn turns(&self) -> u32 {
         self.turns.load(Ordering::Relaxed)
+    }
+
+    pub fn budget(&self) -> u32 {
+        self.budget
     }
 
     /// Ask the run to stop at the next opportunity.
@@ -178,13 +183,73 @@ pub fn start(
     log_dir: std::path::PathBuf,
     mission_id: String,
     project_id: String,
+    app: tauri::AppHandle,
+) -> Arc<Autopilot> {
+    let budget = turn_budget(&db);
+    start_with_progress(
+        session,
+        db,
+        log_dir,
+        mission_id,
+        project_id,
+        app,
+        0,
+        budget,
+        0,
+        Vec::new(),
+    )
+}
+
+/// Continue the same mission on a fresh provider process after an account
+/// rotation. Progress and the original budget cross the relay; provider
+/// transcript internals do not.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn start_relayed(
+    session: Arc<LiveSession>,
+    db: Arc<Database>,
+    log_dir: std::path::PathBuf,
+    mission_id: String,
+    project_id: String,
+    app: tauri::AppHandle,
+    turns: u32,
+    budget: u32,
+    stalled_rounds: u32,
+    last_failing: Vec<String>,
+) -> Arc<Autopilot> {
+    start_with_progress(
+        session,
+        db,
+        log_dir,
+        mission_id,
+        project_id,
+        app,
+        turns,
+        budget,
+        stalled_rounds,
+        last_failing,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start_with_progress(
+    session: Arc<LiveSession>,
+    db: Arc<Database>,
+    log_dir: std::path::PathBuf,
+    mission_id: String,
+    project_id: String,
+    app: tauri::AppHandle,
+    initial_turns: u32,
+    budget: u32,
+    initial_stalled_rounds: u32,
+    initial_last_failing: Vec<String>,
 ) -> Arc<Autopilot> {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let run = Arc::new(Autopilot {
         session_id: session.id.clone(),
         mission_id: mission_id.clone(),
         state: Mutex::new(RunState::Working),
-        turns: AtomicU32::new(0),
+        turns: AtomicU32::new(initial_turns),
+        budget,
         stop: Arc::clone(&stop_flag),
     });
 
@@ -203,17 +268,8 @@ pub fn start(
                 .map(|events| events.len() as u64)
                 .unwrap_or(0);
 
-            let mut last_failing: Vec<String> = Vec::new();
-            let mut stalled_rounds = 0u32;
-
-            // Read once, at the start, and hold it for the run.
-            //
-            // Re-reading every turn would let a change in Settings move the
-            // finish line under a run that is already going — a mission could
-            // pass the budget it started with and fail on a number nobody
-            // applied to it. A budget is part of the terms this run began
-            // under; the next one gets the new value.
-            let budget = turn_budget(&db);
+            let mut last_failing = initial_last_failing;
+            let mut stalled_rounds = initial_stalled_rounds;
 
             // The opening move.
             //
@@ -281,7 +337,9 @@ pub fn start(
                 let failing: Vec<String> = detail
                     .criteria
                     .iter()
-                    .filter(|c| c.is_active() && c.required && c.status != CriterionStatus::Verified)
+                    .filter(|c| {
+                        c.is_active() && c.required && c.status != CriterionStatus::Verified
+                    })
                     .map(|c| c.id.clone())
                     .collect();
                 if !failing.is_empty() && failing == last_failing {
@@ -302,7 +360,35 @@ pub fn start(
                     approval_pending,
                 };
 
-                match next_instruction(&detail, &progress) {
+                let step = next_instruction(&detail, &progress);
+                if matches!(step, Step::Say(_))
+                    && crate::accounts::switch::relay_needed(&db, &driven.session_id).is_some()
+                {
+                    match crate::accounts::switch::relay_autopilot(
+                        &app,
+                        &driven,
+                        &project_id,
+                        turns,
+                        budget,
+                        stalled_rounds,
+                        last_failing.clone(),
+                    ) {
+                        Ok(Some(_replacement)) => break,
+                        Ok(None) => {}
+                        Err(code) => {
+                            let _ = crate::mission::store::set_status(
+                                &db,
+                                &mission_id,
+                                MissionStatus::Waiting,
+                                Some(code.clone()),
+                            );
+                            finish(&driven, &db, &project_id, &detail.mission.title, &code);
+                            break;
+                        }
+                    }
+                }
+
+                match step {
                     Step::Say(text) => {
                         record(
                             &db,
@@ -345,7 +431,13 @@ pub fn start(
                                 tracing::warn!(error = %e, "autopilot completion was refused")
                             }
                         }
-                        finish(&driven, &db, &project_id, &detail.mission.title, "autopilot.completed");
+                        finish(
+                            &driven,
+                            &db,
+                            &project_id,
+                            &detail.mission.title,
+                            "autopilot.completed",
+                        );
                         break;
                     }
 
@@ -607,13 +699,7 @@ fn send(session: &LiveSession, text: &str) -> Result<(), ()> {
     crate::session::typing::submit(session)
 }
 
-fn finish(
-    run: &Autopilot,
-    db: &Database,
-    project_id: &str,
-    title: &str,
-    code: &str,
-) {
+fn finish(run: &Autopilot, db: &Database, project_id: &str, title: &str, code: &str) {
     *run.state.lock() = RunState::Finished;
     record(
         db,
@@ -730,6 +816,7 @@ mod tests {
             mission_id: "m1".into(),
             state: Mutex::new(RunState::Working),
             turns: AtomicU32::new(3),
+            budget: 24,
             stop: Arc::new(AtomicBool::new(false)),
         };
         run.stop();
@@ -745,6 +832,7 @@ mod tests {
             mission_id: "m1".into(),
             state: Mutex::new(RunState::Working),
             turns: AtomicU32::new(0),
+            budget: 24,
             stop: Arc::new(AtomicBool::new(false)),
         }));
 
@@ -860,20 +948,17 @@ mod tests {
 
     #[test]
     fn a_recognised_prefix_selects_its_kind() {
-        let (kind, body) =
-            interpret_reflection("GOTCHA: the port is hardcoded to 4173.").unwrap();
+        let (kind, body) = interpret_reflection("GOTCHA: the port is hardcoded to 4173.").unwrap();
         assert_eq!(kind, crate::brain::Kind::Gotcha);
         assert_eq!(body, "the port is hardcoded to 4173.");
 
-        let (kind, _) =
-            interpret_reflection("convention: tests live beside the code.").unwrap();
+        let (kind, _) = interpret_reflection("convention: tests live beside the code.").unwrap();
         assert_eq!(kind, crate::brain::Kind::Convention);
 
         let (kind, _) = interpret_reflection("WHAT: this is a CLI, not a library.").unwrap();
         assert_eq!(kind, crate::brain::Kind::What);
 
-        let (kind, _) =
-            interpret_reflection("GLOSSARY: a \"run\" means one CI job.").unwrap();
+        let (kind, _) = interpret_reflection("GLOSSARY: a \"run\" means one CI job.").unwrap();
         assert_eq!(kind, crate::brain::Kind::Glossary);
     }
 
@@ -882,8 +967,7 @@ mod tests {
     /// nothing to say.
     #[test]
     fn a_reply_with_no_prefix_defaults_to_gotcha() {
-        let (kind, body) =
-            interpret_reflection("the CI runner is pinned to an old Node.").unwrap();
+        let (kind, body) = interpret_reflection("the CI runner is pinned to an old Node.").unwrap();
         assert_eq!(kind, crate::brain::Kind::Gotcha);
         assert_eq!(body, "the CI runner is pinned to an old Node.");
     }
@@ -892,7 +976,10 @@ mod tests {
     fn an_overlong_reply_is_truncated_not_dropped() {
         let long = "x".repeat(REFLECT_MAX_CHARS + 50);
         let (_, body) = interpret_reflection(&format!("GOTCHA: {long}")).unwrap();
-        assert!(body.chars().count() <= REFLECT_MAX_CHARS + 1, "the ellipsis adds one char");
+        assert!(
+            body.chars().count() <= REFLECT_MAX_CHARS + 1,
+            "the ellipsis adds one char"
+        );
         assert!(body.ends_with('…'));
     }
 

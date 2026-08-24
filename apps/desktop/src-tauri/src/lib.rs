@@ -4,6 +4,7 @@
 //! Git, PTY sessions, the session event log, provider adapters and secure
 //! credential storage (§3 local-first). The webview owns presentation only.
 
+mod accounts;
 mod activity;
 mod analytics;
 mod autopilot;
@@ -15,15 +16,15 @@ mod git;
 mod guardrail;
 mod mission;
 mod onboarding;
-mod project;
-mod settings;
-mod providers;
 mod preview;
+mod project;
+mod providers;
 mod pty;
 mod relay;
 mod review;
 mod search;
 mod session;
+mod settings;
 mod voice;
 mod window;
 mod worktrees;
@@ -152,6 +153,14 @@ pub fn run() {
 
             let db = Arc::new(db);
 
+            // Adopt the provider configuration already in use on this machine.
+            // Idempotent and identity-only: no credential file is opened.
+            for provider in accounts::PROVIDERS {
+                if let Err(error) = accounts::adopt_machine_account(&db, provider) {
+                    tracing::warn!(%error, %provider, "could not adopt machine account");
+                }
+            }
+
             // Everything said in a session recorded before Global Search
             // existed is on disk and not in the index (D25). This walks those
             // logs once, off the startup path — see `search::backfill` for why
@@ -184,6 +193,15 @@ pub fn run() {
             window::window_is_maximized,
             window::window_ready,
             envscan::scan_environment,
+            accounts::commands::accounts_report,
+            accounts::commands::accounts_refresh,
+            accounts::commands::account_create,
+            accounts::commands::account_rename,
+            accounts::commands::account_set_paused,
+            accounts::commands::account_remove,
+            accounts::commands::account_set_active,
+            accounts::commands::account_set_auto_switch,
+            accounts::commands::account_begin_sign_in,
             onboarding::onboarding_status,
             onboarding::onboarding_mark_seen,
             project::list_projects,

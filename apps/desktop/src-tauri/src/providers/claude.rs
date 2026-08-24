@@ -21,12 +21,11 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
-use crate::session::event::Confidence;
 use super::{
     BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
-    ProviderCapabilities,
-    UsageReporting,
+    ProviderCapabilities, UsageReporting,
 };
+use crate::session::event::Confidence;
 
 pub struct ClaudeCode;
 
@@ -48,7 +47,7 @@ impl Provider for ClaudeCode {
             worktrees: true,
             // Verified through a real PTY, not from --help.
             briefing: BriefingSupport::SystemPrompt,
-            account_switching: false,
+            account_switching: true,
         }
     }
 
@@ -94,7 +93,19 @@ fn home() -> Option<PathBuf> {
 /// **Nothing here ever writes trust.** Marking a folder trusted is a security
 /// decision that belongs to the person, in the other product's own interface.
 pub fn folder_is_trusted(cwd: &Path) -> Option<bool> {
-    let config = home()?.join(".claude.json");
+    let root = home()?.join(".claude");
+    folder_is_trusted_in(&root, true, cwd)
+}
+
+/// Account-scoped trust lookup. The machine account keeps `.claude.json`
+/// beside its default `.claude/` directory; an explicit CLAUDE_CONFIG_DIR
+/// carries the file inside that directory (verified against 2.1.241).
+pub fn folder_is_trusted_in(config_dir: &Path, adopted: bool, cwd: &Path) -> Option<bool> {
+    let config = if adopted {
+        config_dir.parent()?.join(".claude.json")
+    } else {
+        config_dir.join(".claude.json")
+    };
     trusted_in(&std::fs::read_to_string(config).ok()?, cwd)
 }
 
@@ -141,6 +152,11 @@ pub fn trusted_in(config_json: &str, cwd: &Path) -> Option<bool> {
 /// the normal state for the first seconds of a session.
 pub fn find_transcript(session_id: &str) -> Option<PathBuf> {
     let root = home()?.join(".claude").join("projects");
+    find_transcript_in(&root, session_id)
+}
+
+/// Find a transcript below one account's already-resolved projects root.
+pub fn find_transcript_in(root: &Path, session_id: &str) -> Option<PathBuf> {
     let wanted = format!("{session_id}.jsonl");
 
     for entry in std::fs::read_dir(root).ok()? {
@@ -176,7 +192,10 @@ pub fn transcript_cwd(path: &Path) -> Option<String> {
 /// context reminders, queue bookkeeping. Rendering it verbatim would bury the
 /// actual work. Conversation View shows development, so this is dropped (§24).
 fn is_internal_noise(value: &Value) -> bool {
-    let kind = value.get("type").and_then(Value::as_str).unwrap_or_default();
+    let kind = value
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
 
     match kind {
         // Bookkeeping with no reader-facing meaning.
@@ -189,7 +208,10 @@ fn is_internal_noise(value: &Value) -> bool {
         "system" => true,
 
         // Messages the harness injected into the user turn, not typed by a human.
-        "user" => value.get("isMeta").and_then(Value::as_bool).unwrap_or(false),
+        "user" => value
+            .get("isMeta")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
 
         _ => false,
     }
@@ -244,7 +266,11 @@ fn tool_summary(name: &str, input: &Value) -> String {
         "Read" | "Edit" | "Write" | "NotebookEdit" => field("file_path"),
         "Glob" | "Grep" => {
             let pattern = field("pattern");
-            if pattern.is_empty() { field("query") } else { pattern }
+            if pattern.is_empty() {
+                field("query")
+            } else {
+                pattern
+            }
         }
         "WebFetch" => field("url"),
         "WebSearch" => field("query"),
@@ -279,7 +305,11 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
     }
 
     // Sub-agent traffic belongs to its own thread, not the main conversation.
-    if value.get("isSidechain").and_then(Value::as_bool).unwrap_or(false) {
+    if value
+        .get("isSidechain")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         return Vec::new();
     }
 
@@ -289,7 +319,10 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
         .and_then(parse_timestamp)
         .unwrap_or(0);
 
-    let kind = value.get("type").and_then(Value::as_str).unwrap_or_default();
+    let kind = value
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
 
     // File history: the provider is telling us which files it touched. Keeping
     // it is what lets a session answer "what did this actually change?" (§39).
@@ -359,8 +392,16 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
                         .get("is_error")
                         .and_then(Value::as_bool)
                         .unwrap_or(false);
-                    let summary = truncate(&content_text(block.get("content").unwrap_or(&Value::Null)), 200);
-                    items.push(ConversationItem::ToolResult { id, ok, summary, ts_ms });
+                    let summary = truncate(
+                        &content_text(block.get("content").unwrap_or(&Value::Null)),
+                        200,
+                    );
+                    items.push(ConversationItem::ToolResult {
+                        id,
+                        ok,
+                        summary,
+                        ts_ms,
+                    });
                 }
             }
 
@@ -495,7 +536,9 @@ mod tests {
         let items = parse_line(REAL_USER);
         assert_eq!(items.len(), 1);
         match &items[0] {
-            ConversationItem::Message { role, text, ts_ms, .. } => {
+            ConversationItem::Message {
+                role, text, ts_ms, ..
+            } => {
                 assert_eq!(*role, Role::User);
                 assert_eq!(text, "Reply with exactly: CORRELATION_OK");
                 assert!(*ts_ms > 0);
@@ -532,13 +575,14 @@ mod tests {
         // autopilot interrupt an agent mid-tool-loop.
         let ended = parse_line(REAL_ASSISTANT);
         assert!(
-            ended
-                .iter()
-                .any(|i| matches!(i, ConversationItem::TurnEnded { reason, .. } if reason == "end_turn")),
+            ended.iter().any(
+                |i| matches!(i, ConversationItem::TurnEnded { reason, .. } if reason == "end_turn")
+            ),
             "a turn that ended must say so"
         );
 
-        let mid_loop = REAL_ASSISTANT.replace(r#""stop_reason":"end_turn""#, r#""stop_reason":"tool_use""#);
+        let mid_loop =
+            REAL_ASSISTANT.replace(r#""stop_reason":"end_turn""#, r#""stop_reason":"tool_use""#);
         assert!(
             !parse_line(&mid_loop)
                 .iter()
@@ -553,7 +597,9 @@ mod tests {
         // The spoken turn, then the turn boundary the provider reported.
         assert_eq!(items.len(), 2);
         match &items[0] {
-            ConversationItem::Message { role, text, usage, .. } => {
+            ConversationItem::Message {
+                role, text, usage, ..
+            } => {
                 assert_eq!(*role, Role::Assistant);
                 assert_eq!(text, "CORRELATION_OK");
                 let usage = usage.as_ref().expect("assistant turns report usage");
@@ -570,14 +616,23 @@ mod tests {
     /// The signal-to-noise ratio is the whole point of Conversation View.
     #[test]
     fn drops_transcript_machinery() {
-        assert!(parse_line(REAL_ATTACHMENT).is_empty(), "hook output is not conversation");
-        assert!(parse_line(REAL_QUEUE_OP).is_empty(), "queue bookkeeping is not conversation");
+        assert!(
+            parse_line(REAL_ATTACHMENT).is_empty(),
+            "hook output is not conversation"
+        );
+        assert!(
+            parse_line(REAL_QUEUE_OP).is_empty(),
+            "queue bookkeeping is not conversation"
+        );
     }
 
     #[test]
     fn drops_harness_injected_user_turns() {
         let meta = r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>…"},"timestamp":"2026-08-22T21:57:01.375Z"}"#;
-        assert!(parse_line(meta).is_empty(), "isMeta turns were not typed by a person");
+        assert!(
+            parse_line(meta).is_empty(),
+            "isMeta turns were not typed by a person"
+        );
     }
 
     #[test]
@@ -607,7 +662,9 @@ mod tests {
         let failed = r#"{"type":"user","isSidechain":false,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_2","is_error":true,"content":"boom"}]},"timestamp":"2026-08-22T21:57:01.375Z"}"#;
 
         match &parse_line(ok)[0] {
-            ConversationItem::ToolResult { id, ok, summary, .. } => {
+            ConversationItem::ToolResult {
+                id, ok, summary, ..
+            } => {
                 assert_eq!(id, "tu_1");
                 assert!(*ok);
                 assert_eq!(summary, "done");
@@ -684,7 +741,10 @@ mod tests {
         println!("parsed {files} transcripts -> {items} items, {with_usage} carrying usage");
         assert!(files > 0, "expected at least one local transcript");
         assert!(items > 0, "parsed nothing at all from real transcripts");
-        assert!(with_usage > 0, "no official usage recovered from real transcripts");
+        assert!(
+            with_usage > 0,
+            "no official usage recovered from real transcripts"
+        );
     }
 
     /// The autopilot's stopping condition, checked against reality (§32).
@@ -920,12 +980,20 @@ mod briefing_capability {
         if opening.contains("trust this folder") {
             std::thread::sleep(Duration::from_millis(500));
             let _ = handle.write(b"\r");
-            drain_until_any(&handle, &rx, &["Welcome back", "Try \""], Duration::from_secs(30));
+            drain_until_any(
+                &handle,
+                &rx,
+                &["Welcome back", "Try \""],
+                Duration::from_secs(30),
+            );
         }
 
         // Let the input line settle before typing into it (D16).
         std::thread::sleep(Duration::from_secs(5));
-        type_and_submit(&handle, "What is the project codename? Reply with the one word only.");
+        type_and_submit(
+            &handle,
+            "What is the project codename? Reply with the one word only.",
+        );
 
         // Wait for the answer, then stop.
         //

@@ -36,7 +36,9 @@ fn kind_for(item: &ConversationItem) -> EventKind {
         // A turn that carries only usage is a usage sample, not a message.
         // Filing it as a message would bury the numbers Analytics reads and
         // would put an empty bubble in the conversation.
-        ConversationItem::Message { text, usage, .. } if text.trim().is_empty() && usage.is_some() => {
+        ConversationItem::Message { text, usage, .. }
+            if text.trim().is_empty() && usage.is_some() =>
+        {
             EventKind::Usage
         }
         ConversationItem::Message { .. } | ConversationItem::Thinking { .. } => EventKind::Message,
@@ -62,6 +64,8 @@ pub fn spawn(
     db: Arc<Database>,
     project_id: String,
     provider: String,
+    account_id: Option<String>,
+    transcript_root: Option<std::path::PathBuf>,
     cwd: String,
     launched_at_ms: i64,
     stop: Arc<AtomicBool>,
@@ -74,7 +78,14 @@ pub fn spawn(
     std::thread::Builder::new()
         .name(format!("transcript-{session_id}"))
         .spawn(move || {
-            let Some(path) = locate(&provider, &session_id, &cwd, launched_at_ms, &stop) else {
+            let Some(path) = locate(
+                &provider,
+                transcript_root.as_deref(),
+                &session_id,
+                &cwd,
+                launched_at_ms,
+                &stop,
+            ) else {
                 tracing::warn!(
                     session = %session_id,
                     %provider,
@@ -89,6 +100,15 @@ pub fn spawn(
                 match tailer.poll() {
                     Ok(lines) => {
                         for line in lines {
+                            if let Some(account_id) = account_id.as_deref() {
+                                crate::accounts::quota::observe_line(
+                                    &db,
+                                    account_id,
+                                    &session_id,
+                                    &provider,
+                                    &line,
+                                );
+                            }
                             let items = match provider.as_str() {
                                 "claude-code" => claude::parse_line(&line),
                                 "codex" => codex::parse_line(&line),
@@ -102,7 +122,41 @@ pub fn spawn(
                                 // index. Analytics and the timeline need to
                                 // aggregate across sessions without reading
                                 // every log file (§52, §39).
-                                mirror(&db, &session.id, &project_id, &provider, &item);
+                                mirror(
+                                    &db,
+                                    &session.id,
+                                    &project_id,
+                                    &provider,
+                                    account_id.as_deref(),
+                                    &item,
+                                );
+                            }
+
+                            if let Some(account_id) = account_id.as_deref() {
+                                let before = crate::accounts::get(&db, account_id).ok().flatten();
+                                if let Some(next) = crate::accounts::switch::maybe_rotate(&db, account_id) {
+                                    if let Some(before) = before {
+                                        let estimated = crate::accounts::quota::for_account(&db, &before)
+                                            .windows
+                                            .iter()
+                                            .any(|window| {
+                                                window.confidence
+                                                    == crate::session::event::Confidence::Estimated
+                                                    && window
+                                                        .percent
+                                                        .map(|percent| {
+                                                            percent >= crate::accounts::quota::NEARING_PERCENT
+                                                        })
+                                                        .unwrap_or(false)
+                                            });
+                                        crate::accounts::switch::record_rotation(
+                                            &db,
+                                            &before,
+                                            &next,
+                                            estimated,
+                                        );
+                                    }
+                                }
                             }
                         }
                     }
@@ -121,6 +175,7 @@ pub fn spawn(
 /// Wait for the provider to create its transcript, then return its path.
 fn locate(
     provider: &str,
+    transcript_root: Option<&std::path::Path>,
     session_id: &str,
     cwd: &str,
     launched_at_ms: i64,
@@ -135,10 +190,16 @@ fn locate(
 
         let found = match provider {
             // Deterministic: we chose the id, so the file is named for it.
-            "claude-code" => claude::find_transcript(session_id),
+            "claude-code" => match transcript_root {
+                Some(root) => claude::find_transcript_in(root, session_id),
+                None => claude::find_transcript(session_id),
+            },
             // Heuristic: match on working directory and start time, because
             // Codex assigns its own id (§26).
-            "codex" => codex::correlate(cwd, launched_at_ms),
+            "codex" => match transcript_root {
+                Some(root) => codex::correlate_in(root, cwd, launched_at_ms),
+                None => codex::correlate(cwd, launched_at_ms),
+            },
             _ => None,
         };
 
@@ -205,7 +266,7 @@ mod tests {
             usage: None,
         };
 
-        mirror(&db, "s1", "p1", "claude-code", &message);
+        mirror(&db, "s1", "p1", "claude-code", None, &message);
 
         let (kind, label, text) = event_row(&db);
         assert_eq!(kind, "message");
@@ -221,7 +282,10 @@ mod tests {
                 )
             })
             .unwrap();
-        assert_eq!(hits, 1, "the mirrored text must reach the search index, not just the row");
+        assert_eq!(
+            hits, 1,
+            "the mirrored text must reach the search index, not just the row"
+        );
     }
 
     /// A turn that carries only usage numbers is a usage sample (§28), not
@@ -230,7 +294,10 @@ mod tests {
     #[test]
     fn a_usage_only_message_is_not_mirrored_as_searchable_text() {
         let db = seeded_db();
-        let usage = TokenUsage { input: Some(120), ..TokenUsage::default() };
+        let usage = TokenUsage {
+            input: Some(120),
+            ..TokenUsage::default()
+        };
         let message = ConversationItem::Message {
             role: Role::Assistant,
             text: String::new(),
@@ -238,17 +305,46 @@ mod tests {
             usage: Some(usage),
         };
 
-        mirror(&db, "s1", "p1", "claude-code", &message);
+        mirror(&db, "s1", "p1", "claude-code", None, &message);
 
         assert_eq!(event_count(&db), 0);
         let usage_rows: i64 = db
             .with(|conn| {
-                conn.query_row("SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'", [], |r| {
-                    r.get(0)
-                })
+                conn.query_row(
+                    "SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'",
+                    [],
+                    |r| r.get(0),
+                )
             })
             .unwrap();
         assert_eq!(usage_rows, 1);
+    }
+
+    #[test]
+    fn usage_is_attributed_to_the_account_that_started_the_session() {
+        let db = seeded_db();
+        let message = ConversationItem::Message {
+            role: Role::Assistant,
+            text: String::new(),
+            ts_ms: 1,
+            usage: Some(TokenUsage {
+                input: Some(120),
+                ..TokenUsage::default()
+            }),
+        };
+
+        mirror(&db, "s1", "p1", "claude-code", Some("account-a"), &message);
+
+        let account_id: Option<String> = db
+            .with(|conn| {
+                conn.query_row(
+                    "SELECT account_id FROM usage_samples WHERE session_id = 's1'",
+                    [],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(account_id.as_deref(), Some("account-a"));
     }
 
     /// Found by running a real Claude Code turn and searching for its own
@@ -259,7 +355,11 @@ mod tests {
     #[test]
     fn a_reply_with_both_text_and_usage_is_recorded_both_ways() {
         let db = seeded_db();
-        let usage = TokenUsage { input: Some(120), output: Some(40), ..TokenUsage::default() };
+        let usage = TokenUsage {
+            input: Some(120),
+            output: Some(40),
+            ..TokenUsage::default()
+        };
         let message = ConversationItem::Message {
             role: Role::Assistant,
             text: "jarvis-search-probe-9d3f".into(),
@@ -267,9 +367,13 @@ mod tests {
             usage: Some(usage),
         };
 
-        mirror(&db, "s1", "p1", "claude-code", &message);
+        mirror(&db, "s1", "p1", "claude-code", None, &message);
 
-        assert_eq!(event_count(&db), 1, "the reply's own text must reach the search index");
+        assert_eq!(
+            event_count(&db),
+            1,
+            "the reply's own text must reach the search index"
+        );
         let (kind, label, text) = event_row(&db);
         assert_eq!(kind, "message");
         assert_eq!(label.as_deref(), Some("assistant"));
@@ -277,12 +381,17 @@ mod tests {
 
         let usage_rows: i64 = db
             .with(|conn| {
-                conn.query_row("SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'", [], |r| {
-                    r.get(0)
-                })
+                conn.query_row(
+                    "SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'",
+                    [],
+                    |r| r.get(0),
+                )
             })
             .unwrap();
-        assert_eq!(usage_rows, 1, "the usage figures still belong to Analytics too");
+        assert_eq!(
+            usage_rows, 1,
+            "the usage figures still belong to Analytics too"
+        );
     }
 
     /// Thinking is what a person might search for later ("why did it decide
@@ -296,17 +405,29 @@ mod tests {
             "s1",
             "p1",
             "claude-code",
-            &ConversationItem::Thinking { text: "weighing the tradeoffs".into(), ts_ms: 1 },
+            None,
+            &ConversationItem::Thinking {
+                text: "weighing the tradeoffs".into(),
+                ts_ms: 1,
+            },
         );
         mirror(
             &db,
             "s1",
             "p1",
             "claude-code",
-            &ConversationItem::TurnEnded { reason: "end_turn".into(), ts_ms: 2 },
+            None,
+            &ConversationItem::TurnEnded {
+                reason: "end_turn".into(),
+                ts_ms: 2,
+            },
         );
 
-        assert_eq!(event_count(&db), 1, "only the thinking item carries text worth finding");
+        assert_eq!(
+            event_count(&db),
+            1,
+            "only the thinking item carries text worth finding"
+        );
         let (kind, label, text) = event_row(&db);
         assert_eq!(kind, "thinking");
         assert!(label.is_none());
@@ -323,6 +444,7 @@ mod tests {
             "s1",
             "p1",
             "claude-code",
+            None,
             &ConversationItem::ToolCall {
                 id: "t1".into(),
                 name: "Bash".into(),
@@ -351,11 +473,19 @@ mod tests {
         let items = claude::parse_line(line);
         let message = items
             .iter()
-            .find(|item| matches!(item, ConversationItem::Message { role: Role::Assistant, .. }))
+            .find(|item| {
+                matches!(
+                    item,
+                    ConversationItem::Message {
+                        role: Role::Assistant,
+                        ..
+                    }
+                )
+            })
             .expect("a real assistant turn must parse into a Message item");
 
         let db = seeded_db();
-        mirror(&db, "s1", "p1", "claude-code", message);
+        mirror(&db, "s1", "p1", "claude-code", None, message);
 
         let hits: i64 = db
             .with(|conn| {
@@ -366,13 +496,18 @@ mod tests {
                 )
             })
             .unwrap();
-        assert_eq!(hits, 1, "a real assistant reply, usage and all, must land in the search index");
+        assert_eq!(
+            hits, 1,
+            "a real assistant reply, usage and all, must land in the search index"
+        );
 
         let usage_rows: i64 = db
             .with(|conn| {
-                conn.query_row("SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'", [], |r| {
-                    r.get(0)
-                })
+                conn.query_row(
+                    "SELECT COUNT(*) FROM usage_samples WHERE session_id = 's1'",
+                    [],
+                    |r| r.get(0),
+                )
             })
             .unwrap();
         assert_eq!(usage_rows, 1, "and Analytics must still get its tokens");
@@ -448,17 +583,23 @@ fn mirror(
     session_id: &str,
     project_id: &str,
     provider: &str,
+    account_id: Option<&str>,
     item: &ConversationItem,
 ) {
-    if let ConversationItem::Message { usage: Some(usage), ts_ms, .. } = item {
+    if let ConversationItem::Message {
+        usage: Some(usage),
+        ts_ms,
+        ..
+    } = item
+    {
         if !usage.is_empty() {
             let outcome = db.with(|conn| {
                 conn.execute(
                     "INSERT INTO usage_samples
                          (session_id, project_id, provider, model, ts_ms,
                           input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-                          cost_usd, confidence, limit_percent, limit_resets_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                          cost_usd, confidence, limit_percent, limit_resets_at, account_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                     params![
                         session_id,
                         project_id,
@@ -476,6 +617,7 @@ fn mirror(
                             .trim_matches('"'),
                         usage.limit_percent,
                         usage.limit_resets_at,
+                        account_id,
                     ],
                 )?;
                 Ok(())
@@ -507,8 +649,16 @@ fn mirror(
     // usage above. `TurnEnded` carries no text worth indexing.
     if let Some((kind, label, text)) = search_event(item) {
         if !text.trim().is_empty() {
-            let outcome =
-                insert_search_event(db, session_id, project_id, item.ts_ms(), kind, label, &text, item);
+            let outcome = insert_search_event(
+                db,
+                session_id,
+                project_id,
+                item.ts_ms(),
+                kind,
+                label,
+                &text,
+                item,
+            );
             if let Err(e) = outcome {
                 tracing::warn!(error = %e, session = session_id, "could not mirror a session event");
             }
@@ -523,11 +673,17 @@ fn mirror(
 /// text itself. A `usage`-only `Message` still reaches here with empty text
 /// and is dropped by the empty check at the call site, same as an empty
 /// `ToolResult` summary.
-pub(crate) fn search_event(item: &ConversationItem) -> Option<(&'static str, Option<String>, String)> {
+pub(crate) fn search_event(
+    item: &ConversationItem,
+) -> Option<(&'static str, Option<String>, String)> {
     match item {
         ConversationItem::Message { role, text, .. } => {
             let role = serde_json::to_string(role).unwrap_or_default();
-            Some(("message", Some(role.trim_matches('"').to_string()), text.clone()))
+            Some((
+                "message",
+                Some(role.trim_matches('"').to_string()),
+                text.clone(),
+            ))
         }
         ConversationItem::Thinking { text, .. } => Some(("thinking", None, text.clone())),
         // The tool's own name is folded into the indexed text, not left only

@@ -409,6 +409,138 @@ mod tests {
         );
     }
 
+    /// Pins the account-isolation contract against the provider CLIs actually
+    /// installed on this machine. No credential is copied or read: both tools
+    /// are deliberately started with empty configuration roots. Even while
+    /// signed out they initialise enough state to prove where configuration
+    /// and transcripts live.
+    ///
+    /// `cargo test -- --ignored provider_config_roots_isolate_state_and_transcripts`
+    #[test]
+    #[ignore]
+    fn provider_config_roots_isolate_state_and_transcripts() {
+        fn contains_file(root: &std::path::Path, extension: &str) -> bool {
+            let Ok(entries) = std::fs::read_dir(root) else {
+                return false;
+            };
+            entries.flatten().any(|entry| {
+                let path = entry.path();
+                if path.is_dir() {
+                    contains_file(&path, extension)
+                } else {
+                    path.extension().and_then(|value| value.to_str()) == Some(extension)
+                }
+            })
+        }
+
+        fn wait_for_path(path: &std::path::Path, timeout: Duration) -> bool {
+            let deadline = Instant::now() + timeout;
+            while Instant::now() < deadline {
+                if path.exists() {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            false
+        }
+
+        fn wait_for_extension(root: &std::path::Path, extension: &str, timeout: Duration) -> bool {
+            let deadline = Instant::now() + timeout;
+            while Instant::now() < deadline {
+                if contains_file(root, extension) {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            false
+        }
+
+        let temp = tempfile::tempdir().expect("temporary probe root");
+        let scratch = temp.path().join("repo");
+        let claude_root = temp.path().join("claude");
+        let codex_root = temp.path().join("codex");
+        std::fs::create_dir_all(&scratch).expect("scratch repository directory");
+        std::fs::create_dir_all(&claude_root).expect("Claude configuration directory");
+        std::fs::create_dir_all(&codex_root).expect("Codex configuration directory");
+
+        let git = std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&scratch)
+            .status()
+            .expect("run real git");
+        assert!(git.success(), "the scratch repository must be real");
+
+        let claude_session = uuid::Uuid::new_v4().to_string();
+        let (claude, claude_rx) = spawn(PtyOptions {
+            program: "claude".into(),
+            args: vec![
+                "--session-id".into(),
+                claude_session.clone(),
+                "--print".into(),
+                "--".into(),
+                "Reply with probe-ok.".into(),
+            ],
+            cwd: scratch.clone(),
+            cols: 120,
+            rows: 30,
+            env: vec![(
+                "CLAUDE_CONFIG_DIR".into(),
+                claude_root.to_string_lossy().into_owned(),
+            )],
+        })
+        .expect("start the real Claude CLI");
+        let _ = drain_until(
+            &claude,
+            &claude_rx,
+            // A needle that cannot occur makes the helper wait for the real
+            // process to exit. Claude flushes the transcript during shutdown;
+            // killing as soon as "Not logged in" was painted races that flush.
+            "jarvis-probe-never-appears",
+            Duration::from_secs(20),
+        );
+        let _ = claude.kill();
+
+        assert!(
+            wait_for_path(&claude_root.join(".claude.json"), Duration::from_secs(5)),
+            "CLAUDE_CONFIG_DIR must carry .claude.json with the account"
+        );
+        let claude_projects = claude_root.join("projects");
+        assert!(
+            wait_for_extension(&claude_projects, "jsonl", Duration::from_secs(5)),
+            "Claude transcripts must live under CLAUDE_CONFIG_DIR/projects"
+        );
+
+        let (codex, codex_rx) = spawn(PtyOptions {
+            program: "codex".into(),
+            args: vec![
+                "exec".into(),
+                "--sandbox".into(),
+                "read-only".into(),
+                "--skip-git-repo-check".into(),
+                "-C".into(),
+                scratch.to_string_lossy().into_owned(),
+                "Reply with probe-ok.".into(),
+            ],
+            cwd: scratch,
+            cols: 120,
+            rows: 30,
+            // CODEX_* is scrubbed from inherited state. Supplying CODEX_HOME
+            // here must win because account env is applied after that scrub.
+            env: vec![(
+                "CODEX_HOME".into(),
+                codex_root.to_string_lossy().into_owned(),
+            )],
+        })
+        .expect("start the real Codex CLI");
+        let _ = drain_until(&codex, &codex_rx, "session id", Duration::from_secs(20));
+        let codex_sessions = codex_root.join("sessions");
+        assert!(
+            wait_for_extension(&codex_sessions, "jsonl", Duration::from_secs(20)),
+            "CODEX_HOME must survive the PTY scrub and own Codex rollouts"
+        );
+        let _ = codex.kill();
+    }
+
     #[test]
     fn reports_a_clear_error_for_a_missing_program() {
         let result = spawn(PtyOptions {

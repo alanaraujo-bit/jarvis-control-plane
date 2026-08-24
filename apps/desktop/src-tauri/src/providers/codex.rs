@@ -20,12 +20,11 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
-use crate::session::event::Confidence;
 use super::{
     BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
-    ProviderCapabilities,
-    UsageReporting,
+    ProviderCapabilities, UsageReporting,
 };
+use crate::session::event::Confidence;
 
 pub struct Codex;
 
@@ -52,7 +51,7 @@ impl Provider for Codex {
             worktrees: true,
             // No out-of-band flag exists on 0.147.0.
             briefing: BriefingSupport::OpeningMessage,
-            account_switching: false,
+            account_switching: true,
         }
     }
 
@@ -81,8 +80,13 @@ pub fn recent_rollouts(since_ms: i64) -> Vec<PathBuf> {
     let Some(root) = sessions_root() else {
         return Vec::new();
     };
+    recent_rollouts_in(&root, since_ms)
+}
+
+/// Collect rollout files from one account's resolved sessions root.
+pub fn recent_rollouts_in(root: &Path, since_ms: i64) -> Vec<PathBuf> {
     let mut found = Vec::new();
-    walk(&root, 0, since_ms, &mut found);
+    walk(root, 0, since_ms, &mut found);
     found
 }
 
@@ -92,7 +96,9 @@ fn walk(dir: &Path, depth: usize, since_ms: i64, out: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(kind) = entry.file_type() else { continue };
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
 
         if kind.is_dir() {
             if depth < 3 {
@@ -137,7 +143,13 @@ pub fn rollout_cwd(path: &Path) -> Option<String> {
 /// Matching is on working directory plus start time. If several match, the
 /// oldest at or after the launch wins, since that is the one we caused.
 pub fn correlate(cwd: &str, launched_at_ms: i64) -> Option<PathBuf> {
-    let mut candidates: Vec<_> = recent_rollouts(launched_at_ms - 2_000)
+    let root = sessions_root()?;
+    correlate_in(&root, cwd, launched_at_ms)
+}
+
+/// Correlate only within the account that launched the process.
+pub fn correlate_in(root: &Path, cwd: &str, launched_at_ms: i64) -> Option<PathBuf> {
+    let mut candidates: Vec<_> = recent_rollouts_in(root, launched_at_ms - 2_000)
         .into_iter()
         .filter(|path| {
             rollout_cwd(path)
@@ -153,11 +165,7 @@ pub fn correlate(cwd: &str, launched_at_ms: i64) -> Option<PathBuf> {
 /// Compare paths the way Windows does: case-insensitively, ignoring separator
 /// style and a trailing slash.
 fn paths_equal(a: &str, b: &str) -> bool {
-    let norm = |p: &str| {
-        p.replace('/', "\\")
-            .trim_end_matches('\\')
-            .to_lowercase()
-    };
+    let norm = |p: &str| p.replace('/', "\\").trim_end_matches('\\').to_lowercase();
     norm(a) == norm(b)
 }
 
@@ -255,18 +263,40 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
             // only the tokens would discard the half of §28 that answers
             // "how close am I to the limit, and when does it reset?".
             let limits = payload.get("rate_limits");
-            let window = limits
-                .and_then(|l| l.get("primary"))
-                .filter(|v| !v.is_null())
-                .or_else(|| limits.and_then(|l| l.get("secondary")).filter(|v| !v.is_null()));
+            // `usage_samples` has one legacy summary slot. Keep the most
+            // constraining window there; §66 records both windows separately
+            // in `account_limit_events`, so the Accounts surface loses none.
+            let window = limits.and_then(|limits| {
+                ["primary", "secondary"]
+                    .into_iter()
+                    .filter_map(|key| limits.get(key).filter(|value| !value.is_null()))
+                    .max_by(|a, b| {
+                        a.get("used_percent")
+                            .and_then(Value::as_f64)
+                            .unwrap_or_default()
+                            .total_cmp(
+                                &b.get("used_percent")
+                                    .and_then(Value::as_f64)
+                                    .unwrap_or_default(),
+                            )
+                    })
+            });
 
             let limit_percent = window
                 .and_then(|w| w.get("used_percent"))
                 .and_then(Value::as_f64);
-            let limit_resets_at = window
-                .and_then(|w| w.get("resets_in_seconds"))
-                .and_then(Value::as_i64)
-                .map(|secs| ts_ms + secs * 1_000);
+            let limit_resets_at = window.and_then(|window| {
+                window
+                    .get("resets_at")
+                    .and_then(Value::as_i64)
+                    .map(|seconds| seconds * 1_000)
+                    .or_else(|| {
+                        window
+                            .get("resets_in_seconds")
+                            .and_then(Value::as_i64)
+                            .map(|seconds| ts_ms + seconds * 1_000)
+                    })
+            });
 
             let usage = TokenUsage {
                 input: get("input_tokens"),
@@ -337,6 +367,8 @@ mod tests {
 
     const REAL_RESPONSE_ITEM: &str = r#"{"timestamp":"2026-08-19T02:06:15.944Z","ordinal":2,"type":"response_item","payload":{"type":"message","id":"msg_01","role":"developer","content":[{"type":"input_text","text":"<skills_instructions>secret system prompt</skills_instructions>"}]}}"#;
 
+    const REAL_LIMITS: &str = r#"{"timestamp":"2026-08-19T02:06:16.019Z","type":"event_msg","payload":{"type":"token_count","info":{"input_tokens":120,"output_tokens":30,"cached_input_tokens":20},"rate_limits":{"limit_id":"codex","primary":{"used_percent":12.5,"window_minutes":10080,"resets_at":1788050255},"secondary":{"used_percent":81.0,"window_minutes":300,"resets_at":1787540000},"credits":{"has_credits":false,"unlimited":false,"balance":"0"}}}}"#;
+
     #[test]
     fn parses_a_real_user_turn_and_strips_the_prompt_glyph() {
         let items = parse_line(REAL_USER);
@@ -366,6 +398,20 @@ mod tests {
                 assert!(message.contains("usage limit"));
             }
             other => panic!("expected an error item, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reads_absolute_reset_time_from_the_binding_codex_window() {
+        let items = parse_line(REAL_LIMITS);
+        match &items[0] {
+            ConversationItem::Message {
+                usage: Some(usage), ..
+            } => {
+                assert_eq!(usage.limit_percent, Some(81.0));
+                assert_eq!(usage.limit_resets_at, Some(1_787_540_000_000));
+            }
+            other => panic!("expected usage, got {other:?}"),
         }
     }
 

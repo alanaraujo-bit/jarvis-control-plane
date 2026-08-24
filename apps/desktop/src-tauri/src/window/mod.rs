@@ -4,7 +4,7 @@
 //! session state and the command palette entry point. That means the caption
 //! button behaviours have to be provided explicitly.
 
-use tauri::{Manager, Runtime, Window};
+use tauri::{Runtime, Window};
 
 #[tauri::command]
 pub fn window_minimize<R: Runtime>(window: Window<R>) -> tauri::Result<()> {
@@ -37,9 +37,11 @@ pub fn window_is_maximized<R: Runtime>(window: Window<R>) -> tauri::Result<bool>
 /// empty white frame (§11 — perceived performance is part of the finish).
 #[tauri::command]
 pub fn window_ready<R: Runtime>(window: Window<R>) -> tauri::Result<()> {
-    if let Some(main) = window.get_webview_window("main") {
-        main.show()?;
-        main.set_focus()?;
-    }
+    // `Window` here is already the native window associated with the webview
+    // that invoked the command. Trying to look the webview up through it is a
+    // category error: `get_webview_window` has no managed webviews on this
+    // handle and quietly returns `None`, leaving every first-run window hidden.
+    window.show()?;
+    window.set_focus()?;
     Ok(())
 }

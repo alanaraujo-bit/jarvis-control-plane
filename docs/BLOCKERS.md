@@ -136,12 +136,14 @@ therefore: create the directory, then **sign in to it**, and signing in means
 agent can do that for you, and `claude setup-token` is not a way around it —
 its first use needs the same interactive login.
 
-**Impact: narrow.** The machinery is built and exercised against your live
-account plus an alternate configuration directory: the registry, the config-dir
-plumbing, the quota model, the panel, the manual switch and the automatic
-switch can all be verified without a second subscription. What cannot be
-verified until this is done is the one end-to-end pass that matters most —
-account A exhausting, work moving to account B, and the agent carrying on.
+**Impact: narrow; M13 is complete despite it.** The machinery is built and
+exercised against your live account plus alternate configuration directories:
+registry, config-dir plumbing, quota model, panel, manual/automatic switch and
+the Brain relay are covered by real-infrastructure and deterministic tests. The
+release app was also validated in both locales/themes under an isolated app
+identifier. What cannot be executed until this is done is one external-state
+verification: account A genuinely exhausting, work moving to a separately
+authenticated account B, and the agent carrying on.
 
 **What I need from you:** with J.A.R.V.I.S. open on the Accounts screen, add an
 account, then complete the sign-in in the browser window it opens — once per
@@ -150,6 +152,6 @@ password and never reads a token; it asks the provider who the directory is
 signed in as (`claude auth status --json`) and stores the email, organisation
 and plan so you can tell four accounts apart.
 
-**What happens when it arrives:** the automatic-switch path can be run for real
-against two genuine allowances instead of a simulated rejection, which is the
-last thing standing between M13 and "verified" rather than "built".
+**What happens when it arrives:** repeat the already-built automatic-switch path
+against two genuine allowances and record the external E2E evidence. It does not
+change the architecture or reopen M13.

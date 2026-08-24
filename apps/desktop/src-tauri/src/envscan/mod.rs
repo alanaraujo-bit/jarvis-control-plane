@@ -289,11 +289,7 @@ pub(crate) fn tool_command(bin: &str, args: &[&str]) -> Option<Command> {
 /// machine's. A non-zero exit is `None`: a status command that failed has not
 /// told us anything, and treating its error text as an answer is how a
 /// signed-in account gets reported as signed out.
-pub(crate) fn run_tool(
-    bin: &str,
-    args: &[&str],
-    env: Option<(String, String)>,
-) -> Option<String> {
+pub(crate) fn run_tool(bin: &str, args: &[&str], env: Option<(String, String)>) -> Option<String> {
     let mut cmd = tool_command(bin, args)?;
     if let Some((key, value)) = env {
         cmd.env(key, value);
@@ -460,8 +456,14 @@ mod tests {
             Some("2.55.0.windows.3")
         );
         assert_eq!(parse_version("v24.19.0").as_deref(), Some("24.19.0"));
-        assert_eq!(parse_version("codex-cli 0.147.0").as_deref(), Some("0.147.0"));
-        assert_eq!(parse_version("2.1.240 (Claude Code)").as_deref(), Some("2.1.240"));
+        assert_eq!(
+            parse_version("codex-cli 0.147.0").as_deref(),
+            Some("0.147.0")
+        );
+        assert_eq!(
+            parse_version("2.1.240 (Claude Code)").as_deref(),
+            Some("2.1.240")
+        );
         assert_eq!(parse_version("11.20.0").as_deref(), Some("11.20.0"));
         assert_eq!(
             parse_version("gh version 2.97.0 (2026-07-31)\nhttps://github.com/cli/cli").as_deref(),
@@ -492,16 +494,22 @@ mod tests {
 
     #[test]
     #[cfg(windows)]
-    fn prefers_exe_over_cmd_when_both_exist() {
-        // PATHEXT lists .EXE before .CMD, and the shell resolves in that order.
+    fn respects_pathext_when_exe_and_cmd_both_exist() {
         let candidates = vec![
             r"C:\tools\thing.cmd".to_string(),
             r"C:\tools\thing.exe".to_string(),
         ];
-        assert_eq!(
-            preferred_executable(&candidates).as_deref(),
-            Some(r"C:\tools\thing.exe")
-        );
+        let pathext = std::env::var("PATHEXT")
+            .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into())
+            .to_uppercase();
+        let exe_first =
+            pathext.find(".EXE").unwrap_or(usize::MAX) < pathext.find(".CMD").unwrap_or(usize::MAX);
+        let expected = if exe_first {
+            r"C:\tools\thing.exe"
+        } else {
+            r"C:\tools\thing.cmd"
+        };
+        assert_eq!(preferred_executable(&candidates).as_deref(), Some(expected));
     }
 
     /// The whole point of the scan is to report what is actually usable, so
@@ -513,7 +521,11 @@ mod tests {
 
         // Git is required and is present here; if the scan cannot see it, the
         // scan is broken rather than the machine.
-        let git = report.tools.iter().find(|t| t.id == "git").expect("git probe");
+        let git = report
+            .tools
+            .iter()
+            .find(|t| t.id == "git")
+            .expect("git probe");
         assert_eq!(git.state, ToolState::Ready, "git detail: {:?}", git.detail);
         assert!(git.version.is_some());
 

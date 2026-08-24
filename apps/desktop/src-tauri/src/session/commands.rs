@@ -12,8 +12,8 @@ use super::attachment;
 use super::manager::{new_session_id, timestamp, Result, SessionInfo};
 use super::{transcript, SessionLogReader, SessionState};
 use crate::providers::conversation::ConversationItem;
-use crate::session::event::EventKind;
 use crate::pty::PtyOptions;
+use crate::session::event::EventKind;
 use crate::AppState;
 
 /// How much terminal history is restored into a reattached view.
@@ -227,7 +227,16 @@ pub fn start_agent_session(
     // A driven session has no view of its own to size it, so it gets a
     // reasonable terminal rather than a degenerate one: agent CLIs lay out
     // their output against the width they are told.
-    launch(state, project_id.to_string(), kind, None, 120, 30, mission_id, driven)
+    launch(
+        state,
+        project_id.to_string(),
+        kind,
+        None,
+        120,
+        30,
+        mission_id,
+        driven,
+    )
 }
 
 #[tauri::command]
@@ -270,6 +279,16 @@ fn launch(
     let cwd = cwd.unwrap_or(project_path);
     let id = new_session_id();
     let log_dir = state.session_dir(&id);
+    // No registered account is a supported state: the provider then receives
+    // exactly the environment and transcript roots it did before §66.
+    let account = crate::accounts::active(&state.db, kind.provider_id());
+    let account_id = account.as_ref().map(|account| account.id.clone());
+    let transcript_root = account.as_ref().and_then(|account| {
+        crate::accounts::transcript_root(
+            &account.provider,
+            std::path::Path::new(&account.config_dir),
+        )
+    });
 
     // Guardrails (§35), installed before the process starts because the hook
     // has to be in place for the very first tool call.
@@ -301,8 +320,7 @@ fn launch(
     let mut guarded = false;
     let guardrail_settings = match (kind, snapshot.as_ref()) {
         (SessionKind::ClaudeCode, Some(snapshot)) => {
-            let settings =
-                crate::guardrail::sessions::write_hook_settings(&log_dir, snapshot);
+            let settings = crate::guardrail::sessions::write_hook_settings(&log_dir, snapshot);
             guarded = settings.is_some();
             if !guarded {
                 // Worth saying out loud rather than degrading quietly: this
@@ -315,10 +333,8 @@ fn launch(
             settings
         }
         (SessionKind::Codex, Some(snapshot)) => {
-            let written = crate::guardrail::sessions::write_codex_hook(
-                std::path::Path::new(&cwd),
-                snapshot,
-            );
+            let written =
+                crate::guardrail::sessions::write_codex_hook(std::path::Path::new(&cwd), snapshot);
             // Written, not yet in force: Codex runs it only once the user has
             // trusted it. The watcher still follows it, so the moment they do,
             // its decisions arrive here like any other.
@@ -336,8 +352,11 @@ fn launch(
     // up in the very Review surface it also ships.
     let brief = write_brief(state, &project_id, &log_dir, kind);
 
-    let (program, args, env) =
+    let (program, args, mut env) =
         command_for(kind, &id, guardrail_settings.as_deref(), brief.as_deref());
+    if let Some(account) = account.as_ref() {
+        env.extend(crate::accounts::session_env(account));
+    }
 
     let created_at = timestamp();
     state.db.with(|conn| {
@@ -349,8 +368,8 @@ fn launch(
             // before search existed", and that is never true of a new session.
             "INSERT INTO sessions
                  (id, project_id, mission_id, provider, cwd, state, log_dir, created_at,
-                  updated_at, provider_session_id, events_backfilled_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?8)",
+                  updated_at, provider_session_id, events_backfilled_at, account_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?8, ?10)",
             params![
                 id,
                 project_id,
@@ -362,6 +381,7 @@ fn launch(
                 created_at,
                 // Claude Code uses our id verbatim; Codex assigns its own.
                 (kind == SessionKind::ClaudeCode).then(|| id.clone()),
+                account_id,
             ],
         )?;
         Ok(())
@@ -379,6 +399,9 @@ fn launch(
             env,
         },
     )?;
+    if let Some(account_id) = account_id.as_deref() {
+        crate::accounts::stamp_used(&state.db, account_id);
+    }
 
     // Follow the provider's structured transcript into the same log, so the
     // conversation and the terminal are two views of one stream (§23).
@@ -387,6 +410,8 @@ fn launch(
         Arc::clone(&state.db),
         project_id.clone(),
         kind.provider_id().to_string(),
+        account_id,
+        transcript_root,
         cwd.clone(),
         created_at,
         session.stop_flag(),
@@ -458,11 +483,7 @@ pub fn session_detach(state: State<'_, AppState>, session_id: String) -> Result<
 }
 
 #[tauri::command]
-pub fn session_write(
-    state: State<'_, AppState>,
-    session_id: String,
-    data: Vec<u8>,
-) -> Result<()> {
+pub fn session_write(state: State<'_, AppState>, session_id: String, data: Vec<u8>) -> Result<()> {
     // Record that a person was engaged this minute (§53).
     //
     // This command is the only path by which human input reaches a session, so
@@ -529,9 +550,11 @@ pub fn session_replay(state: State<'_, AppState>, session_id: String) -> Result<
 /// The session's own directory on disk, or an error naming the session.
 fn log_dir_of(state: &AppState, session_id: &str) -> Result<String> {
     Ok(state.db.with(|conn| {
-        conn.query_row("SELECT log_dir FROM sessions WHERE id = ?1", [session_id], |row| {
-            row.get(0)
-        })
+        conn.query_row(
+            "SELECT log_dir FROM sessions WHERE id = ?1",
+            [session_id],
+            |row| row.get(0),
+        )
     })?)
 }
 
@@ -632,7 +655,10 @@ mod tests {
     #[test]
     fn a_default_shell_is_always_resolvable() {
         let (program, _args) = default_shell();
-        assert!(!program.is_empty(), "there must always be a shell to fall back to");
+        assert!(
+            !program.is_empty(),
+            "there must always be a shell to fall back to"
+        );
     }
 
     #[test]
@@ -641,7 +667,10 @@ mod tests {
         // this flag being passed (§26).
         let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None, None);
         assert_eq!(program, "claude");
-        assert_eq!(args, vec!["--session-id".to_string(), "abc-123".to_string()]);
+        assert_eq!(
+            args,
+            vec!["--session-id".to_string(), "abc-123".to_string()]
+        );
     }
 
     #[test]
@@ -759,8 +788,7 @@ mod briefing_launch {
     #[test]
     fn a_brief_is_appended_rather_than_replacing_the_system_prompt() {
         let brief = std::path::Path::new("C:/logs/s1/project-brief.md");
-        let (program, args, _) =
-            command_for(SessionKind::ClaudeCode, "s1", None, Some(brief));
+        let (program, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, Some(brief));
 
         assert_eq!(program, "claude");
         let joined = args.join(" ");

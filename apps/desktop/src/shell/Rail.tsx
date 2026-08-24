@@ -5,6 +5,7 @@ import {
   Settings,
   Radar,
   Target,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { useT } from "../app/i18n";
@@ -17,6 +18,7 @@ export type SurfaceId =
   | "missions"
   | "activity"
   | "analytics"
+  | "accounts"
   | "settings";
 
 export interface RailItem {
@@ -30,7 +32,7 @@ export interface RailItem {
 /**
  * Global navigation (§87).
  *
- * Deliberately six destinations and no more. Project-scoped tools — terminal,
+ * Global destinations only. Project-scoped tools — terminal,
  * files, editor, diff, preview, notes — do not live here; they appear inside a
  * project, where they have context (§85).
  */
@@ -40,6 +42,7 @@ export const RAIL_ITEMS: RailItem[] = [
   { id: "missions", icon: Target, label: "nav.missions" },
   { id: "activity", icon: Activity, label: "nav.activity" },
   { id: "analytics", icon: ChartNoAxesColumn, label: "nav.analytics" },
+  { id: "accounts", icon: UsersRound, label: "nav.accounts" },
   { id: "settings", icon: Settings, label: "nav.settings", footer: true },
 ];
 

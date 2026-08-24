@@ -144,6 +144,13 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
 
     // Escape closes the find bar even when the terminal itself holds the
     // keyboard, so a search can be dismissed without clicking back into it.
+    //
+    // xterm normally treats Ctrl+C as the terminal control byte and relies on
+    // the webview's native paste event for Ctrl+V. The latter is unreliable in
+    // WebView2, while the former makes it impossible to copy a selection with
+    // the shortcut people use everywhere else. Own both keys here, where we
+    // can distinguish a selected terminal range from a process interrupt.
+    // Ctrl+C without a selection deliberately falls through, preserving ^C.
     // Ctrl+F is **not** handled here — see the capture-phase effect below for
     // why a widget-level handler was not enough.
     term.attachCustomKeyEventHandler((event) => {
@@ -153,6 +160,33 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
         setFind(null);
         return false;
       }
+
+      const plainControl = event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
+      const key = event.key.toLowerCase();
+
+      if (plainControl && key === "c" && term.hasSelection()) {
+        event.preventDefault();
+        void navigator.clipboard.writeText(term.getSelection()).catch(() => {
+          // Clipboard access can be denied by the host. Keep the selection so
+          // the person can retry instead of clearing it or sending ^C.
+        });
+        return false;
+      }
+
+      if (plainControl && key === "v") {
+        event.preventDefault();
+        void navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (text.length > 0) term.paste(text);
+          })
+          .catch(() => {
+            // An image-only clipboard has no text to read. The image-paste
+            // handler below asks the native core for it independently.
+          });
+        return false;
+      }
+
       return true;
     });
 

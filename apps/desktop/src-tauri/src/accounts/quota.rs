@@ -398,7 +398,12 @@ fn window_start(resets_at_ms: Option<i64>, length_ms: i64, now: i64) -> i64 {
 /// measurement is used rather than the largest or the mean, because the number
 /// is used to decide when to switch away, and switching a little early costs
 /// nothing while switching late costs a refused turn in the middle of a run.
-fn calibration(db: &Database, account_id: &str, window: &str, length_ms: i64) -> (Option<i64>, i64) {
+fn calibration(
+    db: &Database,
+    account_id: &str,
+    window: &str,
+    length_ms: i64,
+) -> (Option<i64>, i64) {
     let rejections: Vec<i64> = db
         .with(|conn| {
             let mut stmt = conn.prepare(
@@ -406,8 +411,9 @@ fn calibration(db: &Database, account_id: &str, window: &str, length_ms: i64) ->
                   WHERE account_id = ?1 AND window = ?2 AND status = 'rejected'
                   ORDER BY ts_ms DESC LIMIT 12",
             )?;
-            let rows: rusqlite::Result<Vec<i64>> =
-                stmt.query_map(params![account_id, window], |r| r.get(0))?.collect();
+            let rows: rusqlite::Result<Vec<i64>> = stmt
+                .query_map(params![account_id, window], |r| r.get(0))?
+                .collect();
             Ok(rows?)
         })
         .unwrap_or_default();
@@ -436,7 +442,7 @@ fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> Quo
     // is presumed recovered — the provider said when, and waiting for it to say
     // so a second time would leave an account parked as exhausted forever, since
     // nothing runs on it to produce a new observation.
-    let exhausted = status == "rejected" && resets_at_ms.map(|r| r > now).unwrap_or(false);
+    let exhausted = status == "rejected" && resets_at_ms.map(|r| r > now).unwrap_or(true);
 
     let start = window_start(resets_at_ms, length, now);
     let tokens = tokens_between(db, &account.id, start, now + 1);
@@ -444,8 +450,8 @@ fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> Quo
 
     // Order matters and encodes §28. An official percentage wins; a stale one
     // is not used to describe the window we are in now.
-    let official_is_current = official_percent.is_some()
-        && event_ts.map(|ts| ts >= start).unwrap_or(false);
+    let official_is_current =
+        official_percent.is_some() && event_ts.map(|ts| ts >= start).unwrap_or(false);
 
     let (percent, confidence) = if exhausted {
         (Some(100.0), Confidence::Official)
@@ -468,7 +474,13 @@ fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> Quo
         window: window.to_string(),
         percent,
         confidence,
-        resets_at_ms,
+        // A past provider timestamp still anchors the token window and its
+        // calibration, but it is not the reset of the window currently shown.
+        // Advancing it by `length` would be our inference presented through a
+        // field documented as provider-reported; keeping the stale value makes
+        // the UI promise "resetting now" forever. Until a current observation
+        // arrives, the honest countdown is no countdown.
+        resets_at_ms: resets_at_ms.filter(|reset| *reset > now),
         exhausted,
         tokens,
         calibration_tokens,
@@ -575,4 +587,126 @@ pub fn report(db: &Database, provider: &str) -> Result<Vec<(Account, AccountQuot
             (a, quota)
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn insert_account(db: &Database, id: &str, provider: &str) -> Account {
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO provider_accounts
+                     (id, provider, label, config_dir, adopted, signed_in, active, paused,
+                      position, created_at, checked_at)
+                 VALUES (?1, ?2, ?1, ?3, 0, 1, 1, 0, 0, 1, 1)",
+                params![id, provider, format!("C:/accounts/{id}")],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        super::super::get(db, id).unwrap().unwrap()
+    }
+
+    fn usage(db: &Database, account_id: Option<&str>, ts_ms: i64, input: i64) {
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO usage_samples
+                     (provider, ts_ms, input_tokens, confidence, account_id)
+                 VALUES ('claude-code', ?1, ?2, 'official', ?3)",
+                params![ts_ms, input, account_id],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn claude_reset_is_unix_seconds_and_never_invents_a_percentage() {
+        let line = r#"{"quotaLimits":{"status":"rejected","resetsAt":1787556000,"rateLimitType":"five_hour"},"message":{"content":[{"text":"You've hit your limit"}]}}"#;
+        let observation = claude_observation(line).unwrap();
+        assert_eq!(observation.resets_at_ms, Some(1_787_556_000_000));
+        assert_eq!(observation.percent, None);
+        assert_eq!(observation.detail.as_deref(), Some("You've hit your limit"));
+    }
+
+    #[test]
+    fn codex_preserves_both_reported_windows() {
+        let line = r#"{"timestamp":"2026-08-24T00:00:00Z","payload":{"rate_limits":{"primary":{"used_percent":18.0,"window_minutes":10080,"resets_at":1788050255},"secondary":{"used_percent":72.0,"window_minutes":300,"resets_in_seconds":600}}}}"#;
+        let observations = codex_observations(line);
+        assert_eq!(observations.len(), 2);
+        assert_eq!(observations[0].window, "weekly");
+        assert_eq!(observations[0].resets_at_ms, Some(1_788_050_255_000));
+        assert_eq!(observations[1].window, "five_hour");
+        assert_eq!(observations[1].percent, Some(72.0));
+    }
+
+    #[test]
+    fn an_uncalibrated_claude_window_reports_tokens_without_a_fake_bar() {
+        let db = Database::open_in_memory().unwrap();
+        let account = insert_account(&db, "a", "claude-code");
+        usage(&db, Some("a"), now_ms() - 1_000, 420);
+
+        let quota = for_account(&db, &account);
+        let window = quota
+            .windows
+            .iter()
+            .find(|window| window.window == "five_hour")
+            .unwrap();
+        assert_eq!(window.tokens, 420);
+        assert_eq!(window.percent, None);
+        assert_eq!(window.confidence, Confidence::Unknown);
+    }
+
+    #[test]
+    fn pre_account_usage_is_never_folded_into_the_machine_account() {
+        let db = Database::open_in_memory().unwrap();
+        let account = insert_account(&db, "a", "claude-code");
+        let now = now_ms();
+        usage(&db, None, now - 2_000, 9_000);
+        usage(&db, Some("a"), now - 1_000, 100);
+
+        let quota = for_account(&db, &account);
+        let window = quota
+            .windows
+            .iter()
+            .find(|window| window.window == "five_hour")
+            .unwrap();
+        assert_eq!(window.tokens, 100);
+    }
+
+    #[test]
+    fn a_past_refusal_calibrates_an_estimate_but_stops_exhausting_after_reset() {
+        let db = Database::open_in_memory().unwrap();
+        let account = insert_account(&db, "a", "claude-code");
+        let now = now_ms();
+        let refused_at = now - 5 * 60 * 60 * 1_000;
+        usage(&db, Some("a"), refused_at - 60 * 60 * 1_000, 1_000);
+        usage(&db, Some("a"), now - 60 * 60 * 1_000, 850);
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO account_limit_events
+                     (account_id, ts_ms, window, status, resets_at_ms)
+                 VALUES ('a', ?1, 'five_hour', 'rejected', ?2)",
+                params![refused_at, now - 4 * 60 * 60 * 1_000],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let quota = for_account(&db, &account);
+        let window = quota
+            .windows
+            .iter()
+            .find(|window| window.window == "five_hour")
+            .unwrap();
+        assert!(
+            !window.exhausted,
+            "a refusal expires at the provider's reset"
+        );
+        assert_eq!(window.calibration_tokens, Some(1_000));
+        assert_eq!(window.percent, Some(85.0));
+        assert_eq!(window.confidence, Confidence::Estimated);
+        assert_eq!(window.resets_at_ms, None);
+    }
 }

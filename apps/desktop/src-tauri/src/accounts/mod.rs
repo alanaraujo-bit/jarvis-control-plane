@@ -296,8 +296,7 @@ const SELECT: &str = "SELECT id, provider, label, config_dir, adopted, email, or
 pub fn list(db: &Database) -> Result<Vec<Account>> {
     db.with(|conn| {
         let mut stmt = conn.prepare(&format!("{SELECT} ORDER BY provider, position"))?;
-        let rows: rusqlite::Result<Vec<Account>> =
-            stmt.query_map([], row_to_account)?.collect();
+        let rows: rusqlite::Result<Vec<Account>> = stmt.query_map([], row_to_account)?.collect();
         Ok(rows?)
     })
     .map_err(|e| e.to_string())
@@ -366,7 +365,8 @@ pub fn adopt_machine_account(db: &Database, provider: &str) -> Result<Option<Str
         return Ok(None);
     }
 
-    let identity = read_identity(provider, &dir, true).unwrap_or_default();
+    let observed_identity = read_identity(provider, &dir, true);
+    let identity = observed_identity.clone().unwrap_or_default();
     let id = crate::session::manager::new_session_id();
     // Empty when the provider is installed but logged out; the surface names
     // it in the reader's language until an identity arrives.
@@ -385,7 +385,7 @@ pub fn adopt_machine_account(db: &Database, provider: &str) -> Result<Option<Str
             "INSERT INTO provider_accounts
                  (id, provider, label, config_dir, adopted, email, org_id, org_name, plan,
                   signed_in, checked_at, active, paused, position, created_at)
-             VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?10)",
+             VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13)",
             params![
                 id,
                 provider,
@@ -396,9 +396,10 @@ pub fn adopt_machine_account(db: &Database, provider: &str) -> Result<Option<Str
                 identity.org_name,
                 identity.plan,
                 identity.signed_in as i64,
-                ts,
+                observed_identity.as_ref().map(|_| ts),
                 (count == 0) as i64,
                 count,
+                ts,
             ],
         )?;
         Ok(())
@@ -438,7 +439,15 @@ pub fn create(db: &Database, provider: &str, data_dir: &Path, label: &str) -> Re
                  (id, provider, label, config_dir, adopted, signed_in, active, paused,
                   position, created_at)
              VALUES (?1, ?2, ?3, ?4, 0, 0, ?5, 0, ?6, ?7)",
-            params![id, provider, label, dir_text, (count == 0) as i64, count, ts],
+            params![
+                id,
+                provider,
+                label,
+                dir_text,
+                (count == 0) as i64,
+                count,
+                ts
+            ],
         )?;
         Ok(())
     })
@@ -463,14 +472,52 @@ pub fn rename(db: &Database, id: &str, label: &str) -> Result<()> {
 }
 
 pub fn set_paused(db: &Database, id: &str, paused: bool) -> Result<()> {
-    db.with(|conn| {
-        conn.execute(
-            "UPDATE provider_accounts SET paused = ?2 WHERE id = ?1",
-            params![id, paused as i64],
-        )?;
-        Ok(())
-    })
-    .map_err(|e| e.to_string())
+    let outcome = db
+        .with(|conn| {
+            let Some((provider, was_active)) = conn
+                .query_row(
+                    "SELECT provider, active FROM provider_accounts WHERE id = ?1",
+                    [id],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
+                )
+                .optional()?
+            else {
+                return Ok(Ok(()));
+            };
+
+            let replacement = if paused && was_active {
+                conn.query_row(
+                    "SELECT id FROM provider_accounts
+                 WHERE provider = ?1 AND id <> ?2 AND signed_in = 1 AND paused = 0
+                 ORDER BY position LIMIT 1",
+                    params![provider, id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?
+            } else {
+                None
+            };
+            if paused && was_active && replacement.is_none() {
+                return Ok(Err("accounts.lastAvailableCannotPause".to_string()));
+            }
+
+            let tx = conn.unchecked_transaction()?;
+            tx.execute(
+                "UPDATE provider_accounts SET paused = ?2 WHERE id = ?1",
+                params![id, paused as i64],
+            )?;
+            if let Some(replacement) = replacement {
+                tx.execute(
+                    "UPDATE provider_accounts SET active = (id = ?2)
+                 WHERE provider = ?1",
+                    params![provider, replacement],
+                )?;
+            }
+            tx.commit()?;
+            Ok(Ok(()))
+        })
+        .map_err(|e| e.to_string())?;
+    outcome
 }
 
 /// Forget an account.
