@@ -119,6 +119,38 @@ pub fn save(log_dir: &str, data: &[u8]) -> Result<Attachment, String> {
     })
 }
 
+/// Take an image off the system clipboard, as PNG bytes.
+///
+/// **The webview cannot do this**, which is the whole reason this exists in
+/// the core. WebView2 delivers a `paste` event for text and does not raise one
+/// at all for image data — verified by instrumenting the real app: the Ctrl+V
+/// `keydown` arrives at xterm's textarea and no `paste` event ever follows, so
+/// `clipboardData.items` is never reached and there is nothing to read. Every
+/// browser-shaped approach fails the same way for the same reason.
+///
+/// `arboard` reads the platform clipboard directly, which on Windows hands
+/// back a raw RGBA buffer rather than a file in any particular format. It is
+/// encoded as PNG here — lossless, so nothing the person pasted is lost, and
+/// it means the file on disk is one an agent can actually open.
+pub fn from_clipboard() -> Result<Vec<u8>, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    // Not an error worth a scary sentence: a paste with no image on the
+    // clipboard is an ordinary text paste, and the caller falls back to
+    // letting the terminal handle it.
+    let image = clipboard.get_image().map_err(|_| "attachment.noImage".to_string())?;
+
+    let width = u32::try_from(image.width).map_err(|_| "attachment.unsupported".to_string())?;
+    let height = u32::try_from(image.height).map_err(|_| "attachment.unsupported".to_string())?;
+    let buffer = image::RgbaImage::from_raw(width, height, image.bytes.into_owned())
+        .ok_or_else(|| "attachment.unsupported".to_string())?;
+
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(buffer)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(png)
+}
+
 /// Read an attachment back, for the preview.
 ///
 /// Confined to the session's own `attachments` directory: the webview passes

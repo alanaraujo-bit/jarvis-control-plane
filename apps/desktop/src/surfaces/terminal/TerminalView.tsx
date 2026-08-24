@@ -12,7 +12,7 @@ import {
   attachSession,
   replaySession,
   resizeSession,
-  saveAttachment,
+  pasteImage,
   writeSession,
   type Attachment,
 } from "../../app/sessions";
@@ -332,6 +332,7 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
    * so the first hit should be the most recent one, not the first one after
    * wrapping around.
    */
+
   /**
    * Pasting an image types its path (§22).
    *
@@ -342,40 +343,46 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
    * whole mechanism and it is worth being plain about rather than implying the
    * terminal grew a new capability.
    *
-   * Registered on the host element in the **capture** phase so it runs before
-   * xterm's own paste handling, which would otherwise write the clipboard's
-   * text rendering of an image — usually nothing at all — into the shell.
-   * Text pastes are untouched and still go to xterm.
+   * **This hooks Ctrl+V rather than the `paste` event, and that is not a
+   * shortcut taken for convenience.** The first version listened for `paste` —
+   * on the host element, then on `window` in the capture phase — and neither
+   * ever fired. Instrumenting the real app settled why: the Ctrl+V `keydown`
+   * arrives at xterm's helper textarea and **no `paste` event follows at
+   * all**, because WebView2 raises one for clipboard text and not for
+   * clipboard images. No browser-side handler can see those bytes, so the core
+   * reads the clipboard instead (`session::attachment::from_clipboard`).
+   *
+   * Nothing is prevented here, and that matters: a text paste must keep
+   * working exactly as it did. `attachment.noImage` is the ordinary answer for
+   * one, xterm has already handled it by then, and this stays silent.
    */
   useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
+    if (!autoFocus) return;
 
-    const onPaste = (event: ClipboardEvent) => {
-      const file = Array.from(event.clipboardData?.items ?? [])
-        .find((item) => item.kind === "file" && item.type.startsWith("image/"))
-        ?.getAsFile();
-      if (!file) return; // A text paste. xterm's own handling is correct.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== "v") return;
 
-      event.preventDefault();
-      event.stopPropagation();
-
-      void file
-        .arrayBuffer()
-        .then((buffer) => saveAttachment(sessionId, new Uint8Array(buffer)))
+      void pasteImage(sessionId)
         .then((saved) => {
           setAttachment(saved);
+          setPasteError(null);
           // A trailing space, so the next thing typed does not run into the
-          // path — and no newline: this is the person's prompt to submit, the
-          // same rule voice dictation follows (§54).
+          // path — and no newline: submitting is the person's to do, the same
+          // rule voice dictation follows (§54).
           return writeSession(sessionId, `${quoteIfNeeded(saved.path)} `);
         })
-        .catch((cause) => setPasteError(String(cause)));
+        .catch((cause) => {
+          // No image on the clipboard is the ordinary case: this was a text
+          // paste, xterm has already handled it, and nothing is wrong.
+          if (String(cause).includes("noImage")) return;
+          setPasteError(String(cause));
+        });
     };
 
-    host.addEventListener("paste", onPaste, { capture: true });
-    return () => host.removeEventListener("paste", onPaste, { capture: true });
-  }, [sessionId]);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [sessionId, autoFocus]);
 
   const paintedFor = useRef(resolved);
   useEffect(() => {

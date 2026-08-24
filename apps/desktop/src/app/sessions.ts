@@ -120,12 +120,17 @@ export interface Attachment {
 }
 
 /**
- * Save a pasted image into the session's own directory.
+ * Take the image on the clipboard and attach it to a session (§22).
  *
- * The core decides where it lands; this passes a session, never a path.
+ * The **core** reads the clipboard, not the webview: WebView2 raises no
+ * `paste` event for image data at all, so there is nothing for a browser-side
+ * handler to read. See `session::attachment::from_clipboard`.
+ *
+ * Rejects with `attachment.noImage` when the clipboard holds no image, which
+ * is the ordinary case for a text paste rather than a failure.
  */
-export async function saveAttachment(sessionId: string, data: Uint8Array): Promise<Attachment> {
-  return invoke<Attachment>("session_save_attachment", { sessionId, data: Array.from(data) });
+export async function pasteImage(sessionId: string): Promise<Attachment> {
+  return invoke<Attachment>("session_paste_image", { sessionId });
 }
 
 /** Read a pasted image back, for the preview. */

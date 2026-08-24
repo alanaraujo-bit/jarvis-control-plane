@@ -542,12 +542,12 @@ fn log_dir_of(state: &AppState, session_id: &str) -> Result<String> {
 /// Errors come back as stable codes the surface localises (§65), the same
 /// shape evidence summaries use.
 #[tauri::command]
-pub fn session_save_attachment(
+pub fn session_paste_image(
     state: State<'_, AppState>,
     session_id: String,
-    data: Vec<u8>,
 ) -> std::result::Result<attachment::Attachment, String> {
     let log_dir = log_dir_of(&state, &session_id).map_err(|e| e.to_string())?;
+    let data = attachment::from_clipboard()?;
     let saved = attachment::save(&log_dir, &data)?;
 
     // The log is the record (§23). An attachment is part of what happened in
