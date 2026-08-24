@@ -166,16 +166,23 @@ pub fn decide_guardrail(
     choice: Choice,
     by: Option<String>,
 ) -> IpcResult<Option<crate::mission::model::MissionDetail>> {
-    decide(&state, event_id, choice, by).map_err(|e| e.to_string())
+    decide(&state.db, event_id, choice, by).map_err(|e| e.to_string())
 }
 
-fn decide(
-    state: &State<'_, AppState>,
+/// The body of `decide_guardrail`, taking a `Database` rather than a Tauri
+/// `State`.
+///
+/// Split out so the companion (§59) can answer an approval from its background
+/// thread, where there is no `State` to be had. The alternative — a second
+/// implementation for the phone — is how a rule the local UI honours gets
+/// quietly skipped by another path into the same decision.
+pub(crate) fn decide(
+    db: &Database,
     event_id: String,
     choice: Choice,
     by: Option<String>,
 ) -> crate::mission::Result<Option<crate::mission::model::MissionDetail>> {
-    let Some(event) = super::get(&state.db, &event_id)? else {
+    let Some(event) = super::get(&db, &event_id)? else {
         return Ok(None);
     };
     if event.status != Status::Pending {
@@ -195,15 +202,15 @@ fn decide(
         Choice::NeverAllow => Some((event.project_id.clone(), Decision::Deny)),
     };
     if let Some((scope, decision)) = stored {
-        state.db.with(|conn| {
+        db.with(|conn| {
             policy::set(conn, scope.as_deref(), event.operation, Some(decision), now_ms())
         })?;
-        refresh_live_sessions(&state.db);
+        refresh_live_sessions(&db);
     }
 
     let allowed = choice != Choice::NeverAllow;
     super::settle(
-        &state.db,
+        &db,
         &event_id,
         if allowed { Status::Allowed } else { Status::Denied },
         &by,
@@ -211,7 +218,7 @@ fn decide(
     )?;
 
     crate::activity::record(
-        &state.db,
+        &db,
         if allowed { "guardrail.allowed" } else { "guardrail.denied" },
         crate::activity::Severity::Info,
         event.operation.as_str(),
@@ -226,16 +233,16 @@ fn decide(
         return Ok(None);
     };
     if allowed {
-        crate::mission::store::verify_criterion(&state.db, criterion_id)?;
+        crate::mission::store::verify_criterion(&db, criterion_id)?;
     } else {
-        crate::mission::store::record_refusal(&state.db, criterion_id, event.operation.as_str())?;
+        crate::mission::store::record_refusal(&db, criterion_id, event.operation.as_str())?;
     }
 
     let Some(mission_id) = event.mission_id.as_deref() else {
         return Ok(None);
     };
-    release_if_nothing_is_waiting(&state.db, mission_id)?;
-    crate::mission::store::detail(&state.db, mission_id).map(Some)
+    release_if_nothing_is_waiting(&db, mission_id)?;
+    crate::mission::store::detail(&db, mission_id).map(Some)
 }
 
 /// Return a mission to Ready once no approval is holding it.

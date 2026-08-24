@@ -20,6 +20,7 @@ mod settings;
 mod providers;
 mod preview;
 mod pty;
+mod relay;
 mod review;
 mod search;
 mod session;
@@ -113,6 +114,13 @@ pub fn run() {
                 Arc::new(std::sync::atomic::AtomicBool::new(false)),
             );
 
+            // The mobile companion (§59), off unless the user turned it on.
+            // Nothing local depends on it — see `relay`.
+            relay::spawn(
+                Arc::clone(&db),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            );
+
             app.manage(AppState {
                 db,
                 data_dir,
@@ -192,6 +200,9 @@ pub fn run() {
             autopilot::commands::autopilot_start,
             autopilot::commands::autopilot_stop,
             search::global_search,
+            relay::relay_status,
+            relay::relay_pair,
+            relay::relay_unpair,
             settings::settings_preferences,
             settings::settings_set_preference,
             preview::preview_detect,
