@@ -121,3 +121,35 @@ from a plain terminal, outside this tool), and whether Windows Defender's
 real-time scanner is holding a lock on the freshly-built multi-megabyte binary
 long enough to starve NSIS of the read it needs. Both are guesses from the
 symptom, not confirmed causes.
+
+---
+
+## B6 — Signing in to the second, third and fourth Claude accounts (§66, M13)
+**Status:** Blocked on an interactive browser sign-in. Blocks one verification,
+not the feature.
+
+M13 gives each account its own provider configuration directory
+(`CLAUDE_CONFIG_DIR` / `CODEX_HOME`) — see `docs/M13-ACCOUNTS.md` §2.5 for why
+rewriting `~/.claude/.credentials.json` was rejected. Registering an account is
+therefore: create the directory, then **sign in to it**, and signing in means
+`claude auth login` opening a browser and you completing an OAuth flow. No
+agent can do that for you, and `claude setup-token` is not a way around it —
+its first use needs the same interactive login.
+
+**Impact: narrow.** The machinery is built and exercised against your live
+account plus an alternate configuration directory: the registry, the config-dir
+plumbing, the quota model, the panel, the manual switch and the automatic
+switch can all be verified without a second subscription. What cannot be
+verified until this is done is the one end-to-end pass that matters most —
+account A exhausting, work moving to account B, and the agent carrying on.
+
+**What I need from you:** with J.A.R.V.I.S. open on the Accounts screen, add an
+account, then complete the sign-in in the browser window it opens — once per
+subscription, three times in total. Nothing else. The product never sees a
+password and never reads a token; it asks the provider who the directory is
+signed in as (`claude auth status --json`) and stores the email, organisation
+and plan so you can tell four accounts apart.
+
+**What happens when it arrives:** the automatic-switch path can be run for real
+against two genuine allowances instead of a simulated rejection, which is the
+last thing standing between M13 and "verified" rather than "built".

@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 10;
+pub const SCHEMA_VERSION: u32 = 11;
 
 struct Migration {
     version: u32,
@@ -456,6 +456,92 @@ const MIGRATIONS: &[Migration] = &[Migration {
     -- mirrors it and re-reading its log would only duplicate rows.
     ALTER TABLE sessions ADD COLUMN events_backfilled_at INTEGER;
 "#,
+    },
+    Migration {
+        version: 11,
+        sql: r#"
+    -- ---- Accounts (§66) ----------------------------------------------------
+    --
+    -- One row per signed-in provider account. Several accounts on the same
+    -- provider is the ordinary case this exists for: four Claude Pro
+    -- subscriptions, each with its own five-hour allowance, and work that
+    -- should move to the next one rather than stop.
+    --
+    -- `config_dir` is the whole mechanism. Each account owns a directory handed
+    -- to the provider as its configuration root (CLAUDE_CONFIG_DIR / CODEX_HOME)
+    -- when a session starts, so two accounts never share a credential file.
+    -- Nothing here ever rewrites the machine's own credentials: the account
+    -- already signed in on this machine is *adopted* — its row points at the
+    -- real ~/.claude — and every account added afterwards gets a directory of
+    -- ours. Swapping one global credential file instead would log the user out
+    -- of the session they are sitting in front of, and could not let a running
+    -- session finish on the old account while new work starts on the next one,
+    -- which is the entire point of the feature.
+    --
+    -- No secret is ever stored in this table. `email`, `org_name` and `plan`
+    -- are identity, read back from the provider's own status command, and exist
+    -- so a person can tell four accounts apart (§60/§61).
+    CREATE TABLE provider_accounts (
+        id          TEXT PRIMARY KEY,
+        provider    TEXT NOT NULL,
+        label       TEXT NOT NULL,
+        config_dir  TEXT NOT NULL,
+        -- 1 for the machine's own configuration directory, which is adopted
+        -- rather than created — and never deleted when the account is removed.
+        adopted     INTEGER NOT NULL DEFAULT 0,
+        email       TEXT,
+        org_id      TEXT,
+        org_name    TEXT,
+        plan        TEXT,
+        signed_in   INTEGER NOT NULL DEFAULT 0,
+        checked_at  INTEGER,
+        -- Exactly one account per provider is the one new sessions start on.
+        active      INTEGER NOT NULL DEFAULT 0,
+        -- Taken out of the rotation by the user. Distinct from exhausted: one
+        -- is a decision, the other is a measurement.
+        paused      INTEGER NOT NULL DEFAULT 0,
+        position    INTEGER NOT NULL,
+        created_at  INTEGER NOT NULL,
+        last_used_at INTEGER
+    );
+    CREATE UNIQUE INDEX idx_accounts_dir ON provider_accounts (provider, config_dir);
+    CREATE INDEX idx_accounts_order ON provider_accounts (provider, position);
+
+    -- Everything a provider has *stated* about an account's allowance.
+    --
+    -- Append-only, and deliberately not one mutable "current quota" row: the
+    -- reset time of a window is only knowable from an observation, a rejection
+    -- has to stay on the record after it clears, and the observed forecast
+    -- (§28) takes its calibration from past rejections. A row here is always
+    -- something a provider said, never something we inferred — an estimate
+    -- lives in the aggregate, not in this table.
+    CREATE TABLE account_limit_events (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id   TEXT NOT NULL REFERENCES provider_accounts (id) ON DELETE CASCADE,
+        session_id   TEXT,
+        ts_ms        INTEGER NOT NULL,
+        -- five_hour | weekly | opus_weekly | unknown — the provider's own name
+        -- for the window, kept verbatim rather than mapped onto ours.
+        window       TEXT NOT NULL,
+        -- ok | warning | rejected
+        status       TEXT NOT NULL,
+        resets_at_ms INTEGER,
+        percent      REAL,
+        detail       TEXT
+    );
+    CREATE INDEX idx_limit_events_account ON account_limit_events (account_id, ts_ms DESC);
+    CREATE INDEX idx_limit_events_window ON account_limit_events (account_id, window, ts_ms DESC);
+
+    -- Which account a session ran on, and which account spent these tokens.
+    --
+    -- NULL means "recorded before accounts existed", which is a different thing
+    -- from "the default account" and must not be folded into it: a quota window
+    -- computed over rows that predate the feature would attribute somebody
+    -- else's spend to whichever account happens to be first in the list.
+    ALTER TABLE sessions ADD COLUMN account_id TEXT;
+    ALTER TABLE usage_samples ADD COLUMN account_id TEXT;
+    CREATE INDEX idx_usage_account ON usage_samples (account_id, ts_ms);
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -564,6 +650,7 @@ mod tests {
             (8, 0x93ed_a072_1ac5_8f63),
             (9, 0x5843_2197_f138_27bd),
             (10, 0xee5e_755e_d603_e551),
+            (11, 0xd1c1_2851_e515_228c),
         ];
 
         for migration in MIGRATIONS {

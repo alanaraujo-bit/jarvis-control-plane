@@ -596,7 +596,40 @@ orphaned-process bug the same live pass caught and fixed. Open on M12: one
 combined live ear-test pass confirming the sound cues, both bug fixes, and
 streaming's captions together on a real microphone.
 
+## M13 — Accounts and quota (§66)  ~
+
+The feature Alan named the most important one in the project: four Claude Pro
+subscriptions, each with its own five-hour allowance, and work that moves to the
+next account rather than stopping.
+
+- [x] Migration 11 — `provider_accounts`, `account_limit_events`,
+      `sessions.account_id`, `usage_samples.account_id`.
+- [x] The registry and the identity model (`accounts/mod.rs`). An account **is**
+      a provider configuration directory (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`);
+      the account already signed in on this machine is adopted, never copied,
+      and nothing here ever rewrites the user's own credentials. Rewriting one
+      global credential file would log the user out of the session they are
+      sitting in front of, and could not let a running session finish on the old
+      account while new work starts on the next one — which is the point.
+- [x] The quota model (`accounts/quota.rs`). Established empirically against
+      115 real transcripts: **Claude Code has no live gauge** — a rejection is
+      Official and exact to the second, everything before it is Observed at
+      best, and a percentage needs an allowance learned from this machine's own
+      past refusals. **Codex does** state its consumption every turn, and the
+      adapter currently reads the wrong field name for the reset time.
+- [ ] Prove `CLAUDE_CONFIG_DIR` / `CODEX_HOME` against the real CLI, in an
+      `#[ignore]`d test. Everything else rests on it.
+- [ ] Config dir and per-session transcript root plumbed through the launcher.
+- [ ] The Accounts surface, the quota panel, manual switch, automatic switch.
+- [ ] Agent continuity across a switch, through the Brain brief rather than
+      `--resume`, which cannot cross configuration directories.
+
+Full account, including everything measured and every trap:
+[`docs/M13-ACCOUNTS.md`](M13-ACCOUNTS.md). Signing in to accounts 2–4 needs an
+interactive browser login and is **B6**.
+
 ## Next steps
+
 1. Re-verify voice dictation end to end by ear on a real microphone — the
    sound cues, both earlier bug fixes, and now streaming's live captions
    too. One pass now covers everything voice-related that has shipped

@@ -249,6 +249,62 @@ fn which(bin: &str) -> Option<String> {
     preferred_executable(&candidates)
 }
 
+/// Build a `Command` that will actually start a tool resolved from PATH.
+///
+/// Two Windows facts conspire here. `CreateProcess` does not apply PATHEXT, so
+/// `Command::new("pnpm")` cannot find `pnpm.cmd`; and a `.cmd`/`.bat` is a
+/// script, not an executable, so only the command interpreter can run it.
+/// Without both, a perfectly working pnpm was reported as "program not found"
+/// in the environment scan.
+///
+/// Shared with `accounts`, which has to run `claude auth status` for exactly
+/// the same reason and would otherwise repeat this — and get it subtly wrong,
+/// because `claude` on this machine is a `.cmd` shim too.
+pub(crate) fn tool_command(bin: &str, args: &[&str]) -> Option<Command> {
+    let resolved = which(bin)?;
+    let is_batch = resolved
+        .rsplit('.')
+        .next()
+        .map(|ext| ext.eq_ignore_ascii_case("cmd") || ext.eq_ignore_ascii_case("bat"))
+        .unwrap_or(false);
+
+    let mut cmd = if cfg!(windows) && is_batch {
+        let mut c = Command::new(std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into()));
+        c.arg("/c").arg(&resolved).args(args);
+        c
+    } else {
+        let mut c = Command::new(&resolved);
+        c.args(args);
+        c
+    };
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    Some(cmd)
+}
+
+/// Run a tool and return its standard output, or `None` if anything went wrong.
+///
+/// One extra environment variable may be applied, which is what lets an account
+/// be interrogated at its own configuration directory without touching the
+/// machine's. A non-zero exit is `None`: a status command that failed has not
+/// told us anything, and treating its error text as an answer is how a
+/// signed-in account gets reported as signed out.
+pub(crate) fn run_tool(
+    bin: &str,
+    args: &[&str],
+    env: Option<(String, String)>,
+) -> Option<String> {
+    let mut cmd = tool_command(bin, args)?;
+    if let Some((key, value)) = env {
+        cmd.env(key, value);
+    }
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
 fn run_probe(probe: &Probe) -> ToolReport {
     let path = which(probe.bin);
 

@@ -8,6 +8,14 @@ This file tells you where things stand, how the work is done here, and what
 will bite you. **Read `docs/DECISIONS.md` before changing anything in the core** —
 several decisions there were paid for with real debugging.
 
+> **Work in progress right now: M13 — accounts and quota (§66).**
+> The foundation is on disk and the suite is green, but the surface does not
+> exist yet and one load-bearing fact is still unverified. Read
+> [`docs/M13-ACCOUNTS.md`](M13-ACCOUNTS.md) **before** this file if you are
+> picking that up — it carries the empirical findings, the architecture
+> decision behind them, and the ordered plan. Note especially the migration
+> warning in its §3.1: migration 11 has not run on a real database yet.
+
 ---
 
 ## 1. The one idea everything rests on
