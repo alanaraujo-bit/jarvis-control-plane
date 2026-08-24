@@ -716,7 +716,7 @@ orphaned-process bug the same live pass caught and fixed. Open on M12: one
 combined live ear-test pass confirming the sound cues, both bug fixes, and
 streaming's captions together on a real microphone.
 
-## M13 — Accounts and quota (§66)  ~
+## M13 — Accounts and quota (§66)  ✅
 
 The feature Alan named the most important one in the project: four Claude Pro
 subscriptions, each with its own five-hour allowance, and work that moves to the
@@ -737,11 +737,11 @@ next account rather than stopping.
       best, and a percentage needs an allowance learned from this machine's own
       past refusals. **Codex does** state its consumption every turn, and the
       adapter currently reads the wrong field name for the reset time.
-- [ ] Prove `CLAUDE_CONFIG_DIR` / `CODEX_HOME` against the real CLI, in an
+- [x] Prove `CLAUDE_CONFIG_DIR` / `CODEX_HOME` against the real CLI, in an
       `#[ignore]`d test. Everything else rests on it.
-- [ ] Config dir and per-session transcript root plumbed through the launcher.
-- [ ] The Accounts surface, the quota panel, manual switch, automatic switch.
-- [ ] Agent continuity across a switch, through the Brain brief rather than
+- [x] Config dir and per-session transcript root plumbed through the launcher.
+- [x] The Accounts surface, the quota panel, manual switch, automatic switch.
+- [x] Agent continuity across a switch, through the Brain brief rather than
       `--resume`, which cannot cross configuration directories.
 
 Full account, including everything measured and every trap:
@@ -806,6 +806,48 @@ silent fall-through that turned out to have been in Global Search since §51
       directory. True of every launch into a moved project; refused now.
 
 Full account: [`docs/M15-HISTORY.md`](M15-HISTORY.md).
+
+## M16 — Live, official quota per account (§66)  ✅
+
+M13 shipped complete and correct, and Alan opened it and said he still could not
+see when a window resets, how much he had left, or which quota was the one
+holding him up. He was right, and the reason is worth keeping: M13 read all 115
+transcripts on this machine, established that Claude Code states quota **only in
+the turn it refuses**, and built an impeccably honest panel that therefore said
+"allowance unknown" everywhere — sending him back to the web UI the feature
+existed to replace. The finding was true about *transcripts*, not about the
+providers.
+
+- [x] Both CLIs answer a live usage question on their own supported protocol —
+      `get_usage` on Claude Code's stream-json control channel,
+      `account/rateLimits/read` on `codex app-server`. Measured against the real
+      binaries, not remembered: no HTTP endpoint, no credential read, no token
+      spent, no transcript written.
+- [x] **The check that decided the scope**, before anything was built: run each
+      probe against an *empty* configuration directory. Both read the account in
+      the directory they are pointed at, and both fail by saying so instead of
+      returning the ambient account's numbers under the wrong name. Kept as an
+      `#[ignore]`d safety test — if it ever passes as `Ok`, the feature is
+      misattributing allowances and must be turned off.
+- [x] Migration 15 — `account_live_readings`, one row per account. A cache, and
+      it says so by holding exactly one row; the append-only record stays in
+      `account_limit_events`, which every live reading is folded into so the
+      switch, the calibration and `build_window` needed no knowledge of probing.
+- [x] `implied_allowance` — the unpublished allowance learned from *any*
+      official percentage rather than only from a refusal, so the Estimated
+      fallback stops needing the failure it exists to prevent.
+- [x] The surface rebuilt around the three questions actually being asked: a
+      dial showing what is **left**, a countdown *and* the wall-clock moment,
+      and the binding window drawn larger than the ones that are not. Paid
+      overage in the provider's own currency. Provenance and reading age on the
+      card, not in a footnote.
+- [x] Status-bar chips (D44) — the answer where the question gets asked.
+- [x] Codex identity via `account/read`: this build stopped writing
+      `id_token_claims` into `auth.json` and every Codex account had silently
+      gone nameless.
+
+Full account, including everything the looking found:
+[`docs/M16-QUOTA.md`](M16-QUOTA.md). See D43 and D44.
 
 ## Next steps
 

@@ -1638,3 +1638,79 @@ Working somewhere other than where you said is the worst available outcome —
 worse than not starting — so `launch` refuses with `session.cwdMissing`, and a
 history row carries `project_exists` so the surface offers reading instead of a
 Continue the core would refuse. Both halves: the core enforces, the UI explains.
+
+## D43 — A quota panel that cannot state a number is not honest, it is useless
+
+M13's central finding was correct and load-bearing: Claude Code states quota
+**only in the turn it refuses**, established by reading all 115 transcripts on
+this machine. Everything built on it — Official/Observed/Estimated/Unknown, a
+calibration learned from past refusals, a bar that refuses to be drawn over a
+number nobody has — was right.
+
+The result was a screen that said "allowance unknown" on every window of every
+account, because none of them had been refused yet. Which is honest, and which
+sent the person straight back to the provider's web UI to sign in and out of
+four accounts by hand — the exact chore the feature existed to abolish.
+
+**The finding was true about transcripts and false about the providers.** Both
+answer a live, official usage question on their own supported CLI protocol:
+`get_usage` on Claude Code's stream-json control channel, and
+`account/rateLimits/read` on `codex app-server`. Neither is an HTTP endpoint we
+would have to remember — which is what makes this evidence rather than recall,
+and what M13 §2.3 explicitly left room for when it said a live meter could come
+later as "a third additive source behind your own verification".
+
+Three things decided the shape:
+
+1. **The verification came first, and it was a real gate.** Run each probe
+   against an *empty* configuration directory. Claude answers
+   `rate_limits_available: false`; Codex answers `-32600 authentication
+   required`. Both read the account in the directory they are pointed at, and
+   both fail by saying so rather than returning the ambient account's numbers
+   under somebody else's name. Had either done the latter, the feature would
+   have been unbuildable — plausible numbers attributed to the wrong account are
+   worse than no numbers, and no amount of interface can undo that.
+
+2. **Additive, not a replacement.** Every live window is folded into
+   `account_limit_events`, the same append-only table a refusal writes to. So
+   `quota::build_window`, the automatic switch and the calibration did not have
+   to learn that probing exists. The Observed/Estimated ladder stayed, became
+   the fallback for when a probe cannot run, and got sharper:
+   `implied_allowance` learns the unpublished allowance from *any* official
+   percentage rather than only from a refusal — which matters because the number
+   that decides "leave before you run out" previously only arrived after you had
+   run out.
+
+3. **§28 still governs, in both directions.** Claude Code names the binding
+   window itself (`is_active`); Codex does not, so the fullest window is our
+   inference. The two are stored and rendered differently. Understating a fact
+   the provider stated is the same failure as overstating one it did not.
+
+The general lesson, which is the reason this is a decision and not a changelog
+entry: **an empirical finding is scoped to what was actually examined.** M13
+examined transcripts exhaustively and wrote its conclusion as a fact about the
+provider. The right move was not to distrust the finding — it was to notice
+which question it had answered.
+
+## D44 — The answer has to be where the question gets asked
+
+The Accounts screen answers "how much have I got left" when you go and ask it.
+That is not the same as removing the asking, and the asking is the complaint:
+the answer was nowhere until you went looking, and by then the moment worth
+knowing about — an agent about to start a long unattended run on an account with
+forty minutes left in its window — had already gone past.
+
+So the binding window's headroom and its countdown sit in the status bar, for
+the account new work would start on, one chip per provider. §7 rules decorative
+counters out of the status bar and this is not one: it reports state that
+changes what a person does next, it appears only when a provider has actually
+stated a number, and where there is nothing to state it disappears rather than
+showing a placeholder.
+
+What made it affordable is that quota only moves when an account is used. A
+reading is cached in `account_live_readings` and painted instantly; the probe
+behind it runs once at startup and then every five minutes, and it asks for
+**quota only** — re-interrogating each directory's identity doubles the process
+spawns for a fact that changes around a login and at no other time. That
+distinction is the difference between a chip worth having and a background task
+that starts eight CLIs every five minutes forever.

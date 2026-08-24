@@ -1,6 +1,6 @@
 # M16 — Cotas ao vivo, oficiais e legíveis (§66 continuado)
 
-**Estado: em execução.** Continuação direta do M13, aberta porque o Alan olhou a
+**Estado: concluído em 2026-08-24.** Continuação direta do M13, aberta porque o Alan olhou a
 tela pronta e disse a coisa que importa: *"ainda não estou achando usável e
 funcional, ainda não consigo ver quando reseta e nem qual percentual ainda
 tenho disponível, e nem qual das cotas está travada esperando o reset."*
@@ -141,7 +141,7 @@ O que vale copiar dele é o acabamento da contagem
    continuamente, em vez de só numa recusa.
 3. **A tela responde as três perguntas que ele fez**, em uma olhada: quanto
    sobra, quando reseta, e **qual janela está travando**.
-4. **Migração 12** para o que a leitura ao vivo precisa guardar. A 11 está
+4. **Migração 15** para o que a leitura ao vivo precisa guardar. A 11 está
    congelada (M13 §3.1) e não se toca.
 
 ## 3. Registro de progresso
@@ -150,3 +150,48 @@ Atualizado a cada etapa concluída e verificada.
 
 - [x] Investigação empírica das duas sondas (§1), incluindo o teste do
       diretório vazio que decidiu o alcance da feature.
+- [x] Migração 15 (`account_live_readings`), sonda dos dois provedores,
+      leitura dobrada em `account_limit_events`, `implied_allowance`.
+- [x] Superfície reconstruída: mostrador do que **sobra**, contagem regressiva
+      com horário de parede, janela que trava em destaque, gasto pago com a
+      moeda do provedor, carimbo de procedência e idade da leitura.
+- [x] Identidade do Codex por `account/read` — o `auth.json` desta versão não
+      escreve mais `id_token_claims` (§4 abaixo).
+- [x] Chips de cota persistentes na barra de status (D44).
+- [x] Verificação visual nos dois temas e nos dois idiomas, com pixels medidos.
+- [x] Testes: 540+ Rust, três contra os CLIs reais (`--ignored`).
+
+---
+
+## 4. O que o ciclo de olhar encontrou (nada disto falhou num teste)
+
+1. **`#[serde(rename_all)]` num enum renomeia variantes, não os campos dentro
+   delas.** `read_at_ms` cruzava como `read_at_ms` enquanto a superfície lia
+   `readAtMs`; o cartão dizia "lido há NaNmin". Os dois lados compilavam.
+   Corrigido com o atributo por variante e um teste que serializa as três.
+2. **Toda conta Codex estava sem nome.** O Codex 0.149.1 parou de escrever
+   `tokens.id_token_claims` no `auth.json` — guarda o JWT cru em
+   `tokens.id_token`. `parse_codex_identity` procura a chave antiga e não a
+   acha. Nada falhou. A correção **não** é decodificar o JWT (seria o produto
+   manipulando credencial, §60/§61, e quebraria de novo na próxima mudança de
+   formato): é `account/read`, na sessão de app-server que a leitura de limites
+   já abriu — um round trip mais barato e a rota suportada.
+3. **O sulco do mostrador era invisível**: a cor do trilho era a mesma do painel
+   atrás dele, e 16% virava uma vírgula solta.
+4. **Conta sem login desenhava dois medidores vazios** dizendo "franquia
+   desconhecida" acima da frase que explicava o motivo — o mesmo vazio inútil
+   que este marco existe para remover, reaparecendo onde a resposta é conhecida.
+5. **Selo de saúde discordando do mostrador** num cartão a 97% usado.
+6. **8.3 short names** fizeram o eco de `codexHome` não bater com o caminho
+   esperado no primeiro teste real, o que teria reportado uma conta logada como
+   quebrada. `same_path` agora resolve os caminhos antes de comparar.
+
+## 5. O que continua verdade do M13
+
+Tudo em `docs/M13-ACCOUNTS.md` §2.5 (uma conta é um diretório de configuração),
+§5 (as armadilhas) e §6 (o bloqueio B6 do login OAuth interativo) vale sem
+alteração. A migração 11 continua congelada; esta é a **15**.
+
+`resetsAt` do Claude no transcript continua sendo unix em **segundos**. A sonda
+ao vivo devolve ISO 8601. `live::reset_to_ms` é a única fronteira que converte
+os três formatos, e tem um teste por formato.

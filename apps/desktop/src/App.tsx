@@ -572,7 +572,7 @@ export function App() {
         </div>
       )}
 
-      {onboardingSeen !== false && <StatusBar />}
+      {onboardingSeen !== false && <StatusBar onOpenAccounts={() => goTo("accounts")} />}
 
       <Toasts items={toasts} onOpen={openNotification} onDismiss={dismiss} />
 

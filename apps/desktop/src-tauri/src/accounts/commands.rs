@@ -92,14 +92,24 @@ pub fn accounts_report(
 /// thread would freeze the window for as long as the slowest CLI takes to
 /// start, which is exactly the kind of thing that only shows up when you run
 /// the real app and look at it.
+/// Whether a refresh should also re-interrogate who each directory is.
+///
+/// It doubles the process spawns — `claude auth status` per account on top of
+/// the probe — for a fact that changes when somebody signs in or out and at no
+/// other time. Worth paying when a person presses "Check now" or a login just
+/// finished; pure waste on the five-minute background tick behind the status
+/// bar, which is the one that runs all day.
 #[tauri::command]
 pub async fn accounts_refresh(
     state: State<'_, AppState>,
     project_id: Option<String>,
+    identity: Option<bool>,
 ) -> Result<AccountsReport> {
     let accounts = super::list(&state.db)?;
-    for account in &accounts {
-        let _ = super::refresh_identity(&state.db, &account.id);
+    if identity.unwrap_or(true) {
+        for account in &accounts {
+            let _ = super::refresh_identity(&state.db, &account.id);
+        }
     }
     // Identity may have changed above — probe against the rows as they are now,
     // so an account that just finished signing in is asked rather than skipped.

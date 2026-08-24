@@ -163,3 +163,32 @@ and plan so you can tell four accounts apart.
 **What happens when it arrives:** repeat the already-built automatic-switch path
 against two genuine allowances and record the external E2E evidence. It does not
 change the architecture or reopen M13.
+
+### B6 — update after M16 (2026-08-24)
+
+Still blocked, still narrow, and now with more of it built underneath.
+
+Two things changed in what a sign-in unlocks. Both were verified against the
+real CLIs (`docs/M16-QUOTA.md` §1.3):
+
+* **A directory that has never been signed into is now a definite answer, not a
+  guess.** Claude replies `rate_limits_available: false` and Codex replies
+  `-32600 authentication required`. Neither one returns the ambient account's
+  numbers under the new account's name — which was the thing that could have
+  made this feature unsafe to ship half-configured. So the cards for accounts
+  2–4 are correct *today*: they say "not signed in — no quota to read" and
+  offer the sign-in, rather than showing a plausible number that belongs to
+  somebody else.
+* **The moment you finish a sign-in, that account starts showing real official
+  figures with no further work.** Nothing is waiting on a first refusal any
+  more; the probe answers immediately.
+
+What still cannot be executed without you is unchanged and is one thing: account
+A genuinely running out, new work moving to a separately authenticated account
+B, and the agent carrying on. Everything up to that point — the registry, the
+config-dir plumbing, the quota model, the panel, the status-bar chips, manual
+and automatic switching, and the Brain relay — is built and covered.
+
+**What I need from you, unchanged:** Accounts screen → Add account → complete
+the browser sign-in. Once per subscription. The product never sees a password
+and never reads a token.

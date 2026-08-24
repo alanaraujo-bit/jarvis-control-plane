@@ -8,13 +8,21 @@ This file tells you where things stand, how the work is done here, and what
 will bite you. **Read `docs/DECISIONS.md` before changing anything in the core** —
 several decisions there were paid for with real debugging.
 
-> **Work in progress right now: M13 — accounts and quota (§66).**
-> The foundation is on disk and the suite is green, but the surface does not
-> exist yet and one load-bearing fact is still unverified. Read
-> [`docs/M13-ACCOUNTS.md`](M13-ACCOUNTS.md) **before** this file if you are
-> picking that up — it carries the empirical findings, the architecture
-> decision behind them, and the ordered plan. Note especially the migration
-> warning in its §3.1: migration 11 has not run on a real database yet.
+> **Most recently finished: M16 — live, official quota per account (§66).**
+> Read [`docs/M16-QUOTA.md`](M16-QUOTA.md) before touching anything under
+> `accounts/`, and [`docs/M13-ACCOUNTS.md`](M13-ACCOUNTS.md) after it. M13
+> still owns the architecture — an account **is** a configuration directory —
+> and every trap in its §5 still applies; M16 owns where the numbers come from.
+>
+> The one thing to carry away if you read nothing else: **an empirical finding
+> is scoped to what was actually examined.** M13 read all 115 transcripts on
+> this machine, found that Claude Code states quota only in the turn it
+> refuses, and wrote that down as a fact about the provider. It was a fact
+> about *transcripts*. Both CLIs answer a live usage question on their own
+> supported protocols, and the panel built on the narrower reading was
+> perfectly honest and completely useless — it said "allowance unknown" on
+> every window of every account, and sent the user straight back to the web UI
+> the feature existed to replace. See D43.
 
 ---
 
@@ -82,12 +90,20 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**560 tests** (529 Rust — 515 run, 14 intentionally `#[ignore]`d — 9 i18n,
+**572 tests** (541 Rust — 524 run, 17 intentionally `#[ignore]`d — 9 i18n,
 22 relay) · all green.
 
-The fourteen ignored ones are ignored for two different reasons, and it is
+The seventeen ignored ones are ignored for three different reasons, and it is
 worth knowing which is which before assuming one is broken:
 
+* **three are the M16 quota probes**, which run the real `claude` and `codex`
+  CLIs against a signed-in account. Run them when either provider ships a new
+  version — the whole feature rests on a claim about two external programs, and
+  such a claim is worth exactly as much as the last time somebody ran it. One
+  of them (`live_quota_an_empty_directory_never_borrows_the_ambient_account`)
+  is a safety property rather than a feature test: if it ever passes as `Ok`,
+  the panel is attributing one account's allowance to another and the feature
+  must be turned off until that is understood;
 * **ten need something only this machine has** — a real `claude` CLI, a real
   microphone, a running whisper server, or this machine's own recorded session
   history;
@@ -142,6 +158,7 @@ version **0.3.0**.
 | **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
 | **Continuing a session (§88, D41)** | A history row opens a **preview** -- the conversation, read-only -- and the preview offers the way back to the terminal: a live session is rejoined, a finished one is **continued** by a new agent handed the old conversation. Both CLIs resume by opposite mechanisms and only one can be followed: Claude Code forks into a transcript we own, Codex appends to the original, which `correlate` cannot find. `ResumeSupport` says which, and the button is absent with a reason where it cannot work. The fork copies the whole prior conversation, so a per-line **timestamp boundary** drops replayed lines before anything reads them -- without it every token is counted twice and a notification fires per already-read turn. |
 | **Session History (§88)** | Every session this machine has ever run, in one place: titled, searchable, grouped by when it happened, openable read-only, renameable and deletable. The two facts that made this the gap it was: `sessions.title` had existed since migration 1 with **no writer at all**, and `session_list` filters `ended_at IS NULL`, so a finished session was unreachable. Claude Code names its own sessions and nobody was reading it (`ai-title`, in 89 of the 124 transcripts here); Codex names none, which is a real capability difference and now says so. A name a person types outranks both, forever (D36). The search runs over **what was actually said**, on §51's own FTS5 index. Delete takes the index rows and the log directory with it and says what it freed (D39) -- and that is the only pruning there is, on purpose. See D36--D40 and `docs/M15-HISTORY.md`. |
+| **Accounts and live quota (§66)** | Four subscriptions, each an isolated configuration directory (M13), each showing **what a provider said a minute ago**: headroom as a dial, a countdown *and* the wall-clock moment it comes back, and the window that is actually rationing you drawn larger than the ones that are not. Both CLIs answer a live usage question on their own supported protocol — `get_usage` on Claude Code's control channel, `account/rateLimits/read` on `codex app-server` — and both read the account in the directory they are pointed at, verified against an empty one. Paid overage is shown in the currency the provider bills in. The Observed/Estimated ladder is still there, now as the fallback for when a probe cannot run, and `implied_allowance` sharpens it from any official percentage instead of only from a refusal. The binding window's headroom also lives in the status bar, so the answer is where the question gets asked. See D43/D44 and `docs/M16-QUOTA.md`. |
 | **Notifications (§49)** | An agent that stops — finished, or waiting on a decision — reaches the person who walked away. A bell and a centre in the titlebar, an in-app toast when the window is in front, a Windows toast and a taskbar flash when it is not. The rule the whole thing turns on: **nothing is raised about a session the person is already watching**, and a suppressed notification is dropped rather than stored-and-marked-read, so the centre is a list of what you *missed*. The preview is the agent's own words — the question it drew, or the reply it just gave — and carries where it came from: Official when a provider stated it, **Observed** when it was read off the terminal (§28). `notify::detect` is that reading, and it exists because Claude Code asking whether it may write a file is stated nowhere else. See D35. |
 
 **The full loop has been executed end to end**, twice over:
@@ -350,6 +367,29 @@ the `b4938` release tag turned out not to mean one fixed set of bytes.
 **Not yet verified with a real human voice** — this feature did not exist
 when D29's own ear-test debt was recorded, so both are now owed together;
 see next steps.
+
+*Live quota (§66, M16), in the installed app.* Both probes were run against the
+real CLIs and against an **empty** configuration directory, which is the check
+the whole feature rests on: Claude answered `rate_limits_available: false`, Codex
+answered `-32600 authentication required`, and neither offered the ambient
+account's numbers under the wrong name. The panel then showed, from the machine's
+own accounts, a weekly window at 85% used marked by the provider as the one
+binding, a five-hour window at 58%, a reset at `Thu, Aug 27, 07:00` counting down
+from `2d 14h`, and the same figures in the status bar without the panel being
+open. Both themes, both languages, with pixels sampled rather than judged from
+the capture (item 42): gauge track `#1F1F20` on `#09090A` dark, `#D7D7D4` on
+`#F0F0ED` light.
+
+The looking found four things the suite did not, and one of them is the reason
+item 42 has a sibling now: **a card said "read NaNmin ago"** because
+`#[serde(rename_all)]` on an enum renames its *variants*, not the fields inside
+them — `read_at_ms` crossed under that name while the surface read `readAtMs`,
+and both sides compiled. There is now a test that serialises every variant and
+asserts camelCase, because TypeScript cannot check a name that only exists at
+runtime. The others: **every Codex account was nameless** (Codex 0.149.1 stopped
+writing `id_token_claims` into `auth.json`, silently); the dial's track was the
+same colour as the panel behind it; and a signed-out card drew two empty meters
+reading "allowance unknown" above the one sentence that explained why.
 
 ### Not built — deliberately absent, not stubbed
 
@@ -934,6 +974,50 @@ Every one of these is real and already cost time.
     `quota::observe_line` record hours-old consumption, lets the account
     rotation act on it, and raises a notification per finished turn of a
     conversation the person has already read. See D41.
+
+61. **`#[serde(rename_all = "camelCase")]` on an *enum* renames the variants,
+    not the fields inside them.** `LiveStatus::Unavailable { read_at_ms }`
+    crossed into the webview as `read_at_ms` while the surface read `readAtMs`,
+    and the card rendered "read NaNmin ago". Rust compiled. TypeScript compiled
+    — it cannot check a name that only exists at runtime. The variant needs its
+    own inner `#[serde(rename_all)]` (or the enum needs `rename_all_fields`),
+    and the only real guard is a test that serialises each variant and asserts
+    the names the surface actually reads. Every tagged enum crossing the
+    boundary is exposed to this.
+
+62. **A provider can change where it keeps a fact without telling anybody, and
+    the reader just returns `None`.** Codex 0.149.1 stopped writing
+    `tokens.id_token_claims` into `auth.json` — it stores the raw JWT in
+    `tokens.id_token` instead. `accounts::parse_codex_identity` looks for the
+    old key, found nothing, and every Codex account in the product rendered as
+    "Unnamed account / Identity not available". Nothing errored and no test
+    noticed, because the parser's contract is "an unreadable file reads as
+    signed out", which is correct and which swallows this.
+
+    The fix that was **not** taken: decoding the JWT to scrape the e-mail out of
+    it. That is the product handling a credential (§60/§61) and it would break
+    again at the next format change. `account/read` on the app-server session
+    the quota probe already opens is the supported route, one round trip
+    cheaper, and it is now asserted in the real-CLI test — which is the thing
+    that will catch the next such change.
+
+63. **On Windows two spellings of the same directory are common and neither is
+    wrong.** `std::env::temp_dir()` returns the 8.3 short form
+    (`C:\Users\ALANAR~1\...`) while a CLI echoes the long one, so a
+    string-compare "did you open the directory I asked for?" check reported a
+    perfectly signed-in account as broken. Junctions and symlinks do the same
+    thing. Resolve both sides before comparing — and keep the plain comparison
+    first, because a directory that does not exist yet still has to compare
+    sensibly.
+
+64. **A screenshot's pixels are not the tokens.** Item 42 says to sample the
+    pixel rather than judge the colour by eye; sampling on this machine shows
+    that large neutral areas come back **exact** (`#09090A`, `#141415`,
+    `#FFFFFF`) while saturated strokes come back shifted (`--state-success`
+    `#2C7A4B` sampled as `#46784C`). The display profile is in the capture path.
+    So sample to answer "is this visible against what is behind it" and "is it
+    the right hue" — both of which the shift preserves — and do not use a sample
+    to conclude a token is wrong.
 
 ---
 

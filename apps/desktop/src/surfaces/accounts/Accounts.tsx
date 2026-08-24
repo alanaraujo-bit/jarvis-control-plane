@@ -874,17 +874,23 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
   const refreshing = useAccounts((state) => state.refreshing);
   const error = useAccounts((state) => state.error);
   const load = useAccounts((state) => state.load);
+  const ensureFresh = useAccounts((state) => state.ensureFresh);
   const setAutoSwitch = useAccounts((state) => state.setAutoSwitch);
   const [provider, setProvider] = useState<ProviderId>("claude-code");
   const [adding, setAdding] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   // Open with what is on disk so the screen is never a spinner over an empty
-  // card, then ask the providers. The probe is a CLI startup per account and
-  // is far too slow to block the first paint on.
+  // card, then ask the providers. The probe is a CLI startup per account and is
+  // far too slow to block the first paint on.
+  //
+  // A short staleness window rather than an unconditional probe: the status bar
+  // keeps a reading warm, and opening the panel seconds later should show it
+  // rather than start every CLI again. Thirty seconds is short enough that
+  // arriving deliberately to check still gets a fresh answer.
   useEffect(() => {
-    void load(false, projectId).then(() => load(true, projectId));
-  }, [load, projectId]);
+    void load("cached", projectId).then(() => ensureFresh(30_000));
+  }, [load, ensureFresh, projectId]);
 
   /**
    * Tick only when a label would actually change.
@@ -941,7 +947,7 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
             <button
               type="button"
               className="accounts__button"
-              onClick={() => void load(true)}
+              onClick={() => void load("full")}
               disabled={refreshing}
             >
               <RefreshCw size={14} className={refreshing ? "accounts__spin" : undefined} />

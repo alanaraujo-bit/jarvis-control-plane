@@ -3,6 +3,7 @@ import { useT } from "../app/i18n";
 import { isTauri } from "../app/platform";
 import { useEnvironment } from "../surfaces/environment/useEnvironment";
 import { useAppVersion } from "../app/version";
+import { QuotaChips } from "./QuotaChips";
 import "./StatusBar.css";
 
 /**
@@ -12,7 +13,7 @@ import "./StatusBar.css";
  * environment is usable, and whether this is the real desktop shell or the
  * browser preview harness. It is not a place to park decorative counters (§7).
  */
-export function StatusBar() {
+export function StatusBar({ onOpenAccounts }: { onOpenAccounts: () => void }) {
   const t = useT();
   const { report, loading } = useEnvironment();
   const version = useAppVersion();
@@ -39,6 +40,7 @@ export function StatusBar() {
       </div>
 
       <div className="statusbar__side statusbar__side--end">
+        <QuotaChips onOpen={onOpenAccounts} />
         {!isTauri() && (
           // Honest marker: this build is rendering against fixtures, not the
           // Rust core. It must never be mistaken for the real integration (§80).
