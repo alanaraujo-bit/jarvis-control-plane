@@ -112,6 +112,9 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **An agent writes to its own Brain (§36–§38)** | once, right after an Unattended mission completes, asked one narrow question — never a manually completed mission (D27) |
 | **Onboarding (§13)** | shown once per install, reuses the environment scan and `openFolder` as-is, gates the window reveal so there is no flash of the wrong screen |
 | **Voice dictation (§54)** | fully local speech-to-text, primed with the project's own vocabulary, typed into the prompt — never auto-submitted (D29) |
+| **Split panes (§20)** | up to four terminals at once, three layout presets; splitting changes each pane's CSS box only, so no terminal is re-parented and no scrollback is lost |
+| **Scrollback search (§20)** | Ctrl+F over the terminal, match-case, live counter, overview ruler only while searching |
+| **Image paste (§22)** | Ctrl+V writes the clipboard image into the session's own directory and types the path; a chip with a hover preview, never a bare filename |
 | **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
 | **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
 
@@ -707,6 +710,32 @@ Every one of these is real and already cost time.
 
     Sample a **background**, not a glyph — the first sample landed on amber
     terminal text inside a blue highlight and read as amber.
+
+43. **WebView2 raises no `paste` event for clipboard *images*.** Only for
+    text. This is not a focus problem and not a listener-placement problem —
+    both were tried, on the host element and then on `window` in the capture
+    phase, and neither fired. The app was made to report what it actually
+    received: the Ctrl+V `keydown` arrives at xterm's helper textarea and no
+    `paste` event follows it at all, so `clipboardData.items` is never
+    reached and there is nothing to read. **Every browser-shaped approach
+    fails identically**, which is worth knowing before spending an hour on
+    the next one. Image paste (§22) hooks Ctrl+V and has the core read the
+    clipboard with `arboard`; on Windows that returns a raw RGBA buffer, not
+    a file, so it is encoded to PNG before anything is written.
+
+    The general lesson, and the reason this cost time: **a missing event is
+    indistinguishable from a broken handler**. Two rebuilds went into moving
+    a listener that was never going to fire. One temporary line that printed
+    what the app actually saw settled it immediately — when something does
+    not happen, make the program say what *did*.
+
+44. **A truncated UUID is not a unique filename.** `&uuid[..8]` reads like a
+    reasonable short id and is not: UUIDv7's leading hex digits *are* a
+    millisecond timestamp, so two of them created in the same millisecond are
+    byte-identical. Two images pasted quickly produced one file, the second
+    silently overwriting the first. Caught by a test that writes twice in a
+    row — which is fast enough to land in one millisecond, exactly as a
+    person pasting twice is.
 
 ---
 

@@ -24,13 +24,21 @@ inspection (§76).
 - [x] Projects over real folders, Git detection via the git binary
 **Verified:** 28 tests, including a real git repository.
 
-## M2 — Terminal (hero surface §21)  ~
+## M2 — Terminal (hero surface §21)  ✅
 - [x] PTY host (portable-pty), resize, lifecycle
 - [x] Windows job objects — no orphaned agent processes
 - [x] Single-writer session runtime; unattended sessions run with no view (§32)
 - [x] Raw-byte IPC channel, coalesced at 16ms
 - [x] xterm.js integration, scrollback, per-theme palettes, tabs
-- [ ] Split panes and layout presets (§20)
+- [x] Split panes and layout presets (§20) — up to four terminals at once,
+      side by side / stacked / grid. Presets rather than a drag-resizable
+      tree, and four rather than unlimited: a fifth pane at this window size
+      is narrower than the prompt most agent CLIs draw. Splitting changes
+      each pane's **CSS box only** — no terminal is ever re-parented, because
+      a remounted terminal has lost its scrollback.
+      **Verified in a real build:** two panes with both scrollbacks intact, a
+      command typed into each reaching its own shell, all three layouts, a
+      third terminal opened mid-split, and closing panes and sessions.
 - [x] Search within scrollback (§20) — Ctrl+F, a panel over the terminal
       rather than a dialog over the app, match-case, live counter, and an
       overview ruler shown only while searching so there is no empty gutter
@@ -39,9 +47,23 @@ inspection (§76).
       took four fixes that the suite could not see — the worst being Ctrl+F
       falling through to **WebView2's own find-in-page** whenever the terminal
       did not literally hold DOM focus. See HANDOFF §5 item 39.
-- [ ] Image paste as first-class attachment (§22) — pasted into the terminal,
-      with a hover preview of the image rather than a bare filename/placeholder
-      (Alan's own requirement, 2026-08-23; not yet scoped further)
+- [x] Image paste as first-class attachment (§22) — Ctrl+V in a terminal
+      writes the clipboard image into the session's own directory (never the
+      user's repository, D23's reasoning) and types the path at the prompt,
+      unsubmitted. A chip says an image is attached; hovering shows the
+      picture — Alan's own requirement, not a bare filename.
+      **The webview cannot see a pasted image at all**: WebView2 raises no
+      `paste` event for clipboard image data, only for text, so the core
+      reads the clipboard with `arboard`. Found by instrumenting the running
+      app after two DOM-shaped attempts produced nothing — see HANDOFF §5
+      item 43.
+      **Verified end to end in a real build** with a real image on the real
+      clipboard: a genuine PNG on disk, the quoted path typed and left
+      unsubmitted, the preview showing the actual picture, and `git status`
+      in the project still clean.
+
+**M2 is finished.** Every part of the hero surface is built and has been
+driven in a real build rather than only compiled.
 
 ## M3 — Providers (§26)  ✅
 - [x] Provider adapter trait + capability model (capabilities as data)
