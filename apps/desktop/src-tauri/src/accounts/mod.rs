@@ -34,6 +34,7 @@
 //! secret from any of these directories is read, stored, or shown (§60/§61).
 
 pub mod commands;
+pub mod live;
 pub mod quota;
 pub mod switch;
 

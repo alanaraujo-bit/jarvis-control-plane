@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 14;
+pub const SCHEMA_VERSION: u32 = 15;
 
 struct Migration {
     version: u32,
@@ -682,6 +682,37 @@ const MIGRATIONS: &[Migration] = &[Migration {
     CREATE INDEX IF NOT EXISTS idx_sessions_recent ON sessions (created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_usage_session ON usage_samples (session_id);
 "#,
+    },
+    Migration {
+        version: 15,
+        sql: r#"
+    -- ---- The newest live quota reading per account (§66, M16) ---------------
+    --
+    -- Both CLIs answer, on demand, how full an account's windows are right now
+    -- (`docs/M16-QUOTA.md` §1). Asking costs a CLI startup — a second or two —
+    -- which is fine for a refresh and far too slow for opening a panel. This
+    -- table is what the panel draws instantly while a fresh probe runs behind
+    -- it, so the surface is never a spinner over an empty card.
+    --
+    -- **One row per account, deliberately.** `account_limit_events` is already
+    -- the append-only history and every live reading is folded into it, so a
+    -- second log here would be a second record of the same facts that could
+    -- disagree with the first. This is a cache, and it says so by holding
+    -- exactly one row.
+    --
+    -- `payload` is the serialised reading rather than a column per field. The
+    -- provider's own description of the request ends "Experimental — the
+    -- response shape may change", so pinning its shape into a schema would
+    -- guarantee a migration every time it moves. A payload this build cannot
+    -- parse is discarded and re-probed, which is the correct behaviour for a
+    -- cache and would be the wrong behaviour for a record.
+    CREATE TABLE account_live_readings (
+        account_id TEXT PRIMARY KEY
+                   REFERENCES provider_accounts (id) ON DELETE CASCADE,
+        read_at_ms INTEGER NOT NULL,
+        payload    TEXT NOT NULL
+    );
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -794,6 +825,7 @@ mod tests {
             (12, 0x4ea3_d5cb_46cb_d4a8),
             (13, 0xc7ca_954d_e678_f1bd),
             (14, 0x1dd0_9220_2d82_afda),
+            (15, 0x2668_ef6f_85b5_38f8),
         ];
 
         for migration in MIGRATIONS {

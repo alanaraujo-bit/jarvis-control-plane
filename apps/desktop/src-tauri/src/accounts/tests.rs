@@ -212,3 +212,174 @@ fn account_wire_data_contains_identity_but_no_credential_field() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Live quota, against the CLIs actually installed on this machine (M16)
+// ---------------------------------------------------------------------------
+
+/// The whole live-quota feature rests on a claim about two external programs,
+/// and a claim about an external program is worth exactly as much as the last
+/// time somebody ran it. These are `#[ignore]`d because they need a signed-in
+/// account and a working network — run them when a provider ships a new
+/// version, which is the moment the claim can quietly stop being true:
+///
+/// ```text
+/// cargo test live_quota -- --ignored --nocapture
+/// ```
+mod live_cli {
+    use super::*;
+    use crate::accounts::live::{self, LiveStatus};
+
+    /// The machine's own account, as `adopt_machine_account` would register it.
+    /// `adopted` is true, so `session_env` is empty and the CLI runs against the
+    /// default configuration — the account the person is signed into right now.
+    fn machine(provider: &str) -> Option<Account> {
+        let dir = super::super::machine_config_dir(provider)?;
+        if !dir.exists() {
+            return None;
+        }
+        Some(Account {
+            id: "machine".into(),
+            provider: provider.into(),
+            label: String::new(),
+            config_dir: dir.to_string_lossy().to_string(),
+            adopted: true,
+            email: None,
+            org_id: None,
+            org_name: None,
+            plan: None,
+            signed_in: true,
+            checked_at: Some(1),
+            active: true,
+            paused: false,
+            position: 0,
+            created_at: 1,
+            last_used_at: None,
+        })
+    }
+
+    /// An account pointed at a directory that has never been signed into.
+    fn empty(provider: &str, dir: &std::path::Path) -> Account {
+        Account {
+            id: "empty".into(),
+            provider: provider.into(),
+            label: String::new(),
+            config_dir: dir.to_string_lossy().to_string(),
+            adopted: false,
+            email: None,
+            org_id: None,
+            org_name: None,
+            plan: None,
+            signed_in: false,
+            checked_at: Some(1),
+            active: false,
+            paused: false,
+            position: 1,
+            created_at: 1,
+            last_used_at: None,
+        }
+    }
+
+    #[test]
+    #[ignore = "runs the real Claude Code CLI and needs a signed-in account"]
+    fn live_quota_claude_answers_with_official_numbers() {
+        let Some(account) = machine("claude-code") else {
+            eprintln!("no ~/.claude on this machine — nothing to probe");
+            return;
+        };
+        let status = live::probe(&account);
+        let LiveStatus::Ok { reading } = &status else {
+            panic!("expected a reading from the machine's own account, got {status:?}");
+        };
+
+        assert!(
+            !reading.windows.is_empty(),
+            "a signed-in Pro account is rationed by at least one window"
+        );
+        assert_eq!(
+            reading.windows.iter().filter(|w| w.binding).count(),
+            1,
+            "exactly one window binds — that is the answer the panel exists to give"
+        );
+        for window in &reading.windows {
+            assert!(
+                (0.0..=100.0).contains(&window.percent_used),
+                "{}: {} is not a percentage",
+                window.raw_kind,
+                window.percent_used
+            );
+        }
+        println!("claude: plan={:?} windows={:#?}", reading.plan, reading.windows);
+    }
+
+    #[test]
+    #[ignore = "runs the real Codex CLI and needs a signed-in account"]
+    fn live_quota_codex_answers_and_checks_which_home_it_opened() {
+        let Some(account) = machine("codex") else {
+            eprintln!("no ~/.codex on this machine — nothing to probe");
+            return;
+        };
+        let status = live::probe(&account);
+        let LiveStatus::Ok { reading } = &status else {
+            panic!("expected a reading from the machine's own Codex account, got {status:?}");
+        };
+        assert!(!reading.windows.is_empty());
+
+        // The reason this assertion exists: Codex 0.149.1 stopped writing
+        // `id_token_claims` into `auth.json`, which is where
+        // `parse_codex_identity` looks, and every Codex card in the product
+        // went nameless without a single error. `account/read` is the supported
+        // route and rides the app-server session the limits already opened.
+        let identity = reading
+            .identity
+            .as_ref()
+            .expect("the app-server states who this configuration directory is");
+        assert!(
+            identity.email.is_some(),
+            "a signed-in ChatGPT account has an e-mail; a nameless card is how \
+             the previous format change hid itself"
+        );
+        println!(
+            "codex: plan={:?} identity={:?} windows={:#?}",
+            reading.plan, identity, reading.windows
+        );
+    }
+
+    /// The property the whole feature rests on: a probe reads the account in
+    /// the directory it is pointed at, and an unsigned directory produces a
+    /// definite "nobody is signed in here" rather than the ambient account's
+    /// numbers under the wrong name.
+    ///
+    /// If this ever starts returning `Ok`, the panel is attributing one
+    /// account's allowance to another and the feature must be turned off until
+    /// it is understood.
+    #[test]
+    #[ignore = "runs both real CLIs"]
+    fn live_quota_an_empty_directory_never_borrows_the_ambient_account() {
+        let root = std::env::temp_dir().join(format!("jarvis-quota-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+
+        for provider in ["claude-code", "codex"] {
+            let dir = root.join(provider);
+            std::fs::create_dir_all(&dir).unwrap();
+            let status = live::probe(&empty(provider, &dir));
+            match &status {
+                LiveStatus::Unavailable { reason, .. } => {
+                    assert_eq!(reason, "signedOut", "{provider}");
+                }
+                LiveStatus::Failed { reason, .. } => {
+                    // A missing CLI is a legitimate outcome on a machine that
+                    // does not have it; anything else is not.
+                    assert_eq!(reason, "toolMissing", "{provider}: {status:?}");
+                }
+                LiveStatus::Ok { .. } => panic!(
+                    "{provider} reported quota for a directory that has never been \
+                     signed into — the probe is reading the ambient account and \
+                     every number in the panel is attributed to the wrong person"
+                ),
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

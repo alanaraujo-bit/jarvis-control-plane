@@ -26,6 +26,21 @@
 //! That last point is the whole discipline of §28 applied to the feature Alan
 //! cares most about: an automatic switch fired on a guess must announce itself
 //! as a guess, and a bar that looks Official must be Official.
+//!
+//! ## What M16 changed, and what it deliberately did not
+//!
+//! Everything above is still true of *transcripts*, which is where it was
+//! measured. It is not true of the providers as a whole: both of them answer a
+//! live, official usage question on their own CLI protocols, and
+//! [`super::live`] asks it. That reading is folded straight into
+//! `account_limit_events` — the same table a refusal writes to — so this module
+//! did not have to learn that probing exists. An official percentage now
+//! usually *is* present, and the Observed/Estimated ladder below became the
+//! fallback for when a probe cannot run rather than the normal case.
+//!
+//! The ladder was kept rather than deleted, and sharpened: see
+//! [`implied_allowance`], which learns the invisible allowance from any
+//! official percentage instead of only from a refusal.
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -313,6 +328,16 @@ pub struct AccountQuota {
     /// Live sessions currently running on this account. A switch never touches
     /// them, and the surface has to be able to say so.
     pub live_sessions: i64,
+    /// The newest thing the provider said when asked directly (M16).
+    ///
+    /// `None` only before an account has ever been probed. Everything else —
+    /// signed out, no live limits on this plan, the CLI missing — is a *stated*
+    /// outcome inside [`live::LiveStatus`], because "we have not asked yet" and
+    /// "we asked and there is nothing" are different sentences to read and the
+    /// surface must not collapse them into one grey card.
+    pub live: Option<super::live::LiveStatus>,
+    /// Whether that reading is old enough that a fresh probe is worth running.
+    pub live_stale: bool,
 }
 
 /// The latest thing the provider said about one window.
@@ -428,6 +453,57 @@ fn calibration(
     (totals.first().copied(), totals.len() as i64)
 }
 
+/// The allowance implied by any official percentage, not only by a refusal.
+///
+/// A live reading says "this window is 42% used". The tokens this machine saw
+/// the account spend inside that same window are already known. Those two
+/// numbers give the allowance the provider never publishes:
+/// `tokens / (percent / 100)`.
+///
+/// Why it is worth having when a live percentage is usually available anyway:
+/// the probe needs the CLI on PATH and the account signed in. When it cannot
+/// run — an account mid-login, a CLI being upgraded, a machine offline — the
+/// Estimated tier is all that is left, and before this it could only be
+/// calibrated by a *refusal*, meaning the number it needed most only arrived
+/// after the failure it existed to prevent.
+///
+/// Readings below ten percent are skipped: dividing by a small percentage
+/// multiplies its rounding error by ten or more, and a provider that reports
+/// whole numbers makes "1%" mean anything from 0.5 to 1.5. The **smallest**
+/// implied allowance wins, for the same reason `calibration` takes the smallest
+/// refusal — the number decides when to leave an account, and leaving early is
+/// free while leaving late costs a refused turn.
+fn implied_allowance(db: &Database, account_id: &str, window: &str, length_ms: i64) -> Option<i64> {
+    let samples: Vec<(i64, f64, Option<i64>)> = db
+        .with(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT ts_ms, percent, resets_at_ms FROM account_limit_events
+                  WHERE account_id = ?1 AND window = ?2 AND percent >= 10
+                  ORDER BY ts_ms DESC LIMIT 16",
+            )?;
+            let rows: rusqlite::Result<Vec<(i64, f64, Option<i64>)>> = stmt
+                .query_map(params![account_id, window], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })?
+                .collect();
+            Ok(rows?)
+        })
+        .unwrap_or_default();
+
+    samples
+        .into_iter()
+        .filter_map(|(ts, percent, resets_at)| {
+            // The window that reading described, anchored the same way the
+            // displayed window is — otherwise the token sum and the percentage
+            // would be describing different spans of time.
+            let start = window_start(resets_at, length_ms, ts);
+            let tokens = tokens_between(db, account_id, start, ts + 1);
+            (tokens > 0).then(|| (tokens as f64 / (percent / 100.0)) as i64)
+        })
+        .filter(|allowance| *allowance > 0)
+        .min()
+}
+
 /// Build one window's picture from everything known about it.
 fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> QuotaWindow {
     let length = window_length_ms(window).unwrap_or(FIVE_HOUR_MS);
@@ -446,7 +522,11 @@ fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> Quo
 
     let start = window_start(resets_at_ms, length, now);
     let tokens = tokens_between(db, &account.id, start, now + 1);
-    let (calibration_tokens, calibration_samples) = calibration(db, &account.id, window, length);
+    let (refusal_calibration, calibration_samples) = calibration(db, &account.id, window, length);
+    // A refusal is the sharper measurement — it is the allowance being hit, not
+    // divided into — so it wins where both exist.
+    let calibration_tokens =
+        refusal_calibration.or_else(|| implied_allowance(db, &account.id, window, length));
 
     // Order matters and encodes §28. An official percentage wins; a stale one
     // is not used to describe the window we are in now.
@@ -548,10 +628,22 @@ pub fn for_account(db: &Database, account: &Account) -> AccountQuota {
         })
         .unwrap_or(0);
 
+    let live = super::live::stored(db, &account.id);
+
+    // A live reading is the sharpest statement of exhaustion there is: the
+    // provider was asked a moment ago and answered. It is read alongside the
+    // window history rather than instead of it, because a refusal recorded
+    // mid-session can be newer than the last probe.
+    let live_exhausted = live
+        .as_ref()
+        .and_then(super::live::LiveStatus::reading)
+        .map(|reading| reading.windows.iter().any(super::live::LiveWindow::exhausted))
+        .unwrap_or(false);
+
     // Order matters: a paused account that is also exhausted is reported as
     // exhausted, because that is the fact that decides whether it could take
     // work if the user un-paused it.
-    let health = if windows.iter().any(|w| w.exhausted) {
+    let health = if windows.iter().any(|w| w.exhausted) || live_exhausted {
         AccountHealth::Exhausted
     } else if !account.signed_in {
         AccountHealth::SignedOut
@@ -574,6 +666,8 @@ pub fn for_account(db: &Database, account: &Account) -> AccountQuota {
         refusal_detail,
         tokens_today: tokens_between(db, &account.id, now - 24 * 60 * 60 * 1000, now + 1),
         live_sessions,
+        live_stale: super::live::is_stale(live.as_ref(), now),
+        live,
     }
 }
 

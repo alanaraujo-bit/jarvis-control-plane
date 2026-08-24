@@ -36,6 +36,62 @@ export interface QuotaWindow {
   calibrationSamples: number;
 }
 
+/**
+ * One allowance window exactly as a provider stated it a moment ago (M16).
+ *
+ * `percentUsed` is consumption, which is the direction both providers report
+ * in. The screen shows headroom; the conversion lives in `format.remaining` so
+ * there is one place it can be got wrong.
+ */
+export interface LiveWindow {
+  kind: string;
+  rawKind: string;
+  group: string;
+  scopeLabel: string | null;
+  percentUsed: number;
+  resetsAtMs: number | null;
+  windowMinutes: number | null;
+  /** The window actually rationing this account — "which quota am I waiting on". */
+  binding: boolean;
+  /** `provider` when the provider named it, `derived` when we picked it (§28). */
+  bindingSource: "provider" | "derived";
+  severity: string;
+  severitySource: "provider" | "derived";
+}
+
+export interface LiveSpend {
+  enabled: boolean;
+  used: number;
+  limit: number;
+  currency: string;
+  decimalPlaces: number;
+  percentUsed: number | null;
+  disabledReason: string | null;
+  limitReached: boolean;
+}
+
+export interface LiveReading {
+  readAtMs: number;
+  source: "claudeGetUsage" | "codexAppServer";
+  plan: string | null;
+  windows: LiveWindow[];
+  spend: LiveSpend | null;
+  resetCredits: number;
+}
+
+/**
+ * The outcome of asking a provider directly.
+ *
+ * Three states, not two, and the difference is the whole point: `unavailable`
+ * means the provider answered and there is nothing to report (signed out, or a
+ * plan without subscription limits), while `failed` means the question could
+ * not be put. One deserves a sign-in button, the other a retry.
+ */
+export type LiveStatus =
+  | { state: "ok"; reading: LiveReading }
+  | { state: "unavailable"; reason: string; readAtMs: number }
+  | { state: "failed"; reason: string; readAtMs: number };
+
 export interface AccountQuota {
   accountId: string;
   health: AccountHealth;
@@ -44,6 +100,9 @@ export interface AccountQuota {
   refusalDetail: string | null;
   tokensToday: number;
   liveSessions: number;
+  /** `null` only before this account has ever been asked. */
+  live: LiveStatus | null;
+  liveStale: boolean;
 }
 
 export interface AccountCard {
@@ -64,7 +123,10 @@ interface AccountsState {
   refreshing: boolean;
   error: string | null;
   projectId: string | null;
+  /** Which single account is being re-probed, so only its card spins. */
+  refreshingAccountId: string | null;
   load: (refreshIdentity?: boolean, projectId?: string | null) => Promise<void>;
+  refreshAccount: (accountId: string) => Promise<void>;
   create: (provider: ProviderId, label: string, email?: string) => Promise<void>;
   rename: (accountId: string, label: string) => Promise<void>;
   pause: (accountId: string, paused: boolean) => Promise<void>;
@@ -87,6 +149,7 @@ export const useAccounts = create<AccountsState>((set, get) => ({
   report: null,
   loading: false,
   refreshing: false,
+  refreshingAccountId: null,
   error: null,
   projectId: null,
 
@@ -99,6 +162,28 @@ export const useAccounts = create<AccountsState>((set, get) => ({
       set({ report, projectId: context, loading: false, refreshing: false });
     } catch (cause) {
       set({ error: String(cause), loading: false, refreshing: false });
+    }
+  },
+
+  /**
+   * Re-probe one account.
+   *
+   * Separate from `load(true)` because a full refresh starts a CLI per account
+   * and one card being stuck should not cost the wait for all of them. The
+   * report that comes back is the whole report — the core has no cheaper answer
+   * and a partial merge here would be a second place for cards to go stale.
+   */
+  refreshAccount: async (accountId) => {
+    if (!isTauri()) return;
+    set({ refreshingAccountId: accountId, error: null });
+    try {
+      const report = await invoke<AccountsReport>("account_refresh_live", {
+        accountId,
+        projectId: get().projectId,
+      });
+      set({ report, refreshingAccountId: null });
+    } catch (cause) {
+      set({ error: String(cause), refreshingAccountId: null });
     }
   },
 

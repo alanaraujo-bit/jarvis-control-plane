@@ -227,6 +227,7 @@ pub fn run() {
             envscan::scan_environment,
             accounts::commands::accounts_report,
             accounts::commands::accounts_refresh,
+            accounts::commands::account_refresh_live,
             accounts::commands::account_create,
             accounts::commands::account_rename,
             accounts::commands::account_set_paused,
