@@ -4,6 +4,7 @@ import { useTheme, type ThemePreference } from "../../app/theme";
 import { EnvironmentPanel } from "../environment/EnvironmentPanel";
 import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { AutonomyPanel } from "./AutonomyPanel";
+import { CompanionPanel } from "./CompanionPanel";
 import { NumberSetting } from "./NumberSetting";
 import { PREF, usePreferences } from "./usePreferences";
 import { Updates } from "./Updates";
@@ -119,6 +120,14 @@ export function Settings() {
             onChange={(value) => void set(PREF.turnBudget, value)}
           />
           <GuardrailPanel />
+        </section>
+
+        {/* The companion sits after Agents and before Environment: it is
+            about this desktop rather than about what agents do, and it is the
+            one section that sends anything anywhere. */}
+        <section className="settings__section">
+          <h2 className="settings__section-title">{t("settings.companion")}</h2>
+          <CompanionPanel />
         </section>
 
         <section className="settings__section">

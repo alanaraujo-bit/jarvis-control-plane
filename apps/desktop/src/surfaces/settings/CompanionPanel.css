@@ -1,0 +1,126 @@
+/* The mobile companion (§59), in Settings.
+
+   Same header shape as the Autonomy and Guardrail panels beside it — this is
+   another section of the same document, not a different kind of thing. */
+.companion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.companion__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.companion__subtitle {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.companion__state {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+/* The code itself. Large, monospace and widely tracked because it is read off
+   this screen and typed on a phone — legibility is the whole job. */
+.companion__code-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--bg-surface);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+}
+
+.companion__code-label {
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.companion__code {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  letter-spacing: 0.22em;
+  color: var(--accent);
+}
+
+.companion__hint {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+.companion__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.companion__button {
+  height: 28px;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.companion__button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.companion__button--primary {
+  border-color: var(--accent-border);
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.companion__button--primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.companion__button:disabled { opacity: 0.6; cursor: default; }
+
+.companion__button:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.companion__error {
+  font-size: var(--text-sm);
+  color: var(--state-danger);
+}
+
+/* The privacy sentence. Deliberately not smaller or dimmer than the rest —
+   it is the thing someone needs before deciding, not a disclaimer. */
+.companion__privacy {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+  max-width: 62ch;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companion__button { transition: none; }
+}
