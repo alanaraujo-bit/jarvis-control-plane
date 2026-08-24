@@ -61,6 +61,18 @@ impl SessionKind {
             .find(|c| c.id == id)
             .map(|c| c.briefing)
     }
+
+    /// Whether a past conversation of this kind can be handed back to it
+    /// (§88, D41). Read from the capability model, never matched on here (§26).
+    fn can_resume(self) -> bool {
+        let id = self.provider_id();
+        crate::providers::all()
+            .into_iter()
+            .map(|p| p.capabilities())
+            .find(|c| c.id == id)
+            .map(|c| c.resume_support.is_available())
+            .unwrap_or(false)
+    }
 }
 
 /// Pick the user's shell.
@@ -161,11 +173,15 @@ fn write_brief(
 ///
 /// `brief` is this project's recorded knowledge (§38), and is None whenever
 /// there is nothing to say or the provider cannot take one.
+///
+/// `resume` is the provider's own id for a past conversation to continue
+/// (§88, D41).
 fn command_for(
     kind: SessionKind,
     session_id: &str,
     guardrail_settings: Option<&std::path::Path>,
     brief: Option<&std::path::Path>,
+    resume: Option<&str>,
 ) -> (String, Vec<String>, Vec<(String, String)>) {
     match kind {
         SessionKind::Shell => {
@@ -177,6 +193,29 @@ fn command_for(
         // session without guessing (§26).
         SessionKind::ClaudeCode => {
             let mut args = vec!["--session-id".into(), session_id.to_string()];
+            // Continuing a past conversation (§88, D41).
+            //
+            // `--fork-session` is not optional here, and the reason is
+            // correlation. Verified against Claude Code 2.1.241: `--resume <id>`
+            // alone keeps writing to the *original* transcript, so two of our
+            // sessions would tail one file and each would claim the other's
+            // turns. With `--fork-session` the CLI honours our `--session-id`
+            // and writes a new transcript named for it — deterministic
+            // correlation survives being a continuation.
+            //
+            // What that new transcript contains is the trap: it is a **full
+            // copy** of the prior conversation followed by the new turns, and
+            // every copied line is rewritten with the new session id, so the id
+            // cannot tell them apart. Copied lines do keep their **original
+            // timestamps**, which is the boundary `transcript::spawn` uses. See
+            // D41 — without it, every token of the old conversation is counted
+            // a second time in Analytics and every sentence found twice in
+            // Global Search.
+            if let Some(previous) = resume {
+                args.push("--resume".into());
+                args.push(previous.to_string());
+                args.push("--fork-session".into());
+            }
             // Additional settings, not a replacement: the user's own
             // configuration still applies and this only adds a hook.
             if let Some(path) = guardrail_settings {
@@ -223,6 +262,7 @@ pub fn start_agent_session(
     kind: SessionKind,
     mission_id: Option<String>,
     driven: bool,
+    resume_from: Option<String>,
 ) -> Result<AgentLaunch> {
     // A driven session has no view of its own to size it, so it gets a
     // reasonable terminal rather than a degenerate one: agent CLIs lay out
@@ -236,6 +276,7 @@ pub fn start_agent_session(
         30,
         mission_id,
         driven,
+        resume_from,
     )
 }
 
@@ -251,9 +292,97 @@ pub fn session_start(
     // This is what ties Mission -> Agent -> Terminal -> Conversation ->
     // Evidence into one thread instead of five unrelated things (§86).
     mission_id: Option<String>,
+    // A past session to pick up from (§88, D41). The new session is a new
+    // process with its own log and its own row; this is what makes it a
+    // continuation rather than an unrelated start.
+    resume_from: Option<String>,
 ) -> Result<SessionInfo> {
     // Started by a person, so the seat in front of it is theirs.
-    launch(&state, project_id, kind, cwd, cols, rows, mission_id, false).map(|l| l.info)
+    launch(
+        &state,
+        project_id,
+        kind,
+        cwd,
+        cols,
+        rows,
+        mission_id,
+        false,
+        resume_from,
+    )
+    .map(|l| l.info)
+}
+
+/// How a past session is handed back to its provider (§88, D41).
+///
+/// Resolved from the stored row rather than taken from the caller: the webview
+/// knows a J.A.R.V.I.S. session id, and what the CLI needs is the id the
+/// *provider* used, which is not always the same thing.
+struct Resume {
+    /// The J.A.R.V.I.S. session being continued.
+    session_id: String,
+    /// The id to hand the provider on the command line.
+    provider_session_id: String,
+}
+
+/// Work out whether a resume is possible, and refuse clearly when it is not.
+///
+/// Refusals are codes the surface localises (§65), never prose. Each one is a
+/// different situation and they are deliberately not collapsed: "this provider
+/// cannot do it" and "we never learned this session's provider id" lead to
+/// different answers for the person reading them.
+fn resolve_resume(
+    state: &State<'_, AppState>,
+    kind: SessionKind,
+    resume_from: &str,
+) -> Result<Resume> {
+    let row: Option<(String, Option<String>)> = state.db.with(|conn| {
+        conn.query_row(
+            "SELECT provider, provider_session_id FROM sessions WHERE id = ?1",
+            [resume_from],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map(Some)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })
+    })?;
+
+    let Some((provider, provider_session_id)) = row else {
+        return Err(super::manager::SessionError::Refused(
+            "resume.notFound".into(),
+        ));
+    };
+
+    // Continuing a Claude Code conversation inside Codex is not a resume, it is
+    // a different conversation with a borrowed id.
+    if provider != kind.provider_id() {
+        return Err(super::manager::SessionError::Refused(
+            "resume.providerMismatch".into(),
+        ));
+    }
+
+    // The capability model decides, not a `match` here (§26).
+    if !kind.can_resume() {
+        return Err(super::manager::SessionError::Refused(
+            "resume.unsupported".into(),
+        ));
+    }
+
+    // Claude Code is told our id at launch, so this is always present for one
+    // of its sessions. Codex assigns its own and we only learn it once its
+    // rollout has been located — a session that never got that far cannot be
+    // handed back to it.
+    let Some(provider_session_id) = provider_session_id else {
+        return Err(super::manager::SessionError::Refused(
+            "resume.unknownProviderSession".into(),
+        ));
+    };
+
+    Ok(Resume {
+        session_id: resume_from.to_string(),
+        provider_session_id,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -266,7 +395,17 @@ fn launch(
     rows: u16,
     mission_id: Option<String>,
     driven: bool,
+    resume_from: Option<String>,
 ) -> Result<AgentLaunch> {
+    // Resolved first, before anything exists: a resume that cannot happen must
+    // fail before a session row, a log directory and a process are created for
+    // it. Refusing afterwards would leave a started session that is not the
+    // continuation it was asked to be.
+    let resume = match resume_from.as_deref() {
+        Some(previous) => Some(resolve_resume(state, kind, previous)?),
+        None => None,
+    };
+
     // The working directory defaults to the project folder.
     let project_path: String = state.db.with(|conn| {
         conn.query_row(
@@ -277,6 +416,30 @@ fn launch(
     })?;
 
     let cwd = cwd.unwrap_or(project_path);
+
+    // A session must start where it says it starts.
+    //
+    // ## Why this refuses instead of carrying on
+    //
+    // Found by continuing a session from History whose project folder had since
+    // been deleted (a scratch project from an earlier milestone). The launch
+    // "succeeded": a real Claude Code process started, drew its trust prompt,
+    // and reported `Accessing workspace: C:\Users\Alan Araujo` — **the user's
+    // home directory**. A non-existent working directory is not honoured by the
+    // spawn, so the child lands wherever the parent happens to be, and the
+    // product had just pointed an agent with read, write and execute at
+    // everything the person owns while the header above it named a project.
+    //
+    // This is not specific to continuing a session — it is true of every launch
+    // into a project whose folder has moved or been removed, which `Project`
+    // already reports as `exists: false` and nothing acted on. Silently working
+    // somewhere other than where you said is the worst available outcome, worse
+    // than not starting, so this refuses with a code the surface localises.
+    if !std::path::Path::new(&cwd).is_dir() {
+        return Err(super::manager::SessionError::Refused(
+            "session.cwdMissing".into(),
+        ));
+    }
     let id = new_session_id();
     let log_dir = state.session_dir(&id);
     // No registered account is a supported state: the provider then receives
@@ -353,7 +516,13 @@ fn launch(
     let brief = write_brief(state, &project_id, &log_dir, kind);
 
     let (program, args, mut env) =
-        command_for(kind, &id, guardrail_settings.as_deref(), brief.as_deref());
+        command_for(
+            kind,
+            &id,
+            guardrail_settings.as_deref(),
+            brief.as_deref(),
+            resume.as_ref().map(|r| r.provider_session_id.as_str()),
+        );
     if let Some(account) = account.as_ref() {
         env.extend(crate::accounts::session_env(account));
     }
@@ -368,8 +537,9 @@ fn launch(
             // before search existed", and that is never true of a new session.
             "INSERT INTO sessions
                  (id, project_id, mission_id, provider, cwd, state, log_dir, created_at,
-                  updated_at, provider_session_id, events_backfilled_at, account_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?8, ?10)",
+                  updated_at, provider_session_id, events_backfilled_at, account_id,
+                  resumed_from)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?8, ?10, ?11)",
             params![
                 id,
                 project_id,
@@ -382,6 +552,9 @@ fn launch(
                 // Claude Code uses our id verbatim; Codex assigns its own.
                 (kind == SessionKind::ClaudeCode).then(|| id.clone()),
                 account_id,
+                // The session this one picked up from (§88, D41). What makes
+                // two rows one thread.
+                resume.as_ref().map(|r| r.session_id.clone()),
             ],
         )?;
         Ok(())
@@ -435,6 +608,11 @@ fn launch(
         created_at,
         session.stop_flag(),
         mission_id.clone(),
+        // Only a resumed session needs a boundary, and it needs it badly —
+        // see D41 and `transcript::spawn`. A session starting from nothing
+        // has no prior conversation to be handed back, so it takes every line
+        // its transcript ever contains, exactly as before.
+        resume.as_ref().map(|_| created_at),
     );
 
     // Follow what the guard decided, in its separate process, into this same
@@ -685,7 +863,7 @@ mod tests {
     fn claude_sessions_carry_our_session_id() {
         // Deterministic correlation to the provider's own transcript depends on
         // this flag being passed (§26).
-        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None, None);
+        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None, None, None);
         assert_eq!(program, "claude");
         assert_eq!(
             args,
@@ -694,8 +872,51 @@ mod tests {
     }
 
     #[test]
+    /// Continuing a conversation must keep deterministic correlation (§88, D41).
+    ///
+    /// `--fork-session` is the load-bearing flag: without it Claude Code 2.1.241
+    /// ignores `--session-id` and keeps writing to the *original* transcript,
+    /// so two of our sessions would tail one file and each would claim the
+    /// other's turns.
+    #[test]
+    fn resuming_forks_so_the_new_session_still_owns_its_own_transcript() {
+        let (program, args, _) = command_for(
+            SessionKind::ClaudeCode,
+            "new-id",
+            None,
+            None,
+            Some("old-provider-id"),
+        );
+
+        assert_eq!(program, "claude");
+        assert!(
+            args.windows(2)
+                .any(|w| w == ["--resume", "old-provider-id"]),
+            "the past conversation has to be named: {args:?}"
+        );
+        assert!(
+            args.iter().any(|a| a == "--fork-session"),
+            "without --fork-session the new session writes into the old \
+             transcript and correlation breaks: {args:?}"
+        );
+        assert!(
+            args.windows(2).any(|w| w == ["--session-id", "new-id"]),
+            "the fork still has to be named for *our* id: {args:?}"
+        );
+    }
+
+    /// A session that is not continuing anything must launch exactly as it did
+    /// before this existed.
+    #[test]
+    fn a_session_that_resumes_nothing_carries_no_resume_flags() {
+        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None, None);
+        assert!(!args.iter().any(|a| a == "--resume"));
+        assert!(!args.iter().any(|a| a == "--fork-session"));
+    }
+
+    #[test]
     fn codex_sessions_do_not_claim_an_id_they_cannot_set() {
-        let (program, args, _) = command_for(SessionKind::Codex, "abc-123", None, None);
+        let (program, args, _) = command_for(SessionKind::Codex, "abc-123", None, None, None);
         assert_eq!(program, "codex");
         assert!(
             !args.iter().any(|a| a.contains("abc-123")),
@@ -808,7 +1029,7 @@ mod briefing_launch {
     #[test]
     fn a_brief_is_appended_rather_than_replacing_the_system_prompt() {
         let brief = std::path::Path::new("C:/logs/s1/project-brief.md");
-        let (program, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, Some(brief));
+        let (program, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, Some(brief), None);
 
         assert_eq!(program, "claude");
         let joined = args.join(" ");
@@ -828,7 +1049,7 @@ mod briefing_launch {
 
     #[test]
     fn a_session_with_nothing_to_say_passes_no_brief_flag() {
-        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None);
+        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None, None);
         assert!(
             !args.iter().any(|a| a.contains("system-prompt")),
             "an empty brain must not produce an empty flag: {args:?}"
@@ -855,7 +1076,7 @@ mod briefing_launch {
 
         // And even handed a path, Codex's command line does not grow one.
         let brief = std::path::Path::new("C:/logs/s1/project-brief.md");
-        let (_, args, _) = command_for(SessionKind::Codex, "s1", None, Some(brief));
+        let (_, args, _) = command_for(SessionKind::Codex, "s1", None, Some(brief), None);
         assert!(
             args.is_empty(),
             "Codex has no flag for this and must not be given one: {args:?}"

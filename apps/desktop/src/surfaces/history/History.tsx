@@ -2,11 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Pencil, Search, Target, Trash2, X } from "lucide-react";
 import { useI18n, useT, type Translate } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
-import { StatusDot, type DotStatus } from "../../design/StatusDot";
+import { StatusDot } from "../../design/StatusDot";
 import type { HistoryEntry } from "../../app/history";
-import type { SessionKind } from "../../app/sessions";
 import { useProjects } from "../projects/useProjects";
 import { useHistory, type Range } from "./useHistory";
+import { SessionPreview } from "./SessionPreview";
+import {
+  BUCKET_ORDER,
+  bucketOf,
+  dotFor,
+  formatBytes,
+  formatDuration,
+  providerLabel,
+  relative,
+  type Bucket,
+} from "./format";
 import "./History.css";
 
 /**
@@ -24,114 +34,35 @@ import "./History.css";
  * already full.
  */
 export interface HistoryProps {
-  /** Take me to that session, read-only. Routed through the same path Global
-   * Search uses — a second mechanism for reopening a past session is exactly
-   * what §23's one-log architecture exists to prevent. */
+  /**
+   * Open this session where it lives — the project workspace, as a read-only
+   * conversation tab. Routed through the same path Global Search uses, because
+   * a second mechanism for reopening a past session is exactly what §23's
+   * one-log architecture exists to prevent.
+   */
   onOpenSession: (entry: HistoryEntry) => void;
+  /** Rejoin a session whose agent is still running. */
+  onGoToTerminal: (entry: HistoryEntry) => void;
+  /**
+   * Continue this conversation in a new agent (§88, D41). Resolves once the
+   * new session has started, so the preview can show that it is working.
+   */
+  onContinue: (entry: HistoryEntry) => Promise<void>;
   onOpenMission: (missionId: string) => void;
 }
 
-/** Session states, mapped onto the shared state vocabulary. */
-function dotFor(entry: HistoryEntry): DotStatus {
-  if (entry.live) return entry.state === "waiting" ? "waiting" : "working";
-  switch (entry.state) {
-    case "completed":
-      return "completed";
-    case "blocked":
-      return "blocked";
-    case "failed":
-      return "failed";
-    default:
-      return "idle";
-  }
-}
 
-/**
- * Bytes as a person reads them.
- *
- * Binary units, because this is disk and the operating system reporting it
- * uses them too — a figure here that disagrees with Explorer would be a figure
- * nobody trusts.
- */
-export function formatBytes(bytes: number, locale: string): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  const digits = value < 10 ? 1 : 0;
-  return `${value.toLocaleString(locale, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  })} ${units[unit]}`;
-}
-
-/**
- * How long a session ran, or has been running.
- *
- * Returns `null` for one that never got past a minute — a duration of "0m" on
- * every row is noise, and a session that short has nothing to report about how
- * long it took.
- */
-export function formatDuration(entry: HistoryEntry, now: number): string | null {
-  const end = entry.endedAt ?? (entry.live ? now : null);
-  if (end === null) return null;
-  const ms = end - entry.createdAt;
-  if (ms < 60_000) return null;
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
-}
-
-/** Which day-bucket a session falls in, by when it started. */
-export type Bucket = "today" | "yesterday" | "week" | "month" | "earlier";
-
-export function bucketOf(tsMs: number, now: number): Bucket {
-  const day = (value: number) => {
-    const date = new Date(value);
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  };
-  const days = Math.round((day(now) - day(tsMs)) / 86_400_000);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return "week";
-  if (days < 31) return "month";
-  return "earlier";
-}
-
-const BUCKET_ORDER: Bucket[] = ["today", "yesterday", "week", "month", "earlier"];
-
-/**
- * A short relative time, the way a list of recent things wants one.
- *
- * The exact instant is on the element's `title`, because a relative time is
- * quick to scan and useless the moment somebody actually needs to know when.
- */
-function relative(tsMs: number, now: number, t: Translate): string {
-  const seconds = Math.max(0, Math.round((now - tsMs) / 1000));
-  if (seconds < 60) return t("history.now");
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.round(hours / 24);
-  if (days < 31) return `${days}d`;
-  const months = Math.round(days / 30);
-  if (months < 12) return `${months}mo`;
-  return `${Math.round(months / 12)}y`;
-}
-
-function providerLabel(provider: string, t: Translate): string {
-  const label = t(`history.provider.${provider}` as MessageKey);
-  return label.startsWith("history.provider.") ? provider : label;
-}
-
-export function History({ onOpenSession, onOpenMission }: HistoryProps) {
+export function History({
+  onOpenSession,
+  onGoToTerminal,
+  onContinue,
+  onOpenMission,
+}: HistoryProps) {
+  // The session being read before deciding what to do with it. Local rather
+  // than in the store: it is a view state, and it should not survive leaving
+  // the surface -- coming back to History means coming back to the list.
+  const [selected, setSelected] = useState<HistoryEntry | null>(null);
+  const [starting, setStarting] = useState(false);
   const t = useT();
   // The app's own locale, not the browser's: somebody running the product in
   // pt-BR wants 2,5 MB, whatever Windows was installed as.
@@ -219,6 +150,30 @@ export function History({ onOpenSession, onOpenMission }: HistoryProps) {
     () => [...projects].sort((a, b) => a.name.localeCompare(b.name)),
     [projects],
   );
+
+  // Reading a session comes before deciding what to do with it (§88, D41).
+  // The list is replaced rather than squeezed beside a panel: a conversation
+  // is the widest thing this surface shows, and Back really does go back.
+  if (selected) {
+    return (
+      <SessionPreview
+        entry={selected}
+        starting={starting}
+        onBack={() => setSelected(null)}
+        onGoToTerminal={onGoToTerminal}
+        onOpenProject={onOpenSession}
+        onOpenMission={onOpenMission}
+        onContinue={(entry) => {
+          // Guarded rather than merely disabled: the button is disabled while
+          // this runs, and a double activation from the keyboard would
+          // otherwise start two agents on one conversation.
+          if (starting) return;
+          setStarting(true);
+          void onContinue(entry).finally(() => setStarting(false));
+        }}
+      />
+    );
+  }
 
   return (
     <div className="hist">
@@ -322,7 +277,7 @@ export function History({ onOpenSession, onOpenMission }: HistoryProps) {
                       t={t}
                       renaming={renaming === entry.id}
                       confirming={confirmingDelete === entry.id}
-                      onOpen={() => onOpenSession(entry)}
+                      onOpen={() => setSelected(entry)}
                       onOpenMission={onOpenMission}
                       onBeginRename={() => beginRename(entry.id)}
                       onCancelRename={() => beginRename(null)}
@@ -637,9 +592,3 @@ function Segmented({
   );
 }
 
-/** The session kind a history row reopens as, for the read-only tab (§51). */
-export function kindOf(entry: HistoryEntry): SessionKind {
-  return entry.provider === "claude-code" || entry.provider === "codex"
-    ? entry.provider
-    : "shell";
-}

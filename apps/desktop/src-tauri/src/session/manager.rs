@@ -59,6 +59,10 @@ pub enum SessionError {
     Db(#[from] rusqlite::Error),
     #[error(transparent)]
     DbOpen(#[from] crate::db::DbError),
+    /// A refusal the surface localises (§65). The payload is a stable code,
+    /// never prose — `resume.unsupported` and friends.
+    #[error("{0}")]
+    Refused(String),
 }
 
 impl serde::Serialize for SessionError {

@@ -40,6 +40,10 @@ export async function startSession(params: {
   rows: number;
   /** Set when the session was started to work on a mission (§86). */
   missionId?: string;
+  /// A past session to continue (§88). The new session is a new process with
+  /// its own log; this is what makes it a continuation rather than a fresh
+  /// start that happens to be in the same folder.
+  resumeFrom?: string;
 }): Promise<SessionInfo> {
   return invoke<SessionInfo>("session_start", {
     projectId: params.projectId,
@@ -48,6 +52,7 @@ export async function startSession(params: {
     cols: params.cols,
     rows: params.rows,
     missionId: params.missionId ?? null,
+    resumeFrom: params.resumeFrom ?? null,
   });
 }
 

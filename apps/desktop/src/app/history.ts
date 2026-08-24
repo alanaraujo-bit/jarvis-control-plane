@@ -34,6 +34,23 @@ export interface HistoryEntry {
   live: boolean;
   /** Set only on a search hit: the line that matched, in context. */
   snippet: string | null;
+  /**
+   * Whether this session can be picked up and worked on again (§88, D41).
+   *
+   * False for a provider whose kind of resume this build cannot follow, and
+   * for a session whose provider-side id was never recorded. The offer is
+   * hidden rather than shown and refused.
+   */
+  resumable: boolean;
+  /** The session this one picked up from, when it is a continuation. */
+  resumedFrom: string | null;
+  /**
+   * Whether the project folder is still on disk.
+   *
+   * History outlives folders. The conversation stays readable either way; what
+   * changes is whether anything can be *run* there.
+   */
+  projectExists: boolean;
 }
 
 export interface HistoryQuery {

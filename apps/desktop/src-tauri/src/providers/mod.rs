@@ -111,6 +111,48 @@ pub enum TitleSupport {
     None,
 }
 
+/// How a past conversation is handed back to a provider (§88, D41).
+///
+/// Both CLIs resume, and they do it by **opposite mechanisms** — which matters
+/// far more than the fact that both say yes, because the difference decides
+/// whether this product can correlate the result at all. Measured on this
+/// machine, not read off a help page:
+///
+/// * **Claude Code 2.1.241** forks. `--resume <id> --fork-session` honours our
+///   `--session-id` and writes a *new* transcript named for it, opening with a
+///   full copy of the prior conversation. Correlation survives.
+/// * **Codex 0.147.0** appends. `codex resume <id>` writes into the rollout it
+///   was given — 14 lines became 25, no new file. That rollout was created
+///   before we launched, so `codex::correlate`, which matches on start time,
+///   cannot find it by design.
+///
+/// So a single `resume: bool` would be true for both and useful for neither.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ResumeSupport {
+    /// Resuming produces a new transcript this product can own and follow.
+    Fork,
+    /// Resuming appends to the original transcript. Real, and **not wired up
+    /// here**: following it needs locating by id instead of by correlation, and
+    /// a boundary so the prior conversation is not mirrored twice. The pieces
+    /// exist (`session_id_from_path`, `transcript::is_replayed_line`); the arm
+    /// does not, and §81 says an unbuilt thing is absent rather than pretended.
+    AppendInPlace,
+    /// Nothing to resume — a shell has no conversation.
+    None,
+}
+
+impl ResumeSupport {
+    /// Whether **this build** can actually continue such a session.
+    ///
+    /// Deliberately narrower than "the provider can resume": offering a button
+    /// that starts a fresh agent while claiming to continue a conversation
+    /// would be worse than not offering it.
+    pub fn is_available(self) -> bool {
+        matches!(self, Self::Fork)
+    }
+}
+
 /// What a provider can do. Rendered from, never assumed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,8 +168,12 @@ pub struct ProviderCapabilities {
 
     /// Images can be attached to a prompt (§22).
     pub images: bool,
-    /// A previous session can be resumed.
+    /// A previous session can be resumed. A statement about the *provider*;
+    /// `resume_support` says whether this build can act on it.
     pub resume: bool,
+    /// How a past conversation is handed back, and whether we can follow the
+    /// result (§88, D41).
+    pub resume_support: ResumeSupport,
     /// The provider surfaces approval requests we can represent (§35).
     pub approvals: bool,
     /// Whether a sensitive operation can be stopped before it runs (§35).
@@ -267,6 +313,27 @@ mod tests {
             "one of these writes its own title and the other never does; \
              collapsing them would let a derived title be shown as a stated one"
         );
+    }
+
+    /// Both providers resume, by opposite mechanisms, and only one of them can
+    /// be followed by this build (§88, D41). Collapsing these would let the
+    /// surface offer a Continue button that silently starts a fresh agent.
+    #[test]
+    fn resuming_is_only_offered_where_the_result_can_be_followed() {
+        assert_eq!(
+            claude::ClaudeCode.capabilities().resume_support,
+            ResumeSupport::Fork
+        );
+        assert_eq!(
+            codex::Codex.capabilities().resume_support,
+            ResumeSupport::AppendInPlace
+        );
+        assert!(ResumeSupport::Fork.is_available());
+        assert!(
+            !ResumeSupport::AppendInPlace.is_available(),
+            "appending to the original rollout is real and is not wired up; \n             claiming otherwise would offer a button that does not continue \n             anything"
+        );
+        assert!(!ResumeSupport::None.is_available());
     }
 
     #[test]

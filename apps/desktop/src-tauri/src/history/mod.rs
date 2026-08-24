@@ -88,6 +88,24 @@ pub struct Entry {
     pub live: bool,
     /// Set only on a search hit: the line that matched, in context.
     pub snippet: Option<String>,
+    /// Whether this session can be picked up and worked on again (§88, D41).
+    ///
+    /// Two conditions, and both are about *this build* rather than about the
+    /// provider in the abstract: the provider must resume in a way we can
+    /// follow (`ResumeSupport::is_available`), and we must know the id it uses
+    /// for this particular conversation. A row that fails either is shown
+    /// without the offer rather than with one that would not work.
+    pub resumable: bool,
+    /// The session this one picked up from, when it is a continuation.
+    pub resumed_from: Option<String>,
+    /// Whether the project folder is still on disk.
+    ///
+    /// History outlives folders -- a scratch project, a removed worktree, a
+    /// directory somebody moved. The session and its log are still perfectly
+    /// readable, but nothing can be *run* there, and the surface needs to know
+    /// the difference so it offers reading rather than a Continue that the core
+    /// would refuse (`session.cwdMissing`).
+    pub project_exists: bool,
 }
 
 /// What the caller is asking for.
@@ -178,7 +196,8 @@ const SELECT: &str = "
              WHERE e.session_id = s.id AND e.kind = 'message' AND e.label = 'user'),
            (SELECT COUNT(*) FROM session_events e WHERE e.session_id = s.id),
            (SELECT SUM(COALESCE(u.input_tokens, 0) + COALESCE(u.output_tokens, 0))
-              FROM usage_samples u WHERE u.session_id = s.id)
+              FROM usage_samples u WHERE u.session_id = s.id),
+           s.provider_session_id, s.resumed_from, p.path
       FROM sessions s
       JOIN projects p ON p.id = s.project_id
       LEFT JOIN missions m ON m.id = s.mission_id
@@ -186,11 +205,11 @@ const SELECT: &str = "
 
 fn read_entry(row: &rusqlite::Row<'_>, snippet: Option<String>) -> rusqlite::Result<Entry> {
     let log_dir: String = row.get(11)?;
+    let provider: String = row.get(3)?;
     Ok(Entry {
         id: row.get(0)?,
         project_id: row.get(1)?,
         project_name: row.get(2)?,
-        provider: row.get(3)?,
         title: row.get(4)?,
         title_source: row
             .get::<_, Option<String>>(5)?
@@ -207,7 +226,28 @@ fn read_entry(row: &rusqlite::Row<'_>, snippet: Option<String>) -> rusqlite::Res
         bytes: directory_bytes(std::path::Path::new(&log_dir)),
         live: false, // the manager fills this in; a row cannot know it
         snippet,
+        // Both halves are required, and both are facts about this build rather
+        // than about the provider in the abstract (§88, D41).
+        resumable: resume_available(&provider) && row.get::<_, Option<String>>(15)?.is_some(),
+        resumed_from: row.get(16)?,
+        project_exists: std::path::Path::new(&row.get::<_, String>(17)?).is_dir(),
+        provider,
     })
+}
+
+/// Whether a session of this provider can be continued by **this build**.
+///
+/// Read from the capability model, never matched on here (§26): Claude Code
+/// forks into a transcript we can follow, Codex appends to the original one and
+/// that arm is not built. A plain shell is not in the model at all and is not a
+/// conversation to continue.
+fn resume_available(provider: &str) -> bool {
+    crate::providers::all()
+        .into_iter()
+        .map(|p| p.capabilities())
+        .find(|c| c.id == provider)
+        .map(|c| c.resume_support.is_available())
+        .unwrap_or(false)
 }
 
 /// Filters shared by browsing and searching, as SQL plus its bound values.

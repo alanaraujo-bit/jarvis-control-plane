@@ -60,10 +60,63 @@ fn kind_for(item: &ConversationItem) -> EventKind {
     }
 }
 
+/// Whether a transcript line is a **replay** of a conversation this session is
+/// continuing rather than something that just happened (§88, D41).
+///
+/// ## Why this cannot be done any other way
+///
+/// Resuming hands the provider a past conversation, and both providers then put
+/// that conversation into the file we are tailing — by different routes, with
+/// the same consequence:
+///
+/// * **Claude Code** (`--resume --fork-session`, 2.1.241) writes a *new*
+///   transcript that opens with a **full copy** of the prior conversation. Every
+///   copied line is rewritten with the new session id, so the id cannot tell a
+///   copy from a new turn.
+/// * **Codex** (`codex resume <id>`, 0.147.0) **appends** to the original
+///   rollout, which already holds the whole prior conversation.
+///
+/// Either way a tailer reading from the top would mirror the old conversation a
+/// second time: every token counted twice in Analytics (§52), every sentence
+/// found twice in Global Search (§51), and — before this existed — a
+/// notification raised for every finished turn the person already read, and a
+/// quota event recorded for consumption that happened hours ago.
+///
+/// Offsets cannot be used for the boundary: the file is created by the provider
+/// after we launch, so there is no "before" position to seek past, and a naive
+/// seek-to-end races the first real turn.
+///
+/// **The timestamp is the boundary that actually works.** A replayed line keeps
+/// its *original* time — verified on this machine: a fork's copied lines carry
+/// 16:18–16:22 while the fork itself was written at 17:13. Nothing that happened
+/// before this session launched can be something this session did.
+///
+/// A line with no timestamp at all is deliberately **not** treated as a replay.
+/// Claude Code's `ai-title` is the only such line (§88), and taking it is right:
+/// a continued session should carry the name of the conversation it continues
+/// until the provider chooses a better one.
+fn is_replayed_line(line: &str, boundary_ms: i64) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+        // Unparseable is not evidence of anything. Let the parsers decide;
+        // they already ignore what they cannot read.
+        return false;
+    };
+    value
+        .get("timestamp")
+        .and_then(serde_json::Value::as_str)
+        .and_then(crate::providers::conversation::parse_timestamp)
+        .map(|ts| ts < boundary_ms)
+        .unwrap_or(false)
+}
+
 /// Follow a provider transcript for the lifetime of a session.
 ///
 /// `provider` is the id from the capability model. A provider without a
 /// transcript simply never starts a tailer.
+///
+/// `replay_boundary_ms` is set only for a **resumed** session (§88, D41): every
+/// line older than it is a replay of the conversation being continued and is
+/// dropped whole, before anything reads it. See `is_replayed_line`.
 #[allow(clippy::too_many_arguments)]
 pub fn spawn(
     session: Arc<LiveSession>,
@@ -76,6 +129,7 @@ pub fn spawn(
     launched_at_ms: i64,
     stop: Arc<AtomicBool>,
     mission_id: Option<String>,
+    replay_boundary_ms: Option<i64>,
 ) {
     if provider == "shell" {
         return;
@@ -102,12 +156,52 @@ pub fn spawn(
             };
             tracing::info!(session = %session_id, path = ?path, "following provider transcript");
 
+            // Record the id the provider itself uses for this session.
+            //
+            // Claude Code is handed ours at launch, so its row already carries
+            // it. **Codex assigns its own**, and until now nothing ever wrote it
+            // down — the column existed from migration 1 with a comment saying
+            // it is there "so a session can be resumed", and for Codex it was
+            // always NULL. The id is right here in the rollout's filename, and
+            // this is the only moment we know it (§88, D41).
+            if provider == "codex" {
+                if let Some(rollout_id) = codex::session_id_from_path(&path) {
+                    let recorded = db.with(|conn| {
+                        conn.execute(
+                            "UPDATE sessions SET provider_session_id = ?2 WHERE id = ?1",
+                            rusqlite::params![&session_id, &rollout_id],
+                        )?;
+                        Ok(())
+                    });
+                    if let Err(e) = recorded {
+                        tracing::warn!(error = %e, session = %session_id, "could not record the rollout id");
+                    }
+                }
+            }
+
             let mut tailer = JsonlTailer::new(path);
             let mut last_said: Option<String> = None;
             while !stop.load(Ordering::Relaxed) {
                 match tailer.poll() {
                     Ok(lines) => {
                         for line in lines {
+                            // Dropped **whole**, before anything reads it.
+                            //
+                            // Gating only the conversation items would leave
+                            // three other readers running on replayed history:
+                            // `observe_line` below records quota consumption
+                            // that happened hours ago, the rotation check under
+                            // it can switch accounts because of it, and
+                            // `announce_turn_ended` raises a notification for
+                            // every turn of the old conversation — one per
+                            // finished turn, for turns the person has already
+                            // read. See D41.
+                            if let Some(boundary) = replay_boundary_ms {
+                                if is_replayed_line(&line, boundary) {
+                                    continue;
+                                }
+                            }
+
                             if let Some(account_id) = account_id.as_deref() {
                                 crate::accounts::quota::observe_line(
                                     &db,
@@ -268,6 +362,64 @@ fn locate(
         std::thread::sleep(POLL_INTERVAL);
     }
     None
+}
+
+#[cfg(test)]
+mod replay_boundary {
+    use super::*;
+
+    /// The instant a resumed session launched. Everything older is a replay.
+    const BOUNDARY: i64 = 1_787_435_821_375; // 2026-08-22T21:57:01.375Z
+
+    /// Verbatim shapes from real transcripts on this machine.
+    #[test]
+    fn a_line_from_before_the_resume_is_a_replay() {
+        // A copied line keeps its original time — this is the whole mechanism.
+        let old = r#"{"type":"user","timestamp":"2026-08-22T16:18:16.034Z","message":{"role":"user","content":"hi"}}"#;
+        assert!(is_replayed_line(old, BOUNDARY));
+    }
+
+    #[test]
+    fn a_line_from_after_the_resume_is_this_sessions_own_work() {
+        let new = r#"{"type":"assistant","timestamp":"2026-08-22T23:13:18.901Z","message":{"role":"assistant"}}"#;
+        assert!(!is_replayed_line(new, BOUNDARY));
+    }
+
+    /// The boundary is the launch instant itself; a line stamped exactly then
+    /// belongs to this session. Off by one here would drop a real first turn.
+    #[test]
+    fn the_boundary_instant_itself_is_not_a_replay() {
+        let exact = r#"{"type":"assistant","timestamp":"2026-08-22T21:57:01.375Z"}"#;
+        assert!(!is_replayed_line(exact, BOUNDARY));
+    }
+
+    /// Claude Code's `ai-title` carries no timestamp at all (§88). Taking it is
+    /// deliberate: a continued session should carry the name of the
+    /// conversation it continues until the provider picks a better one.
+    #[test]
+    fn a_line_with_no_timestamp_is_kept_rather_than_guessed_at() {
+        let title = r#"{"type":"ai-title","aiTitle":"README.md review","sessionId":"x"}"#;
+        assert!(!is_replayed_line(title, BOUNDARY));
+    }
+
+    #[test]
+    fn nonsense_is_not_evidence_of_a_replay() {
+        assert!(!is_replayed_line("", BOUNDARY));
+        assert!(!is_replayed_line("{not json", BOUNDARY));
+        assert!(!is_replayed_line(r#"{"timestamp":"not-a-time"}"#, BOUNDARY));
+    }
+
+    /// A Codex envelope has the same top-level `timestamp`, so one rule covers
+    /// both providers — which matters because they replay for *different*
+    /// reasons: Claude Code copies the conversation into a new file, Codex
+    /// appends to the original one.
+    #[test]
+    fn the_same_rule_reads_a_codex_envelope() {
+        let old = r#"{"timestamp":"2026-08-22T16:29:52.000Z","ordinal":0,"type":"event_msg","payload":{}}"#;
+        let new = r#"{"timestamp":"2026-08-23T16:29:52.000Z","ordinal":9,"type":"event_msg","payload":{}}"#;
+        assert!(is_replayed_line(old, BOUNDARY));
+        assert!(!is_replayed_line(new, BOUNDARY));
+    }
 }
 
 #[cfg(test)]

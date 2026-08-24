@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 13;
+pub const SCHEMA_VERSION: u32 = 14;
 
 struct Migration {
     version: u32,
@@ -651,6 +651,37 @@ const MIGRATIONS: &[Migration] = &[Migration {
     -- the page.
     CREATE INDEX idx_usage_session ON usage_samples (session_id);
 "#,
+    },
+    Migration {
+        version: 14,
+        sql: r#"
+    -- ---- Continuing a past session (§88, D41) -------------------------------
+    --
+    -- Which session this one picked up from. A resumed session is a **new**
+    -- session — a new process, a new log, a new row — that carries the previous
+    -- conversation's context. Recording where it came from is what turns two
+    -- rows into one thread, the same way `sessions.mission_id` does for §86.
+    --
+    -- NULL is the ordinary case: most sessions start from nothing.
+    ALTER TABLE sessions ADD COLUMN resumed_from TEXT;
+
+    -- ---- Belt and braces for migration 13's indexes -------------------------
+    --
+    -- Migration 13's SQL was edited after it was first written, and rule 1 at
+    -- the top of this file exists because that is exactly how a database ends
+    -- up missing a statement while a freshly built one looks perfect (item 9 in
+    -- HANDOFF). The reasoning said every edit landed before any build ran, and
+    -- `a_shipped_migration_is_never_edited` now pins 13's text — but reasoning
+    -- is the thing item 9 warns against, and the cost of being wrong is every
+    -- history page scanning `usage_samples` end to end, once per row.
+    --
+    -- `IF NOT EXISTS` makes this a no-op on a database that already has them
+    -- and a repair on one that does not. It is deliberately a **new migration**
+    -- rather than an edit to 13, which is the only correct way to add a
+    -- statement to a version that has already run somewhere.
+    CREATE INDEX IF NOT EXISTS idx_sessions_recent ON sessions (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_usage_session ON usage_samples (session_id);
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -762,6 +793,7 @@ mod tests {
             (11, 0xd1c1_2851_e515_228c),
             (12, 0x4ea3_d5cb_46cb_d4a8),
             (13, 0xc7ca_954d_e678_f1bd),
+            (14, 0x1dd0_9220_2d82_afda),
         ];
 
         for migration in MIGRATIONS {

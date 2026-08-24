@@ -367,6 +367,39 @@ fn a_live_session_cannot_be_deleted() {
     assert_eq!(left, 1, "nothing was removed");
 }
 
+/// History outlives folders — a scratch project, a removed worktree, a
+/// directory somebody moved. The row has to say so, because it is the
+/// difference between a session you can read and one you can continue.
+///
+/// Found the hard way: continuing a session whose project folder was gone
+/// started a real agent in the user's **home directory**. See
+/// `session.cwdMissing`.
+#[test]
+fn a_row_says_whether_its_project_folder_is_still_there() {
+    let db = db();
+    add_session(&db, "gone", "p1", "claude-code", 1000, "C:/nothing");
+
+    let entry = &page(&db, &[], &Query::default()).unwrap().entries[0];
+    assert!(
+        !entry.project_exists,
+        "p1 is seeded at C:/demo, which is not a real directory"
+    );
+
+    // A project that really is there reports the other way.
+    let here = std::env::temp_dir();
+    db.with(|conn| {
+        conn.execute(
+            "UPDATE projects SET path = ?1 WHERE id = 'p1'",
+            rusqlite::params![here.to_string_lossy()],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+
+    let entry = &page(&db, &[], &Query::default()).unwrap().entries[0];
+    assert!(entry.project_exists);
+}
+
 #[test]
 fn a_missing_log_directory_is_zero_bytes_and_not_a_failure() {
     let db = db();

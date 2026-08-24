@@ -19,7 +19,8 @@ import { usePreferences } from "./surfaces/settings/usePreferences";
 import { invoke } from "./app/platform";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
-import { History, kindOf } from "./surfaces/history/History";
+import { History } from "./surfaces/history/History";
+import { kindOf } from "./surfaces/history/format";
 import { Analytics } from "./surfaces/analytics/Analytics";
 import { Accounts } from "./surfaces/accounts/Accounts";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
@@ -501,6 +502,36 @@ export function App() {
                     sessionProvider: entry.live ? undefined : kindOf(entry),
                     sessionTitle: entry.title ?? undefined,
                   });
+                }}
+                // Still running: rejoin it. There is nothing to hand back — the
+                // agent never stopped — so this is the ordinary "take me to
+                // that session" path with no provider passed, which is what
+                // keeps it from opening as a read-only transcript.
+                onGoToTerminal={(entry) => {
+                  void openProjectAnywhere(entry.projectId, {
+                    area: "sessions",
+                    sessionId: entry.id,
+                  });
+                }}
+                // Finished: continue it (§88, D41). A new agent process, handed
+                // this conversation, in a tab named after it.
+                //
+                // The project is opened **first and awaited**, because
+                // `openTerminal` needs the workspace to exist for the tab to
+                // land in — and `openProjectAnywhere` reaches an archived
+                // project, which a continued session very often belongs to.
+                onContinue={async (entry) => {
+                  await openProjectAnywhere(entry.projectId, { area: "sessions" });
+                  await openTerminal(
+                    entry.projectId,
+                    kindOf(entry),
+                    { cols: 120, rows: 30 },
+                    // Not the old session's mission. A continuation is new work
+                    // by default; inheriting a mission would quietly attach
+                    // evidence to something nobody chose (§86).
+                    undefined,
+                    { sessionId: entry.id, title: entry.title ?? undefined },
+                  );
                 }}
                 onOpenMission={(missionId) => {
                   setOpenProject(null);

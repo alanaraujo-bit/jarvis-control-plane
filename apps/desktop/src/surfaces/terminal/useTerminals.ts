@@ -55,6 +55,8 @@ interface TerminalsState {
     kind: SessionKind,
     size: { cols: number; rows: number },
     missionId?: string,
+    /** A past session to continue (§88). The tab is titled after it. */
+    resume?: { sessionId: string; title?: string },
   ) => Promise<void>;
   closeTerminal: (projectId: string, sessionId: string) => Promise<void>;
   setActive: (projectId: string, sessionId: string) => void;
@@ -99,7 +101,7 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
   starting: {},
   error: null,
 
-  openTerminal: async (projectId, kind, size, missionId) => {
+  openTerminal: async (projectId, kind, size, missionId, resume) => {
     if (get().starting[projectId]) return;
     set((state) => ({ starting: { ...state.starting, [projectId]: true }, error: null }));
 
@@ -110,13 +112,19 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
         cols: size.cols,
         rows: size.rows,
         missionId,
+        resumeFrom: resume?.sessionId,
       });
       set((state) => {
         const existing = state.tabs[projectId] ?? [];
         const tab: TerminalTab = {
           sessionId: info.id,
           kind,
-          title: nextTitle(existing, kind),
+          // A continuation is named after the conversation it continues, not
+          // "Claude Code 3" (§88). Somebody who just chose a session out of
+          // history and pressed Continue should see that session's name on the
+          // tab they land on — a generic number would make them wonder whether
+          // the right thing opened at all.
+          title: resume?.title?.trim() || nextTitle(existing, kind),
         };
         // A new terminal opened *during* a split joins the layout, while
         // there is room for it.

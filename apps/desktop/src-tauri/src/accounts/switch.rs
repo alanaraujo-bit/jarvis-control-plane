@@ -244,6 +244,11 @@ pub fn relay_autopilot(
         kind,
         Some(old_run.mission_id.clone()),
         true,
+        // An account switch starts a fresh conversation on the new account
+        // deliberately: `--resume` cannot cross configuration directories, which
+        // is the whole reason continuity here is relayed through the Brain
+        // (D34) rather than handed to the CLI.
+        None,
     )
     .map_err(|error| error.to_string())?;
 

@@ -1,0 +1,180 @@
+/* ==========================================================================
+   Session preview (§88, D41)
+   --------------------------------------------------------------------------
+   A past session, read before deciding what to do with it. The conversation is
+   the content; everything above it is there to answer "is this the one?" and
+   "how do I carry on from here?".
+
+   The bar is pinned so the way onward is never scrolled away — somebody who
+   reads to the bottom of a long conversation is exactly the person who has
+   just decided to continue it.
+   ========================================================================== */
+
+.preview {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  background: var(--bg-base);
+}
+
+/* ---- Action bar ---------------------------------------------------------- */
+.preview__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-5) var(--space-9);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.preview__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 28px;
+  padding: 0 var(--space-5) 0 var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.preview__back:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.preview__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.preview__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 28px;
+  max-width: 32ch;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.preview__action:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* Continuing the work is agent work, so it wears the one colour that means
+   that (§6). It is the only filled control on this screen. */
+.preview__action--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: var(--weight-medium);
+}
+.preview__action--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--text-on-accent);
+}
+.preview__action--primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Why there is no button, rather than a button that would not work (§81). */
+.preview__cannot {
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 5px var(--space-5);
+  white-space: nowrap;
+}
+
+/* ---- What this session is ------------------------------------------------ */
+.preview__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-7) var(--space-9) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.preview__title-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.preview__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview__title[data-untitled] {
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-weight: var(--weight-normal);
+}
+
+.preview__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.preview__dot { color: var(--text-disabled); }
+
+.preview__mission {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  padding: 2px var(--space-4) 2px var(--space-3);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-xs);
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: var(--text-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview__mission:hover { background: var(--bg-selected); }
+
+.preview__note {
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+}
+
+/* ---- The conversation ----------------------------------------------------
+   `ConversationView` owns its own scrolling, so this only has to give it a
+   box with a real height. `minmax(0, 1fr)` on the grid row is what stops the
+   content forcing the container taller and the whole page scrolling instead
+   of the conversation. */
+.preview__body {
+  min-height: 0;
+  overflow: hidden;
+}

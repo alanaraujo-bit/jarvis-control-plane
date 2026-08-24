@@ -23,7 +23,7 @@ use serde_json::Value;
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use super::{
     BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
-    ProviderCapabilities, TitleSupport, UsageReporting,
+    ProviderCapabilities, ResumeSupport, TitleSupport, UsageReporting,
 };
 use crate::session::event::Confidence;
 
@@ -51,6 +51,9 @@ impl Provider for ClaudeCode {
             // It writes its own `ai-title` line. Verified against 124 real
             // transcripts on this machine, 89 of which carry one.
             titles: TitleSupport::Provider,
+            // `--resume <id> --fork-session` honours our `--session-id` and
+            // writes a new transcript named for it. Verified on 2.1.241.
+            resume_support: ResumeSupport::Fork,
         }
     }
 

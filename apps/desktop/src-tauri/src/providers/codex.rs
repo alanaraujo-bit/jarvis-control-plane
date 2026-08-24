@@ -22,7 +22,7 @@ use serde_json::Value;
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use super::{
     BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
-    ProviderCapabilities, TitleSupport, UsageReporting,
+    ProviderCapabilities, ResumeSupport, TitleSupport, UsageReporting,
 };
 use crate::session::event::Confidence;
 
@@ -56,6 +56,9 @@ impl Provider for Codex {
             // is a tool *definition* inside the instructions, not an event it
             // emits -- checked across every rollout on this machine.
             titles: TitleSupport::Derived,
+            // `codex resume <id>` appends to the rollout it was given rather
+            // than creating one. Measured on 0.147.0; see ResumeSupport.
+            resume_support: ResumeSupport::AppendInPlace,
         }
     }
 
@@ -142,10 +145,43 @@ pub fn rollout_cwd(path: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The session id Codex gave a rollout, read off its filename (§88, D41).
+///
+/// `rollout-2026-08-24T14-29-52-01a034d2-4e1e-7c12-bf6e-a3bc1b3ef383.jsonl`
+/// → `01a034d2-4e1e-7c12-bf6e-a3bc1b3ef383`.
+///
+/// The filename is used rather than the `session_meta` line inside because this
+/// is called the moment the file is located, when it may still be empty — the
+/// name is there from the start and the first line may not be.
+///
+/// The timestamp between the prefix and the id contains dashes of its own, so
+/// this takes the **last five** dash-separated groups (a UUID's own shape)
+/// rather than splitting on the first dash after `rollout-`.
+pub fn session_id_from_path(path: &Path) -> Option<String> {
+    let stem = path.file_stem()?.to_str()?;
+    let rest = stem.strip_prefix("rollout-")?;
+    let parts: Vec<&str> = rest.split('-').collect();
+    if parts.len() < 5 {
+        return None;
+    }
+    let id = parts[parts.len() - 5..].join("-");
+    // A UUID is 36 characters. Anything else means the name is not the shape
+    // this was written for, and guessing would put nonsense in a column that
+    // gets handed to a CLI.
+    (id.len() == 36).then_some(id)
+}
+
 /// Identify the rollout belonging to a session we launched.
 ///
 /// Matching is on working directory plus start time. If several match, the
 /// oldest at or after the launch wins, since that is the one we caused.
+///
+/// **This cannot find a resumed session.** `codex resume <id>` appends to the
+/// rollout it was given — verified on 0.147.0: 14 lines became 25 and no new
+/// file appeared — and that rollout was created before we launched, so the
+/// start-time filter here excludes it by design. Resuming Codex therefore needs
+/// locating by id rather than by correlation; see §88's own notes for why that
+/// arm is not built yet.
 pub fn correlate(cwd: &str, launched_at_ms: i64) -> Option<PathBuf> {
     let root = sessions_root()?;
     correlate_in(&root, cwd, launched_at_ms)
@@ -446,5 +482,40 @@ mod tests {
         let path = dir.path().join("not-a-rollout.jsonl");
         std::fs::write(&path, format!("{REAL_USER}\n")).unwrap();
         assert!(rollout_cwd(&path).is_none());
+    }
+}
+
+#[cfg(test)]
+mod rollout_ids {
+    use super::*;
+
+    /// Verbatim from this machine. The timestamp between the prefix and the id
+    /// contains dashes of its own, which is why this cannot split on the first
+    /// dash after `rollout-`.
+    #[test]
+    fn reads_the_session_id_off_a_real_rollout_name() {
+        let path = Path::new(
+            "rollout-2026-08-24T14-29-52-01a034d2-4e1e-7c12-bf6e-a3bc1b3ef383.jsonl",
+        );
+        assert_eq!(
+            session_id_from_path(path).as_deref(),
+            Some("01a034d2-4e1e-7c12-bf6e-a3bc1b3ef383")
+        );
+    }
+
+    #[test]
+    fn refuses_a_name_that_is_not_the_shape_it_was_written_for() {
+        for name in [
+            "rollout-test.jsonl",
+            "rollout-2026-08-24T14-29-52.jsonl",
+            "something-else.jsonl",
+            "rollout-.jsonl",
+        ] {
+            assert_eq!(
+                session_id_from_path(Path::new(name)),
+                None,
+                "{name} should not yield an id"
+            );
+        }
     }
 }

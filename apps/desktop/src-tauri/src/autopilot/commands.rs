@@ -114,6 +114,10 @@ pub fn autopilot_start(
         // Driven, so guardrails must treat this session as having nobody to
         // ask — see `AgentLaunch::driven`.
         true,
+        // An unattended run starts its own conversation. Continuing somebody
+        // else's is a decision for a person to make (§88), not something a run
+        // inherits.
+        None,
     )
     .map_err(|e| e.to_string())?;
 
