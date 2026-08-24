@@ -248,3 +248,61 @@ verbatim, including one that reads `CRead README.md and describe…`. That leadi
 11) and it reproduced live during this pass. The title is faithful to the record,
 which is the right behaviour — but it is worth knowing that a derived title can
 inherit a typing artifact, and that renaming is the answer.
+
+## 7. Open — pick this up first
+
+The feature is built, committed and verified end to end (§6). Four things are
+outstanding, in priority order. The first is the only one that could make the
+feature *wrong* on a real machine.
+
+1. **Confirm migration 13's indexes actually exist on the databases that
+   matter — HANDOFF item 9.** Migration 13's SQL was edited after it was first
+   written (`idx_usage_session` was added later in the same session). The
+   reasoning says every edit landed before the first launch, so the dev
+   database should have applied all four statements at once — **but reasoning
+   is exactly what item 9 warns against, and this was not checked.** Every test
+   builds its database from scratch, which is precisely why this class of bug
+   survives a green suite. Ask the real database directly:
+
+   ```sql
+   SELECT name FROM sqlite_master
+    WHERE type = 'index'
+      AND name IN ('idx_sessions_recent', 'idx_usage_session');
+   ```
+
+   Both must be there, in `%APPDATA%\dev.jarvis.desktop\jarvis.db`. If either
+   is missing, the fix is **migration 14** with `CREATE INDEX IF NOT EXISTS` —
+   never an edit to 13. Without `idx_usage_session` every history page runs a
+   full scan of `usage_samples` once per row.
+
+2. **`delete()` clears `notifications`, and nothing tests it.** That column is
+   plain `TEXT` with no foreign key, so a wrong statement fails silently and
+   the centre keeps a notification that opens nothing — the same shape as
+   HANDOFF items 17 and 32. One test: insert a notification for `s1`, delete
+   the session, assert zero rows.
+
+3. **Scope of the "verified in a real build" claim.** Everything in §6 ran
+   against the **dev** build's data directory (`%APPDATA%\dev.jarvis.desktop`).
+   The installed 0.3.0 copy at `%LOCALAPPDATA%\J.A.R.V.I.S` has its own
+   database, still on schema 12; it will migrate on next launch, and that
+   launch has not happened. Launch it once and confirm it migrates cleanly and
+   History renders.
+
+4. **Two honest limits, currently unstated in the UI.**
+   - A search is capped at `SEARCH_LIMIT` (60) and `has_more` is deliberately
+     false for a search, so a query matching exactly 60 sessions looks
+     identical to one that matched everything. There is copy for *no* matches
+     and none for *capped*.
+   - `storage` is read once per store lifetime, and the store outlives leaving
+     the surface. Start a session, come back, and the disk figure is stale
+     until a delete. Keying the read on mount rather than on `!storage` fixes
+     it. It is read once on purpose — that call walks every session log
+     directory on the machine, and it used to run on every keystroke in the
+     search box — so the fix is *when* it refreshes, not *whether*.
+
+Also worth stating plainly: **Codex's derived title has no live evidence.**
+`TitleSupport::Derived` was established by absence (no title event in any of
+the 48 rollouts here), and the derivation itself by unit test plus Claude Code
+rows. The `Role::User` arm in `transcript::mirror` that would title a Codex
+session has never been watched running against a live Codex session. The path
+is provider-agnostic, so this is a gap in evidence rather than a suspected bug.
