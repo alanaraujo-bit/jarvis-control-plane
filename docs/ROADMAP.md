@@ -457,10 +457,9 @@ streaming's captions together on a real microphone.
    sound cues, both earlier bug fixes, and now streaming's live captions
    too. One pass now covers everything voice-related that has shipped
    since the last one. See HANDOFF §7 item 1.
-2. The rest of M2: split panes (§20), image paste (§22, with a hover
-   preview of the pasted image) — scrollback search (§20, terminal find
-   bar) is built but not yet marked done; it hasn't had its own on-screen
-   verification pass yet.
+2. ~~The rest of M2~~ — **done.** Split panes (§20), scrollback search (§20)
+   and image paste (§22) are all built and all verified in a real build.
+   **M2 is finished.**
 3. ~~Global Search does not backfill~~ — **done** (D30). `search::backfill`
    walks every session log once, off the startup path, one session per
    transaction, resumable and idempotent. Verified against this machine's own

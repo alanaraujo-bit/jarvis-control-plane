@@ -74,9 +74,9 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**379 tests** (370 Rust — 365 run, 5 intentionally `#[ignore]`d because they
-need a real `claude` CLI or other environment this machine cannot guarantee —
-9 i18n) · all green.
+**404 tests** (395 Rust — 388 run, 7 intentionally `#[ignore]`d because they
+need a real `claude` CLI, a real microphone, or this machine's own recorded
+session history — 9 i18n) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
