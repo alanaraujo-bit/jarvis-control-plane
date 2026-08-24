@@ -2,7 +2,7 @@
 
 > **Closed.** The account of what was built and why now lives in
 > [`ROADMAP.md`](ROADMAP.md) (M14) and [`DECISIONS.md`](DECISIONS.md) (D35);
-> the traps live in [`HANDOFF.md`](HANDOFF.md) section 5, items 48-54. What is
+> the traps live in [`HANDOFF.md`](HANDOFF.md) section 5, items 48-55. What is
 > kept here is the **evidence**: what four real agent CLIs actually drew, and
 > how to record it again when a provider changes its interface.
 
@@ -23,8 +23,9 @@ wants.
 | 4. Dispatch and the suppression rule | **done** — `notify::bus`, `Attention`, `useNotificationFeed` |
 | 5. The Notification Centre surface | **done** — bell, centre, toast stack |
 | 6. Settings | **done** — three switches and a real test button |
-| 7. Tests | 476 Rust + 9 i18n green; typecheck green |
+| 7. Tests | 493 Rust (480 run, 13 recording harnesses and machine-bound), 9 i18n, 22 relay - all green |
 | 8. Verified in a real build against a real agent | **done** - see below |
+| 9. Verified with the window *minimised*, which is the case it exists for | **done** - see below |
 
 ---
 
@@ -188,3 +189,28 @@ Add a capture for it and look at what it draws before assuming it is covered.
 The detector keys on a *shape* rather than a sentence, so the honest
 expectation is "probably", not "certainly" — and the way to find out is the
 same harness, not a guess.
+
+## The case it exists for
+
+Everything above was verified with the window on screen. The case the feature is
+*for* is the one where it is not, and that one nearly shipped broken:
+`isFocused()` returns `true` for a minimised window on Windows, so the surface
+drew an in-app toast onto a window nobody could see and never fired the desktop
+one. Nothing in the interface said so — the notification was in the centre, with
+the right words and the right label.
+
+The oracle that caught it is worth keeping:
+
+```powershell
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+[Windows.UI.Notifications.ToastNotificationManager]::History.GetHistory('dev.jarvis.desktop')
+```
+
+That asks **Windows** what it was actually handed, rather than asking our own
+code what it believes it sent. A screenshot only proves a toast fired if you
+happen to catch the few seconds it is on screen; this does not have to be lucky.
+
+Verified afterwards, properly: window minimised, a real Claude Code agent
+finishing a real turn, and Windows showing *Claude Code terminou / This is a
+throwaway scratch project used to verify notifications end to end.* — the
+agent's own reply, from the installed 0.3.0 build.
