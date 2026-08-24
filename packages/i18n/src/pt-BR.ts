@@ -137,6 +137,19 @@ export const ptBR: Record<MessageKey, string> = {
   "terminal.paste.outsideSession": "Esse arquivo não pertence a esta sessão.",
   "terminal.paste.failed": "Não foi possível anexar a imagem.",
 
+  "preview.title": "Prévia",
+  "preview.open": "Abrir prévia",
+  "preview.reload": "Recarregar",
+  "preview.close": "Fechar prévia",
+  "preview.detected": "Esta sessão está servindo {0}",
+  "preview.searching": "Nenhum servidor de desenvolvimento ainda",
+  "preview.hint": "Inicie um no terminal — o {name} encontra o endereço na saída.",
+  "preview.openWindow": "A prévia abre em uma janela própria, ao lado desta.",
+  "preview.notLocal": "A prévia só abre endereços desta máquina.",
+  "preview.invalidUrl": "Esse não é um endereço que a prévia consiga abrir.",
+  "preview.failed": "Não foi possível abrir a prévia.",
+  "preview.choose": "Esta sessão está servindo mais de uma coisa.",
+
 
   "conversation.title": "Conversa",
   "conversation.you": "Você",

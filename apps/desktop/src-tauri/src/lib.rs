@@ -17,6 +17,7 @@ mod mission;
 mod onboarding;
 mod project;
 mod providers;
+mod preview;
 mod pty;
 mod review;
 mod search;
@@ -190,6 +191,11 @@ pub fn run() {
             autopilot::commands::autopilot_start,
             autopilot::commands::autopilot_stop,
             search::global_search,
+            preview::preview_detect,
+            preview::preview_open,
+            preview::preview_reload,
+            preview::preview_close,
+            preview::preview_is_open,
             voice::voice_model_status,
             voice::voice_download_model,
             voice::voice_start_recording,

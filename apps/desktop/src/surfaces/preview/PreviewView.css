@@ -1,0 +1,173 @@
+/* Preview (§46).
+
+   The same reading measure the settings areas use: this is a short document
+   with one decision on it, not a dashboard. */
+.preview {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.preview__inner {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-8) var(--space-11);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.preview__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.preview__subtitle {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.preview__error {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--state-danger-bg);
+  border: 1px solid var(--state-danger);
+  color: var(--state-danger);
+  font-size: var(--text-sm);
+}
+
+/* The detected address, and what can be done with it. */
+.preview__found {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  padding: var(--space-5) var(--space-6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* Monospace, because it is an address: a port read in a proportional font is
+   harder to compare against the one in the terminal above. */
+.preview__url {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.preview__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.preview__primary,
+.preview__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 28px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+/* The one action this surface exists for, so it carries the accent. Amber is
+   the colour of agent work (§6) and this is the result of that work — the same
+   hue the terminal's cursor and the "working" state already use. */
+.preview__primary {
+  border: 1px solid var(--accent-border);
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.preview__primary:hover {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.preview__action {
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.preview__action:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.preview__primary:focus-visible,
+.preview__action:focus-visible,
+.preview__other:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.preview__others-title {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-3);
+}
+
+.preview__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.preview__other {
+  border: 0;
+  background: transparent;
+  padding: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.preview__other:hover {
+  color: var(--accent);
+}
+
+/* No server yet. Says what to do rather than spinning: waiting is the normal
+   state here, not a failure to report. */
+.preview__empty {
+  padding: var(--space-9) var(--space-6);
+  text-align: center;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.preview__empty-title {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.preview__empty-body {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview__primary,
+  .preview__action { transition: none; }
+}

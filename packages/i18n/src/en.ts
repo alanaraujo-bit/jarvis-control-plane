@@ -152,6 +152,19 @@ export const en = {
   "terminal.paste.outsideSession": "That file does not belong to this session.",
   "terminal.paste.failed": "The image could not be attached.",
 
+  "preview.title": "Preview",
+  "preview.open": "Open preview",
+  "preview.reload": "Reload",
+  "preview.close": "Close preview",
+  "preview.detected": "This session is serving {0}",
+  "preview.searching": "No dev server yet",
+  "preview.hint": "Start one in a terminal — {name} will find its address in the output.",
+  "preview.openWindow": "Preview opens in its own window, beside this one.",
+  "preview.notLocal": "Preview only opens addresses on this machine.",
+  "preview.invalidUrl": "That is not an address Preview can open.",
+  "preview.failed": "The preview could not be opened.",
+  "preview.choose": "This session is serving more than one thing.",
+
 
   // ---- Conversation (§24) --------------------------------------------------
   "conversation.title": "Conversation",

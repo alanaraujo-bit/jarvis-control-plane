@@ -36,6 +36,7 @@ sha2 = "0.10"
 ureq = "2"
 arboard = { version = "3.6.1", default-features = false, features = ["image-data"] }
 image = { version = "0.25.6", default-features = false, features = ["png"] }
+url = "2.5.8"
 
 [target."cfg(windows)".dependencies]
 # Job objects: children of a PTY (node, git, nested shells) do not die with the

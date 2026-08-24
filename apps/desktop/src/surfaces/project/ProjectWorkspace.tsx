@@ -6,6 +6,7 @@ import { FilesView } from "../files/FilesView";
 import { ReviewView } from "../review/ReviewView";
 import { WorktreesView } from "../worktrees/WorktreesView";
 import { BrainView } from "../brain/BrainView";
+import { PreviewView } from "../preview/PreviewView";
 import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { AutonomyPanel } from "../settings/AutonomyPanel";
 import { HistoricalTabBadge } from "../../shell/GlobalSearch";
@@ -42,13 +43,14 @@ interface ProjectWorkspaceProps {
  * The list is the same kind of thing `App.tsx` keeps for the rail: an area that
  * is not built is absent from it, never a "coming soon" screen (§81).
  */
-export const AREAS = ["sessions", "files", "review", "worktrees", "brain", "settings"] as const;
+export const AREAS = ["sessions", "files", "review", "preview", "worktrees", "brain", "settings"] as const;
 export type Area = (typeof AREAS)[number];
 
 const AREA_LABEL: Record<Area, MessageKey> = {
   sessions: "project.sessions",
   files: "project.files",
   review: "project.review",
+  preview: "preview.title",
   worktrees: "project.worktrees",
   brain: "project.brain",
   settings: "project.settings",
@@ -514,6 +516,16 @@ export function ProjectWorkspace({
       {visited.has("review") && (
         <div className="workspace__area-body" data-visible={area === "review" || undefined}>
           <ReviewView projectId={project.id} active={area === "review"} />
+        </div>
+      )}
+
+      {/* Preview (§46) — the *see* step, right after Review's *inspect*.
+          It watches the **active session's** output for a dev server, which
+          is what makes it this product's preview rather than a browser: the
+          URL comes from the log we already keep, not from something typed. */}
+      {visited.has("preview") && (
+        <div className="workspace__area-body" data-visible={area === "preview" || undefined}>
+          <PreviewView sessionId={active} active={area === "preview"} />
         </div>
       )}
 
