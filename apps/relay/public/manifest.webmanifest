@@ -1,0 +1,13 @@
+{
+  "name": "J.A.R.V.I.S.",
+  "short_name": "J.A.R.V.I.S.",
+  "description": "Acompanhe seus agentes e responda quando eles precisarem de você.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0C0C0D",
+  "theme_color": "#0C0C0D",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
