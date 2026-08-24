@@ -65,6 +65,19 @@ pub fn raise(reason: Reason, confidence: Confidence, raised: Raise) -> bool {
     }
 }
 
+/// Record that an autopilot has taken, or given up, the seat (§32, §49).
+///
+/// Here rather than only in the command that starts a run, because a run also
+/// ends **on its own** — completed, out of turns, not converging — on a thread
+/// that has no `AppState` to reach for. Without this the flag would survive the
+/// run that set it, and the person who then takes the session over by hand
+/// would get no notification when their own turns finished.
+pub fn set_driven(session_id: &str, driven: bool) {
+    if let Some(bus) = BUS.get() {
+        bus.attention.set_driven(session_id, driven);
+    }
+}
+
 /// Whether a sink has been installed.
 pub fn is_installed() -> bool {
     BUS.get().is_some()

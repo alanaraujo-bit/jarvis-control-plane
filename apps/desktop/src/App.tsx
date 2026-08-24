@@ -251,7 +251,19 @@ export function App() {
         return;
       }
       if (notification.projectId) {
-        openProjectById(notification.projectId, { area: "sessions" });
+        // The session as well as the area. Landing on Sessions and leaving
+        // whichever tab happened to be active is not "take me to it" — with
+        // four terminals open it is a coin toss, and the whole promise of a
+        // notification is that it puts you in front of the thing it is about.
+        //
+        // `sessionProvider` is deliberately **not** passed. It is what tells
+        // ProjectWorkspace to open a *historical, read-only* tab (§51), and a
+        // notification is about a session that is very much alive. Passing it
+        // would reopen a live agent as a transcript.
+        openProjectById(notification.projectId, {
+          area: "sessions",
+          sessionId: notification.sessionId ?? undefined,
+        });
       }
     },
     [dismiss, openProjectById],

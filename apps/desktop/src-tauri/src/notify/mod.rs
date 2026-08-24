@@ -81,6 +81,14 @@ pub struct Attention {
     visible_sessions: Mutex<Vec<String>>,
     /// Whether the person wants to be told at all (§64).
     enabled: AtomicBool,
+    /// Sessions an autopilot is driving right now (§32).
+    ///
+    /// These finish a turn every minute or two for as long as the run lasts,
+    /// and **nobody asked to hear about any of them** — the person set the
+    /// mission to Unattended precisely so they would not have to watch. The run
+    /// announces itself once, when it stops, and that is the notification they
+    /// were promised.
+    driven_sessions: Mutex<Vec<String>>,
 }
 
 impl Default for Attention {
@@ -93,6 +101,7 @@ impl Default for Attention {
             focused: AtomicBool::new(true),
             visible_sessions: Mutex::new(Vec::new()),
             enabled: AtomicBool::new(true),
+            driven_sessions: Mutex::new(Vec::new()),
         }
     }
 }
@@ -112,6 +121,23 @@ impl Attention {
 
     pub fn is_enabled(&self) -> bool {
         self.enabled.load(Ordering::SeqCst)
+    }
+
+    /// An autopilot has taken the seat in front of this session (§32).
+    pub fn set_driven(&self, session_id: &str, driven: bool) {
+        let mut sessions = self.driven_sessions.lock();
+        sessions.retain(|id| id != session_id);
+        if driven {
+            sessions.push(session_id.to_string());
+        }
+    }
+
+    /// Whether an autopilot is driving this session.
+    pub fn is_driven(&self, session_id: Option<&str>) -> bool {
+        let Some(asked) = session_id else {
+            return false;
+        };
+        self.driven_sessions.lock().iter().any(|id| id == asked)
     }
 
     /// Whether the person is already watching this exact session.
@@ -336,6 +362,22 @@ mod model_tests {
         // watched, however visible it is within its own application.
         attention.set_focused(false);
         assert!(!attention.is_watching(Some("a")));
+    }
+
+    #[test]
+    fn drivenness_is_tracked_per_session_and_never_duplicated() {
+        let attention = Attention::default();
+        assert!(!attention.is_driven(Some("a")));
+
+        attention.set_driven("a", true);
+        // Setting it twice must not leave two entries behind, or clearing it
+        // once would leave the session marked driven forever.
+        attention.set_driven("a", true);
+        assert!(attention.is_driven(Some("a")));
+
+        attention.set_driven("a", false);
+        assert!(!attention.is_driven(Some("a")));
+        assert!(!attention.is_driven(None));
     }
 
     #[test]

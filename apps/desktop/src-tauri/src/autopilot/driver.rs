@@ -701,6 +701,10 @@ fn send(session: &LiveSession, text: &str) -> Result<(), ()> {
 
 fn finish(run: &Autopilot, db: &Database, project_id: &str, title: &str, code: &str) {
     *run.state.lock() = RunState::Finished;
+
+    // The seat is free again. Whatever the person types into this session from
+    // here is their own work, and its finished turns are news again (§49).
+    crate::notify::bus::set_driven(&run.session_id, false);
     record(
         db,
         code,

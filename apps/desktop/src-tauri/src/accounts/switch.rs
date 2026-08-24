@@ -264,6 +264,10 @@ pub fn relay_autopilot(
     // moment where the mission has no driver if launch succeeded.
     old_run.stop();
     crate::guardrail::sessions::set_driven(&state.session_dir(&old_run.session_id), false);
+    // The run moved to a new session; the old one is nobody's autopilot now
+    // and the new one is (§49).
+    state.attention.set_driven(&old_run.session_id, false);
+    state.attention.set_driven(&started.id, true);
     state.autopilots.remove(&old_run.session_id);
     state.autopilots.insert(std::sync::Arc::clone(&new_run));
 

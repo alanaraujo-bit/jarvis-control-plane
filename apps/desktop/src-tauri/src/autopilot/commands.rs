@@ -117,6 +117,9 @@ pub fn autopilot_start(
     )
     .map_err(|e| e.to_string())?;
 
+    // The seat is taken, so this session's finished turns stop being news (§49).
+    state.attention.set_driven(&started.id, true);
+
     let _ = crate::mission::store::set_status(&state.db, &mission_id, MissionStatus::Running, None);
 
     let run = super::start(
@@ -150,6 +153,8 @@ pub fn autopilot_stop(state: State<'_, AppState>, mission_id: String) -> IpcResu
         // The seat is free, so a guardrail can put a question to whoever is
         // now watching (§35).
         crate::guardrail::sessions::set_driven(&state.session_dir(&run.session_id), false);
+        // And the person is back in the seat, so finished turns are news again.
+        state.attention.set_driven(&run.session_id, false);
     }
     Ok(())
 }

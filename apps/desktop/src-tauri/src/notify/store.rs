@@ -73,6 +73,20 @@ pub fn raise(
         return None;
     }
 
+    // A driven session's finished turns are not news (§32).
+    //
+    // An unattended run finishes a turn every minute or two for as long as it
+    // lasts, and nobody asked to hear about any of them — setting a mission to
+    // Unattended is asking *not* to watch. The run announces itself once, when
+    // it stops, and that is the notification that was promised.
+    //
+    // Only `TurnEnded` is dropped. A driven agent that stops to ask a question
+    // is the one thing about a driven run worth interrupting somebody for: the
+    // run cannot continue until they answer.
+    if reason == Reason::TurnEnded && attention.is_driven(raised.session_id.as_deref()) {
+        return None;
+    }
+
     let preview = raised
         .preview
         .as_deref()
@@ -383,6 +397,63 @@ mod tests {
         assert!(raise_one(&db, &attention, "s1", "Do you want to create a.txt?").is_some());
         assert!(raise_one(&db, &attention, "s1", "Do you want to create b.txt?").is_some());
         assert_eq!(outstanding(&db).unwrap(), 2);
+    }
+
+    /// The noise an unattended run would otherwise produce.
+    ///
+    /// A driven agent finishes a turn every minute or two for as long as the
+    /// run lasts. Setting a mission to Unattended is asking *not* to watch, so
+    /// being told about each of those turns is the opposite of what was asked
+    /// for — and the run already announces itself once, when it stops.
+    #[test]
+    fn a_driven_sessions_finished_turns_are_not_raised() {
+        let db = db();
+        let attention = Attention::default();
+        attention.set_driven("s1", true);
+
+        let turn = |session: &str| {
+            raise(
+                &db,
+                &attention,
+                Reason::TurnEnded,
+                Confidence::Official,
+                Raise {
+                    session_id: Some(session.into()),
+                    preview: Some("did a thing".into()),
+                    ..Default::default()
+                },
+            )
+        };
+
+        assert!(turn("s1").is_none());
+        // A session nobody is driving is unaffected.
+        assert!(turn("s2").is_some());
+
+        // And when the run gives the seat back, its turns are news again.
+        attention.set_driven("s1", false);
+        assert!(turn("s1").is_some());
+    }
+
+    /// The one thing about a driven run that *is* worth interrupting somebody
+    /// for: it cannot continue until they answer.
+    #[test]
+    fn a_driven_session_that_stops_to_ask_is_still_raised() {
+        let db = db();
+        let attention = Attention::default();
+        attention.set_driven("s1", true);
+
+        let asked = raise(
+            &db,
+            &attention,
+            Reason::ProviderPrompt,
+            Confidence::Observed,
+            Raise {
+                session_id: Some("s1".into()),
+                preview: Some("Do you want to proceed?".into()),
+                ..Default::default()
+            },
+        );
+        assert!(asked.is_some());
     }
 
     #[test]

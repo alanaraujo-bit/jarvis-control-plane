@@ -171,13 +171,33 @@ export function ProjectWorkspace({
   }, [project.id, focusSessionId, focusSessionProvider, focusSessionTitle]);
 
   // Somebody asked to be taken somewhere. See `focusToken`.
+  //
+  // The area applies immediately; the session has to wait for a tab to exist.
+  // Arriving from a notification into a project that is not already open is a
+  // fresh mount, and `adopt` — which rebuilds the tabs for sessions still
+  // running — resolves a round trip later. Activating a session that is not yet
+  // a tab would leave the workspace pointing at nothing, so the request is held
+  // and applied when its tab shows up.
+  const [wantedSession, setWantedSession] = useState<string | undefined>();
   useEffect(() => {
     if (!focusToken || !focusArea) return;
     setVisited((seen) => (seen.has(focusArea) ? seen : new Set(seen).add(focusArea)));
     setArea(focusArea);
-    if (focusSessionId) setActive(project.id, focusSessionId);
+    setWantedSession(focusSessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusToken]);
+
+  useEffect(() => {
+    if (!wantedSession) return;
+    // Only a session this project actually has a tab for. One it no longer
+    // has — closed since the notification was raised — is simply not selected,
+    // and the person lands on Sessions, which is still where they were going.
+    if (projectTabs.some((tab) => tab.sessionId === wantedSession)) {
+      setActive(project.id, wantedSession);
+      setWantedSession(undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedSession, projectTabs.length]);
 
   const goToArea = (next: Area) => {
     setVisited((seen) => (seen.has(next) ? seen : new Set(seen).add(next)));
