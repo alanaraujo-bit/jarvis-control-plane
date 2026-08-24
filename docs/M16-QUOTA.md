@@ -195,3 +195,31 @@ alteração. A migração 11 continua congelada; esta é a **15**.
 `resetsAt` do Claude no transcript continua sendo unix em **segundos**. A sonda
 ao vivo devolve ISO 8601. `live::reset_to_ms` é a única fronteira que converte
 os três formatos, e tem um teste por formato.
+
+## 6. Uma regra que custou uma revisão
+
+**Ler cota não muda estado.** Uma versão intermediária de `accounts_refresh`
+chamava `switch::maybe_rotate` depois de sondar, com o argumento de que uma
+leitura fresca é o primeiro momento em que a política por limiar poderia agir
+sem esperar uma recusa. O argumento é verdadeiro e a implementação estava
+errada, pelo que ela pulava.
+
+`maybe_rotate` é chamado do **tailer de transcript**, e esse ponto de chamada
+não é incidental: ele sabe qual sessão observou a notícia de cota, então checa a
+confiança de pasta na conta de destino antes de mover, relaia um autopilot em
+execução para a conta nova, e registra a troca contra a sessão que a causou.
+Chamado de um refresh de relatório não há nada disso. A conta ativa mudaria a
+partir de um poll de cinco minutos atrás da barra de status — sem sessão, sem
+checagem de confiança, sem relé — e o próximo agente do Alan começaria numa
+conta que ele não escolheu e, numa pasta não confiada, estacionaria num diálogo
+de confiança sem ninguém para responder (item 25 do HANDOFF).
+
+A superfície continua dizendo que uma conta está perto do limite e qual tem mais
+folga. Decidir é um clique.
+
+**Escrita em `account_limit_events`, pelo caminho da sonda, é deduplicada.**
+`quota::record` não deduplica de propósito e isso está certo para o tailer, onde
+cada repetição é um turno que aconteceu. A sonda é um relógio: pergunta a cada
+cinco minutos se a pessoa está usando a conta, e um fim de semana parado
+escreveria mil linhas idênticas dizendo que nada aconteceu. Toda *mudança*
+continua registrada.

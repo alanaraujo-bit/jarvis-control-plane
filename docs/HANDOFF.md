@@ -114,7 +114,7 @@ worth knowing which is which before assuming one is broken:
   commit. See `docs/M14-NOTIFICATIONS.md`.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`,
-version **0.3.0**.
+version **0.4.0** (0.3.0 until the next release is installed).
 
 ### Working and verified in the installed app
 

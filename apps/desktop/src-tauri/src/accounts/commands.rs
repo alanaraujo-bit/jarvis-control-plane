@@ -116,21 +116,27 @@ pub async fn accounts_refresh(
     let accounts = super::list(&state.db)?;
     super::live::refresh_all(&state.db, &accounts);
 
-    // A fresh reading is the moment the automatic policy can finally act on
-    // something other than a refusal. Before live quota existed the only
-    // trigger was a turn being refused mid-session, which meant "switch before
-    // it runs out" could not fire until it had already run out.
+    // **Nothing here rotates accounts, deliberately.**
     //
-    // Only accounts that are active right now are considered, and only when
-    // the person turned the policy on. A switch changes which account the
-    // *next* session starts on and nothing else; it is one click to undo, and
-    // it is written to the activity log by `set_active`'s callers.
-    if super::switch::policy(&state.db) != super::switch::AutoSwitchPolicy::Off {
-        for account in accounts.iter().filter(|a| a.active) {
-            let _ = super::switch::maybe_rotate(&state.db, &account.id);
-        }
-    }
-
+    // It is tempting: a fresh reading is the first moment the threshold policy
+    // could act on something other than a refusal, and before live quota the
+    // "switch before it runs out" setting could not fire until it had already
+    // run out. An earlier version of this function did exactly that, and it was
+    // wrong for reasons that only show up in the paths it skips.
+    //
+    // `switch::maybe_rotate` is called from the **transcript tailer**
+    // (`session::transcript`), and that call site is not incidental: it knows
+    // which session observed the quota news, so it can check the destination
+    // account's folder trust before moving, relay a running autopilot onto the
+    // new account, and record the switch against the session that caused it.
+    // Calling it from a report refresh has none of that context. It would move
+    // the active account from a five-minute background poll behind the status
+    // bar — no session, no trust check, no relay — and the person's next agent
+    // would start somewhere they never chose and, on an untrusted folder, park
+    // at a trust prompt with nobody to answer it (HANDOFF item 25).
+    //
+    // Reading quota must not change state. The surface still says an account
+    // is nearing its limit and which one has more room; deciding is a click.
     report(&state, project_id.as_deref())
 }
 

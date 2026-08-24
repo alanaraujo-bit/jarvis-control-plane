@@ -1036,23 +1036,63 @@ pub fn record_reading(db: &Database, account_id: &str, reading: &LiveReading) {
             "weekly" => "weekly",
             other => other,
         };
-        super::quota::record(
-            db,
-            account_id,
-            None,
-            &super::quota::LimitObservation {
-                window: stored_window.to_string(),
-                status: match window.severity.as_str() {
-                    "exhausted" => "rejected",
-                    "critical" | "warning" => "warning",
-                    _ => "ok",
-                }
-                .to_string(),
-                resets_at_ms: window.resets_at_ms,
-                percent: Some(window.percent_used),
-                detail: None,
-            },
-        );
+        let observation = super::quota::LimitObservation {
+            window: stored_window.to_string(),
+            status: match window.severity.as_str() {
+                "exhausted" => "rejected",
+                "critical" | "warning" => "warning",
+                _ => "ok",
+            }
+            .to_string(),
+            resets_at_ms: window.resets_at_ms,
+            percent: Some(window.percent_used),
+            detail: None,
+        };
+
+        // Skip a row that repeats what the newest one already says.
+        //
+        // `quota::record` is deliberately un-deduplicated, and that is right for
+        // the transcript tailer, where every restatement is a turn that happened
+        // and the repeats *are* the record of how a window filled. This path is
+        // a clock: it asks every five minutes whether the person is using the
+        // account or not, and an idle weekend would otherwise write a thousand
+        // identical rows saying nothing happened.
+        //
+        // Every *change* is still recorded, so the history keeps its shape and
+        // `implied_allowance` keeps its samples. What is dropped is only the
+        // restatement of a number already on file.
+        if unchanged(db, account_id, &observation) {
+            continue;
+        }
+        super::quota::record(db, account_id, None, &observation);
+    }
+}
+
+/// Whether the newest recorded row for this window already says this.
+///
+/// A percentage is whole-numbered by both providers, so anything under half a
+/// point apart is the same statement arriving twice rather than a change.
+fn unchanged(db: &Database, account_id: &str, observation: &super::quota::LimitObservation) -> bool {
+    let latest: Option<(String, Option<f64>)> = db
+        .with(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT status, percent FROM account_limit_events
+                      WHERE account_id = ?1 AND window = ?2
+                      ORDER BY ts_ms DESC LIMIT 1",
+                    params![account_id, observation.window],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?)
+        })
+        .ok()
+        .flatten();
+
+    match (latest, observation.percent) {
+        (Some((status, Some(previous))), Some(current)) => {
+            status == observation.status && (previous - current).abs() < 0.5
+        }
+        _ => false,
     }
 }
 
@@ -1340,6 +1380,56 @@ mod tests {
         for field in ["readAtMs", "percentUsed", "resetsAtMs", "bindingSource", "rawKind"] {
             assert!(json.contains(&format!("\"{field}\"")), "missing {field}");
         }
+    }
+
+    /// The probe runs on a clock, so an idle account must not fill the history
+    /// with rows saying nothing happened — while every real change still lands.
+    #[test]
+    fn a_clock_driven_reading_records_changes_and_not_restatements() {
+        let db = Database::open_in_memory().unwrap();
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO provider_accounts
+                     (id, provider, label, config_dir, adopted, signed_in, active,
+                      paused, position, created_at)
+                 VALUES ('a', 'claude-code', 'a', 'C:/a', 0, 1, 1, 0, 0, 1)",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let count = || {
+            db.with(|conn| {
+                Ok(conn
+                    .query_row("SELECT COUNT(*) FROM account_limit_events", [], |r| {
+                        r.get::<_, i64>(0)
+                    })
+                    .optional()?
+                    .unwrap_or(0))
+            })
+            .unwrap()
+        };
+
+        let mut reading = claude();
+        record_reading(&db, "a", &reading);
+        let after_first = count();
+        assert!(after_first >= 3, "the first reading is all news");
+
+        // The same answer, twelve times, as an idle afternoon would produce.
+        for _ in 0..12 {
+            record_reading(&db, "a", &reading);
+        }
+        assert_eq!(
+            count(),
+            after_first,
+            "restating a number already on file is not an event"
+        );
+
+        // Something actually moved.
+        reading.windows[1].percent_used = 91.0;
+        record_reading(&db, "a", &reading);
+        assert_eq!(count(), after_first + 1, "a change is always recorded");
     }
 
     #[test]
