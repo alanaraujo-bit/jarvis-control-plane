@@ -95,32 +95,25 @@ adapter, which is verified against real recorded rollout transcripts.
 ---
 
 ## B5 — `pnpm tauri build`'s NSIS step hangs on this machine
-**Status:** Blocked on investigation. A workaround exists and is not urgent.
+**Status: RESOLVED, 2026-08-24.** The failure was not reproduced by the M13
+release build.
 
-Two full `pnpm tauri build` runs both hung the same way: the Rust binary
-compiled in about two minutes each time, `installer.nsi` was generated in
-`target/release/nsis/`, and then nothing happened — no installer `.exe`, no
-`makensis.exe` process ever appeared in the process tree, and the whole
-process tree sat at effectively zero CPU for 25+ minutes both times. Both runs
-had to be killed by hand.
+`pnpm tauri build` compiled the release binary, regenerated
+`target/release/nsis/x64/installer.nsi`, launched `makensis.exe` and produced
+`J.A.R.V.I.S_0.2.0_x64-setup.exe` in one uninterrupted run. The NSIS process
+was observed consuming CPU rather than sitting stalled. The resulting binary
+reports file and product version `0.2.0`; the installer is 6,738,870 bytes and
+its updater signature was generated successfully.
 
-**Impact: small.** `pnpm tauri build --no-bundle` produces the same
-`jarvis-desktop.exe` the installer would package, in the same ~2 minutes,
-skipping only the NSIS step — that is what this session used to verify Global
-Search (§51) against the real app. Day-to-day development and verification are
-unaffected.
+The updater key has an empty password. On this PowerShell host, assigning an
+empty environment variable removes it, so Tauri reached an interactive
+password prompt after the bundle was ready. Running `tauri signer sign` with
+`--password=` and absolute key/artifact paths completed the signature without
+rebuilding. This was signing transport, not an NSIS failure.
 
-**What actually needs it:** producing a real, installable `.exe` — which is
-gated on B1 (code signing) anyway, so nothing ships through this path yet
-regardless.
-
-**What I need from you, when you have a spare half hour:** check whether
-`makensis.exe` is on this machine and runs standalone against the generated
-script (`makensis apps\desktop\src-tauri\target\release\nsis\x64\installer.nsi`
-from a plain terminal, outside this tool), and whether Windows Defender's
-real-time scanner is holding a lock on the freshly-built multi-megabyte binary
-long enough to starve NSIS of the read it needs. Both are guesses from the
-symptom, not confirmed causes.
+B1 still applies independently: the updater artifact is cryptographically
+signed for Tauri integrity checks, but the Windows executable has no
+Authenticode certificate and SmartScreen may show “unknown publisher”.
 
 ---
 
