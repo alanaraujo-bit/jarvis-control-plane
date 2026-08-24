@@ -74,7 +74,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**404 tests** (395 Rust — 388 run, 7 intentionally `#[ignore]`d because they
+**416 tests** (407 Rust — 400 run, 7 intentionally `#[ignore]`d because they
 need a real `claude` CLI, a real microphone, or this machine's own recorded
 session history — 9 i18n) · all green.
 
@@ -115,6 +115,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Split panes (§20)** | up to four terminals at once, three layout presets; splitting changes each pane's CSS box only, so no terminal is re-parented and no scrollback is lost |
 | **Scrollback search (§20)** | Ctrl+F over the terminal, match-case, live counter, overview ruler only while searching |
 | **Image paste (§22)** | Ctrl+V writes the clipboard image into the session's own directory and types the path; a chip with a hover preview, never a bare filename |
+| **Preview (§46)** | the dev server URL read from the session's own output, opened in a separate window (never an iframe — the CSP forbids it and widening it would be an escalation), loopback only, with Reload for a server that has no hot reload |
 | **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
 | **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
 
@@ -327,7 +328,7 @@ see next steps.
 
 ### Not built — deliberately absent, not stubbed
 
-Preview (§46), mobile PWA (§55), cloud (§59).
+Mobile PWA (§55), cloud (§59).
 
 Also absent by choice: **push and pull**. Review commits but does not talk to a
 remote — see section 7.

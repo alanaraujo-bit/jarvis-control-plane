@@ -1066,3 +1066,77 @@ through a real microphone has not happened on this build — the ear test D29
 already owed (see HANDOFF §7) covers the sound cues and the two dictation
 bug fixes, not this feature, since it did not exist when that debt was
 recorded. Both are now owed together.
+
+---
+
+## D32 — Preview is a separate window pointed at loopback, and the URL comes from the session's own output
+
+M8's roadmap entry was a bare heading with no specification, so the first
+decision was what Preview *is*. The answer that shaped everything else: it is
+**not a browser in a tab**. The loop §46 exists to close is
+ask → modify → run → **see** → inspect → fix, and every step but *see*
+already existed here — an agent edits files (§41/§42), runs a dev server in a
+real terminal (§21), and the diff is in Review (§43). What was missing was
+looking at the result, which meant leaving the application.
+
+A browser embedded in the app would technically close that loop and would add
+nothing this product knows. **What it knows is which session started the
+server**, because the PTY output is already in the log (§23). So `detect`
+reads the URL out of the same stream the terminal is drawing: no port to
+configure, no setting to forget, and no chance of previewing a different
+project's server that happens to be running.
+
+### Reading output, not watching ports
+
+Enumerating listening sockets was the alternative. It finds *a* server and
+cannot say which one this session started, and a developer's machine usually
+has several — a stale `next dev`, a database, something a colleague's script
+left running. The output is the honest source: this text was printed by this
+session's own process. Ports 5432/3306/6379/27017/9229 are excluded anyway,
+because a Postgres banner has the same shape as a dev server's and is not a
+web page.
+
+### A separate window, not an iframe
+
+The iframe is the obvious first choice and does not work: this app's CSP is
+`default-src 'self'`, so a `localhost:5173` frame is blocked outright.
+
+The important part is what *not* to do about that. Widening the CSP to allow
+it would put the dev server's page — code the agent just wrote, or a
+dependency it installed — in a context adjacent to the surface that can invoke
+every Tauri command in this application. That is a real escalation in exchange
+for a layout convenience. A separate `WebviewWindow` is its own webview with
+its own (empty) capability set, which is the correct boundary, and it happens
+to give people what they actually want anyway: the preview *beside* the
+editor rather than squeezed inside it.
+
+### Loopback is a security boundary
+
+Preview renders whatever it is pointed at inside a window this application
+owns. Terminal output is **not trustworthy input** — a file an agent prints, a
+dependency's postinstall banner, an error message quoting a URL. If any string
+in that stream could choose what Preview displays, then any program a session
+runs could.
+
+So `detect` only ever offers loopback, and `preview_open` **re-checks the URL
+it is handed** rather than trusting the webview that sent it: the renderer got
+it from `preview_detect` in the ordinary case, but a command that opens a
+window must not depend on its caller having been careful. It parses with
+`url::Url` rather than matching substrings, and applies the *same*
+`is_loopback_host` the scanner filtered with — two spellings of "is this
+local" that disagree is exactly how a check gets bypassed.
+`127.0.0.1.evil.com` and `localhost.evil.com` are both in the test.
+
+### Nothing opens by itself
+
+Detection is automatic; opening is always a click. An agent restarting a dev
+server must never yank a window onto someone's screen, and a surface that
+opens things unbidden is one people learn to distrust. The same reasoning as
+§54's "never auto-submitted".
+
+### Reload exists because hot reload is not universal
+
+A dev server with HMR updates itself and the button is redundant. One without
+it — a static server, a Rust binary, a Python app — does not, and without a
+reload the preview silently shows the previous version. That is worse than no
+preview: it is a preview you cannot trust. The button is the difference.

@@ -376,7 +376,46 @@ magnitude, the label carries identity. Colouring by rank would double-encode
 length as hue. A single-category breakdown drops its bar entirely — a full-width
 rectangle restating the number next to it is not a chart.
 
-## M8 — Preview / Browser (§46/§47)
+## M8 — Preview / Browser (§46/§47)  ✅
+- [x] The dev server's URL is read from the **session's own output** — nothing
+      to configure, no port to guess. When an agent runs `npm run dev`, the
+      address it printed is already in the log this product keeps (§23).
+- [x] Loopback only, enforced in the command and not just the scanner
+- [x] Opens in a separate window, not an iframe (see below)
+- [x] Reload, for a dev server without hot reload — the "did that actually
+      change anything?" button
+- [x] Offers a choice when a session serves more than one thing
+- [x] Nothing opens by itself; detection is automatic, opening is a click
+
+M8's entry here was a bare heading with no spec, so the first decision was
+what Preview *is*. It is **not a browser in a tab**. The loop is
+ask → modify → run → **see** → inspect → fix, and every step but *see*
+already existed: an agent edits files (§41/§42), runs a server in a real
+terminal (§21), and the diff is in Review (§43). The missing step meant
+leaving the app and losing the one thing this product knows that a browser
+cannot — **which session started this server**.
+
+### Two decisions worth keeping
+- **A separate window, not an iframe.** The iframe was the obvious first
+  choice and does not work: the app's CSP is `default-src 'self'`. Widening
+  it would put a dev server's page in a context adjacent to the surface that
+  can invoke every Tauri command here — a real escalation for a layout
+  convenience. A separate webview has its own empty capability set.
+- **Loopback is a security boundary, not tidiness.** Preview renders inside
+  our own window, so pointing it at an arbitrary host because a string
+  appeared in terminal output would let any program a session runs choose
+  what this product displays. `preview_open` re-checks with `url::Url` and
+  the *same* `is_loopback_host` the scanner uses — tested against
+  `127.0.0.1.evil.com` and `localhost.evil.com`, which a prefix check
+  waves through.
+
+**Verified end to end in a real build**, against a real dev server: `npx
+serve` printed Local and Network addresses, Preview offered `localhost:4173`
+and silently excluded the LAN address, Open rendered the real page in its own
+window, the file was then edited on disk and **Reload showed the change** —
+the whole §46 loop, closed. Both themes, both languages, plus the empty
+state and the follow-the-active-session behaviour.
+
 ## M9 — Onboarding (§13), Settings (§64)  ~
 - [x] Welcome screen shown once per install, gated on a `settings` row
 - [x] Reuses the environment scan (§14) and `openFolder`, no bespoke picker
