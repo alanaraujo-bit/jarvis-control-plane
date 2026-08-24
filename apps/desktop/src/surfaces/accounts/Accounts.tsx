@@ -547,13 +547,26 @@ function LiveStamp({ card, now }: { card: AccountCard; now: number }) {
     );
   }
 
+  // A settled "nothing here" is already the body of the card, so repeating the
+  // sentence in the stamp would say the same thing twice on a card that has
+  // almost nothing else on it. The stamp keeps only what the body cannot: when
+  // it was asked, and the way to ask again.
+  if (live.state === "unavailable") {
+    return (
+      <div className="accounts__stamp" data-tone="idle">
+        <span>{readingAge(live.readAtMs, now, t)}</span>
+        {retry}
+      </div>
+    );
+  }
+
   return (
-    <div className="accounts__stamp" data-tone={live.state === "failed" ? "warn" : "idle"}>
-      {live.state === "failed" && <AlertTriangle size={11} aria-hidden="true" />}
+    <div className="accounts__stamp" data-tone="warn">
+      <AlertTriangle size={11} aria-hidden="true" />
       <span>
         {LIVE_REASONS.has(live.reason)
           ? t(`accounts.live.reason.${live.reason}` as MessageKey)
-          : t(`accounts.live.${live.state}Generic` as MessageKey)}
+          : t("accounts.live.failedGeneric")}
       </span>
       {retry}
     </div>
@@ -572,13 +585,28 @@ function AccountCardView({
   const t = useT();
   const { locale } = useI18n();
   const { account, quota } = card;
+  // A provider that just told us nobody is signed in here has said more than
+  // "we have not checked". Seen on screen: a card whose body read "not signed
+  // in" wearing a "Not verified" badge, which are two different claims about
+  // the same directory.
   const verification =
-    account.checkedAt === null ? "unverified" : account.signedIn ? quota.health : "signedOut";
+    quota.live?.state === "unavailable" && quota.live.reason === "signedOut"
+      ? "signedOut"
+      : account.checkedAt === null
+        ? "unverified"
+        : account.signedIn
+          ? quota.health
+          : "signedOut";
 
   const reading = quota.live?.state === "ok" ? quota.live.reading : null;
   const windows = reading ? ordered(reading.windows) : [];
   const binding = windows.find((window) => window.binding) ?? windows[0] ?? null;
   const rest = windows.filter((window) => window !== binding);
+
+  // A *settled* negative: the provider was asked and said there is no quota
+  // here. Distinct from "the probe failed" and from "we have not asked", both
+  // of which still deserve whatever the history can offer.
+  const settled = quota.live?.state === "unavailable" ? quota.live.reason : null;
 
   return (
     <article
@@ -605,7 +633,20 @@ function AccountCardView({
             {account.adopted && <span>{t("accounts.machineAccount")}</span>}
           </div>
         </div>
-        <span className="accounts__health" data-health={verification}>
+        {/* The status dot takes its colour from the binding window when there
+            is a live reading. Seen on screen: a card at 97% used had a red dial
+            beside an amber pill, because health has one "nearing" band and the
+            dial has two. Two colours for one fact reads as a bug even when both
+            sentences are true. */}
+        <span
+          className="accounts__health"
+          data-health={verification}
+          data-band={
+            binding && verification !== "signedOut" && verification !== "unverified"
+              ? severityBand(binding.severity, binding.percentUsed)
+              : undefined
+          }
+        >
           <span className="accounts__health-dot" />
           {t(`accounts.health.${verification}` as MessageKey)}
         </span>
@@ -622,6 +663,17 @@ function AccountCardView({
             </ul>
           )}
         </>
+      ) : settled ? (
+        /* The provider answered and the answer was "nothing to report here".
+           Drawing the derived ladder anyway put two empty meters reading
+           "allowance unknown" above the one sentence that explains why — which
+           is the same uninformative emptiness this whole milestone exists to
+           remove, reappearing on the cards where the answer is actually known. */
+        <p className="accounts__settled">
+          {LIVE_REASONS.has(settled)
+            ? t(`accounts.live.reason.${settled}` as MessageKey)
+            : t("accounts.live.unavailableGeneric")}
+        </p>
       ) : (
         <ul className="accounts__rows">
           {quota.windows.map((window) => (

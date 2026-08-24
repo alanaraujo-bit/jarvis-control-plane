@@ -194,6 +194,7 @@
   container-type: inline-size;
   position: relative;
   min-width: 0;
+  max-width: 660px;
   padding: var(--space-6);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -280,6 +281,8 @@
 .accounts__health[data-health="exhausted"] .accounts__health-dot,
 .accounts__health[data-health="signedOut"] .accounts__health-dot { background: var(--state-danger); }
 .accounts__health[data-health="unverified"] .accounts__health-dot { background: var(--state-waiting); }
+.accounts__health[data-band] .accounts__health-dot { background: var(--accounts-band); }
+.accounts__health[data-band] { color: var(--accounts-band); }
 
 /* ==========================================================================
    Quota
@@ -381,6 +384,7 @@
 }
 .accounts__binding-tag[data-source="derived"] {
   border-style: dashed;
+  border-color: color-mix(in srgb, var(--state-warning) 45%, transparent);
   color: var(--state-warning);
 }
 
@@ -442,6 +446,7 @@
 .gauge,
 .quotabar,
 .accounts__row-value,
+.accounts__health,
 .accounts__summary {
   --accounts-band: var(--state-success);
 }
@@ -516,6 +521,19 @@
 .accounts__row--derived[data-confidence="observed"] .quotabar__fill {
   background: var(--accounts-meter-observed);
   background-image: none;
+}
+
+/* The card body when the provider has settled the question: one sentence,
+   given the room the meters would have taken rather than squeezed under them. */
+.accounts__settled {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  text-align: center;
 }
 
 .accounts__unknown-line {

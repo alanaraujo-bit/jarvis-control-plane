@@ -182,6 +182,12 @@ pub struct ProbedIdentity {
 }
 
 /// What a probe attempt produced.
+/// `rename_all` on an enum renames the **variants**, not the fields inside
+/// them, so each variant that has fields carries its own. Without the inner
+/// attribute `read_at_ms` crossed into the webview under that name while the
+/// surface read `readAtMs`, and the card rendered "read NaNmin ago" — visible
+/// only by opening the panel on an account that was signed out, which is why
+/// it survived a green typecheck on both sides.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum LiveStatus {
@@ -190,9 +196,11 @@ pub enum LiveStatus {
     /// The provider answered, and the answer was "no live quota for this
     /// account" — signed out, or on a plan where subscription limits do not
     /// apply. A definite negative, not a failure.
+    #[serde(rename_all = "camelCase")]
     Unavailable { reason: String, read_at_ms: i64 },
     /// The probe could not be completed. A stable reason id, never the raw
     /// error text, because it is read by a person in their own language.
+    #[serde(rename_all = "camelCase")]
     Failed { reason: String, read_at_ms: i64 },
 }
 
@@ -1302,6 +1310,36 @@ mod tests {
         assert_eq!(severity_from_percent(99.0), "critical");
         assert_eq!(severity_from_percent(86.0), "warning");
         assert_eq!(severity_from_percent(20.0), "normal");
+    }
+
+    /// The surface reads these fields by name, and TypeScript cannot check a
+    /// name that only exists at runtime. This test is the only thing standing
+    /// between a serde attribute and a card that reads "read NaNmin ago".
+    #[test]
+    fn every_status_crosses_to_the_surface_in_camel_case() {
+        for status in [
+            LiveStatus::Unavailable {
+                reason: "signedOut".into(),
+                read_at_ms: 1_787_613_600_000,
+            },
+            LiveStatus::Failed {
+                reason: "timeout".into(),
+                read_at_ms: 1_787_613_600_000,
+            },
+        ] {
+            let json = serde_json::to_string(&status).unwrap();
+            assert!(
+                json.contains("\"readAtMs\""),
+                "the surface reads readAtMs; got {json}"
+            );
+            assert!(!json.contains("read_at_ms"), "got {json}");
+        }
+
+        let reading = claude();
+        let json = serde_json::to_string(&LiveStatus::Ok { reading }).unwrap();
+        for field in ["readAtMs", "percentUsed", "resetsAtMs", "bindingSource", "rawKind"] {
+            assert!(json.contains(&format!("\"{field}\"")), "missing {field}");
+        }
     }
 
     #[test]
