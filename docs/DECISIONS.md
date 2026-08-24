@@ -1405,3 +1405,31 @@ guardrail hook subprocess never have to care.
 screen or in its own reply, and translating an agent's question would be
 inventing one. It is the only untranslated string the surface shows, and it is
 the one worth reading.
+
+### Addendum — a driven run is silent until it stops
+
+Found by reading the raise sites back rather than by running one, and it would
+have been the feature's worst behaviour in exactly the situation it exists for.
+
+`TurnEnded` fires for every turn, and an unattended run (§32) is a sequence of
+turns — twenty of them under the default budget. Left alone, the notification
+that was supposed to let somebody walk away would have interrupted them twenty
+times while they were away, and then once more when the run actually finished:
+the only one they had asked for, arriving at the bottom of a pile of nineteen
+they had not.
+
+**Setting a mission to Unattended is asking not to watch it.** So `Attention`
+tracks which sessions an autopilot is driving, and `TurnEnded` is dropped for
+those. The run announces itself once, when it stops, with its own §34 reason.
+
+Only that one signal is dropped. A driven agent that stops to **ask** something
+is the one thing about an unattended run worth interrupting somebody for,
+because the run genuinely cannot continue until they answer — that is the whole
+of §34's "nobody to ask" case, arriving as a notification instead of as a
+silence.
+
+The flag is cleared from `driver::finish`, through the bus, rather than only
+from the `autopilot_stop` command. A run also ends **on its own** — completed,
+out of turns, not converging — on a thread that has no `AppState` to reach for,
+and a flag that outlived the run that set it would silence the person who then
+took that session over by hand.

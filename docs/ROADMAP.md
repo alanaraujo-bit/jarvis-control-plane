@@ -678,6 +678,17 @@ reply, from the installed build.
    area is state read once at mount, and `App` keys the workspace on the
    project id, so re-opening the same project is not a remount.
 
+### One found by reading, not by running
+
+**An unattended run would have notified once per turn.** Twenty notifications
+under the default budget, while the person was away by choice, and then a
+twenty-first when the run actually stopped — the only one they had asked for,
+at the bottom of a pile. Setting a mission to Unattended is asking not to watch
+it, so a driven session’s finished turns are dropped. Its *questions* are not:
+a driven agent that stops to ask is the one thing about an unattended run worth
+interrupting somebody for, because it cannot continue until they answer. See
+D35’s addendum.
+
 ### Deliberately not in M14
 
 Push to a phone. `ROADMAP` already called it its own scope, and it needs a
