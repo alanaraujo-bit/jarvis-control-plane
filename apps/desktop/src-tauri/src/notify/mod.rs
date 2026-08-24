@@ -166,15 +166,6 @@ impl Kind {
             _ => Self::Finished,
         }
     }
-
-    /// Whether this kind survives being seen.
-    ///
-    /// A question is still waiting after you glance at the list; a finished
-    /// turn is over. This is what lets the badge mean "things still wanting
-    /// you" rather than "things you have not scrolled past".
-    pub fn is_outstanding(self) -> bool {
-        matches!(self, Self::NeedsApproval)
-    }
 }
 
 /// Why the agent stopped. A stable identifier the surface localises (§65).
@@ -191,6 +182,8 @@ pub enum Reason {
     GuardrailPending,
     /// A guardrail handed the decision to the provider's own prompt (§35).
     GuardrailAsked,
+    /// A guardrail refused an operation and the agent could not go on (§35).
+    GuardrailBlocked,
     /// The provider reported a finished turn.
     TurnEnded,
     /// A mission reached completed, with its criteria verified (§30).
@@ -213,6 +206,7 @@ impl Reason {
             Self::ProviderPrompt => "providerPrompt",
             Self::GuardrailPending => "guardrailPending",
             Self::GuardrailAsked => "guardrailAsked",
+            Self::GuardrailBlocked => "guardrailBlocked",
             Self::TurnEnded => "turnEnded",
             Self::MissionCompleted => "missionCompleted",
             Self::RunCompleted => "runCompleted",
@@ -228,6 +222,7 @@ impl Reason {
             "providerPrompt" => Self::ProviderPrompt,
             "guardrailPending" => Self::GuardrailPending,
             "guardrailAsked" => Self::GuardrailAsked,
+            "guardrailBlocked" => Self::GuardrailBlocked,
             "missionCompleted" => Self::MissionCompleted,
             "runCompleted" => Self::RunCompleted,
             "sessionEnded" => Self::SessionEnded,
@@ -246,7 +241,10 @@ impl Reason {
             Self::TurnEnded | Self::MissionCompleted | Self::RunCompleted | Self::SessionEnded => {
                 Kind::Finished
             }
-            Self::SessionFailed | Self::MissionBlocked | Self::RunStopped => Kind::Stopped,
+            Self::SessionFailed
+            | Self::MissionBlocked
+            | Self::RunStopped
+            | Self::GuardrailBlocked => Kind::Stopped,
         }
     }
 }
@@ -307,6 +305,7 @@ mod model_tests {
             Reason::ProviderPrompt,
             Reason::GuardrailPending,
             Reason::GuardrailAsked,
+            Reason::GuardrailBlocked,
             Reason::TurnEnded,
             Reason::MissionCompleted,
             Reason::RunCompleted,
@@ -320,13 +319,6 @@ mod model_tests {
         for kind in [Kind::NeedsApproval, Kind::Finished, Kind::Stopped] {
             assert_eq!(Kind::parse(kind.as_str()), kind);
         }
-    }
-
-    #[test]
-    fn only_a_question_stays_outstanding_once_it_has_been_seen() {
-        assert!(Kind::NeedsApproval.is_outstanding());
-        assert!(!Kind::Finished.is_outstanding());
-        assert!(!Kind::Stopped.is_outstanding());
     }
 
     #[test]

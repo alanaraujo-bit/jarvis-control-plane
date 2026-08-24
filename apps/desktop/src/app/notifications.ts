@@ -24,6 +24,7 @@ export type NotificationReason =
   | "providerPrompt"
   | "guardrailPending"
   | "guardrailAsked"
+  | "guardrailBlocked"
   | "turnEnded"
   | "missionCompleted"
   | "runCompleted"
@@ -230,11 +231,6 @@ export function setVisibleSessions(ids: string[]) {
   if (same) return;
   visibleSessions = ids;
   syncAttention();
-}
-
-/** Whether this notification is still asking for something. */
-export function isOutstanding(notification: Notification): boolean {
-  return notification.kind === "needsApproval" && notification.actedAt === null;
 }
 
 /** The status-dot vocabulary a kind belongs to, so it reads like the rest (§7). */

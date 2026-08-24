@@ -273,6 +273,16 @@ pub fn spawn_watcher(
         .expect("spawn guardrail watcher");
 }
 
+/// Whether a guard decision left the agent unable to go on (§49).
+///
+/// Extracted so it can be tested: the difference between this and
+/// `status == Denied` is one notification per policy refusal, which for
+/// somebody who has set an operation to Never allow is a notification every
+/// time the guardrail does exactly what they asked for.
+fn stops_the_agent(status: Status, reason: &str) -> bool {
+    status == Status::Denied && reason == policy::reason::NOBODY_TO_ASK
+}
+
 /// Take one decision the guard made into the session log and the database.
 fn absorb(
     session: &LiveSession,
@@ -328,17 +338,23 @@ fn absorb(
         );
     }
 
-    // A refusal is also the end of what that agent was going to do, and the
-    // person it stopped is not necessarily at the screen (§49).
+    // The one refusal worth interrupting somebody for (§49).
     //
-    // A guardrail set to *ask* is deliberately **not** raised here. Claude Code
-    // then draws its own permission question on the terminal, which `notify`'s
-    // own watcher already sees — with a better preview, because it reads what
-    // the provider actually wrote. Raising both would notify twice for one
-    // question, which is precisely the noise that makes people stop reading.
-    if status == Status::Denied {
+    // Not every denial. A policy that says *never* is the guardrail doing its
+    // job: the agent is told no, reports it, and carries on, and that is
+    // already in Activity. `NOBODY_TO_ASK` is the different case — the rule
+    // said *ask*, there was nobody who could answer, and the agent is now
+    // stopped on something only a person can unstick.
+    //
+    // A guardrail set to *ask* with somebody available is deliberately not
+    // raised either: Claude Code then draws its own question on the terminal,
+    // which `notify`'s watcher already sees with a better preview, because it
+    // reads what the provider actually wrote. Raising both would notify twice
+    // for one question, which is precisely the noise that makes people stop
+    // reading.
+    if stops_the_agent(status, &record.reason) {
         crate::notify::bus::raise(
-            crate::notify::Reason::MissionBlocked,
+            crate::notify::Reason::GuardrailBlocked,
             // The guard reported its own decision (§28).
             crate::session::event::Confidence::Official,
             crate::notify::Raise {
@@ -376,6 +392,22 @@ fn absorb(
 mod tests {
     use super::*;
     use crate::guardrail::policy::Decision;
+
+    /// The line between "the guardrail did its job" and "somebody has to come
+    /// and unstick this" (§49).
+    ///
+    /// A policy set to Never allow refuses, the agent is told, and it carries
+    /// on — notifying there would interrupt somebody every time the setting
+    /// they chose is honoured. `NOBODY_TO_ASK` is the other case: the rule
+    /// said *ask*, there was no one to ask, and nothing moves until a person
+    /// changes something.
+    #[test]
+    fn only_a_refusal_nobody_could_answer_is_worth_interrupting_somebody_for() {
+        assert!(stops_the_agent(Status::Denied, policy::reason::NOBODY_TO_ASK));
+        assert!(!stops_the_agent(Status::Denied, policy::reason::POLICY_DENIES));
+        assert!(!stops_the_agent(Status::Asked, policy::reason::ASKED_HUMAN));
+        assert!(!stops_the_agent(Status::Allowed, policy::reason::POLICY_ALLOWS));
+    }
 
     fn db() -> Database {
         let db = Database::open_in_memory().unwrap();

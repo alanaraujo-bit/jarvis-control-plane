@@ -715,6 +715,7 @@ export const ptBR: Record<MessageKey, string> = {
   "notify.title.providerPrompt": "{agent} está perguntando",
   "notify.title.guardrailPending": "Um guardrail está segurando isto",
   "notify.title.guardrailAsked": "{agent} precisa de aprovação",
+  "notify.title.guardrailBlocked": "Um guardrail parou o {agent}",
   "notify.title.turnEnded": "{agent} terminou",
   "notify.title.missionCompleted": "Missão concluída",
   "notify.title.runCompleted": "Chegou ao fim sozinho",

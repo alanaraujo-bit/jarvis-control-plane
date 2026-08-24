@@ -214,10 +214,14 @@ pub fn recent(db: &Database, limit: u32) -> crate::db::Result<Vec<Notification>>
     })
 }
 
-/// How many still want something.
+/// How many notifications have not been seen.
 ///
 /// Counted rather than derived in the surface, because the badge is drawn
 /// before the list has been fetched and must not flicker from 0 to n.
+///
+/// **Unseen, not unanswered.** A badge that only cleared once every question
+/// had been *acted on* would keep a number on the titlebar for a question the
+/// person read and decided to leave — which is a nag, not a notification.
 pub fn outstanding(db: &Database) -> crate::db::Result<u32> {
     db.with(|conn| {
         conn.query_row(

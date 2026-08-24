@@ -333,9 +333,13 @@ pub fn set_status(
     // always announced. That is right: a mission finishing is the event this
     // product exists to produce, and it is worth saying even to somebody
     // sitting in front of it.
+    // `Waiting` is deliberately absent. It is reached from exactly one place —
+    // a guardrail that had to ask with nobody to answer — and that guardrail
+    // has already said so, naming the operation and the command. Announcing it
+    // again from here would be the same event twice, with less in it.
     let notify_reason = match status {
         MissionStatus::Completed => Some(crate::notify::Reason::MissionCompleted),
-        MissionStatus::Blocked | MissionStatus::Failed | MissionStatus::Waiting => {
+        MissionStatus::Blocked | MissionStatus::Failed => {
             Some(crate::notify::Reason::MissionBlocked)
         }
         _ => None,

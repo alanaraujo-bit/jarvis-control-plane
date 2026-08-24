@@ -152,6 +152,7 @@ fn every_reason_has_a_distinct_stable_identifier() {
         Reason::ProviderPrompt,
         Reason::GuardrailPending,
         Reason::GuardrailAsked,
+        Reason::GuardrailBlocked,
         Reason::TurnEnded,
         Reason::MissionCompleted,
         Reason::RunCompleted,

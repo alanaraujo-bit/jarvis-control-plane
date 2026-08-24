@@ -756,6 +756,7 @@ export const en = {
   "notify.title.providerPrompt": "{agent} is asking",
   "notify.title.guardrailPending": "A guardrail is holding this",
   "notify.title.guardrailAsked": "{agent} needs approval",
+  "notify.title.guardrailBlocked": "A guardrail stopped {agent}",
   "notify.title.turnEnded": "{agent} finished",
   "notify.title.missionCompleted": "Mission complete",
   "notify.title.runCompleted": "Ran to done on its own",
