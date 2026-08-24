@@ -744,13 +744,10 @@ export const en = {
   "notify.emptyHint": "When an agent finishes, or stops to ask you something, it shows up here.",
   "notify.markAllSeen": "Mark all as read",
   "notify.clear": "Clear",
-  "notify.goTo": "Open",
   "notify.disabled": "Notifications are off.",
   "notify.disabledHint": "Turn them back on in Settings.",
   "notify.more": "and {count} more",
   "notify.more_one": "and 1 more",
-  "notify.coalesced": "{count} agents want you",
-  "notify.someProject": "this project",
 
   // What kind of stop it was. The agent's own words go underneath, verbatim.
   "notify.title.providerPrompt": "{agent} is asking",

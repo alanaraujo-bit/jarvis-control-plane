@@ -704,13 +704,10 @@ export const ptBR: Record<MessageKey, string> = {
   "notify.emptyHint": "Quando um agente terminar, ou parar para te perguntar algo, aparece aqui.",
   "notify.markAllSeen": "Marcar tudo como lido",
   "notify.clear": "Limpar",
-  "notify.goTo": "Abrir",
   "notify.disabled": "As notificações estão desligadas.",
   "notify.disabledHint": "Ligue de novo nas Configurações.",
   "notify.more": "e mais {count}",
   "notify.more_one": "e mais 1",
-  "notify.coalesced": "{count} agentes querem você",
-  "notify.someProject": "este projeto",
 
   "notify.title.providerPrompt": "{agent} está perguntando",
   "notify.title.guardrailPending": "Um guardrail está segurando isto",

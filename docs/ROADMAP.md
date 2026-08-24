@@ -754,12 +754,20 @@ interactive browser login and is **B6**.
    session it was said in.
 4. A manually completed mission is never asked what it learned (D27) — the
    reflection only fires at the end of an Unattended run, deliberately.
-5. **Notifications, one thing left open (§49).** The detector reads a question
+5. **The notification sound has never been heard.** `present.chime` synthesises
+   two sine tones through `AudioContext` — quiet by construction, with an
+   exponential envelope so it cannot click — and it is on by default. Every
+   other channel was verified by looking; this one cannot be, and nobody has
+   listened to it yet. It shares the ear-test debt with the voice cues in item
+   1, and should be judged in the same pass: is it audible from another room,
+   and is it annoying at the desk? If it is either wrong, the switch is already
+   in Settings.
+6. **Notifications, one thing left open (§49).** The detector reads a question
    off the terminal for Claude Code and Codex, and its evidence is four real
    captures from those two. A third agent CLI would need its own capture
    before anyone should assume it is covered — `notify::capture` is the
    harness, and the invariant it keys on is a shape rather than a sentence, so
    the honest expectation is *probably*, not *certainly*.
-6. **Push to a phone is still its own scope.** The relay snapshot already
+7. **Push to a phone is still its own scope.** The relay snapshot already
    carries what needs a person; delivering it as a push needs a developer
    account (B6).

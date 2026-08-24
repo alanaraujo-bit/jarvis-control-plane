@@ -82,11 +82,23 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**452 tests** (421 Rust — 414 run, 7 intentionally `#[ignore]`d because they
-need a real `claude` CLI, a real microphone, or this machine's own recorded
-session history — 9 i18n, 22 relay) · all green.
+**524 tests** (493 Rust — 480 run, 13 intentionally `#[ignore]`d — 9 i18n,
+22 relay) · all green.
 
-Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
+The thirteen ignored ones are ignored for two different reasons, and it is
+worth knowing which is which before assuming one is broken:
+
+* **nine need something only this machine has** — a real `claude` CLI, a real
+  microphone, a running whisper server, or this machine's own recorded session
+  history;
+* **four are the `notify::capture` harness** (§49), which spawns a real,
+  signed-in agent CLI and talks to the network. They are not tests of the
+  product at all — they are how the evidence `notify::detect` is built on gets
+  *recorded*. Run them when a provider changes its interface, not on every
+  commit. See `docs/M14-NOTIFICATIONS.md`.
+
+Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`,
+version **0.3.0**.
 
 ### Working and verified in the installed app
 

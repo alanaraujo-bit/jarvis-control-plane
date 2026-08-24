@@ -18,9 +18,11 @@ import "./Toasts.css";
  * the thing people turn off first:
  *
  * * **A question stays; an announcement leaves.** Anything still asking for a
- *   decision sits there until it is dismissed or opened. A finished turn fades
- *   after `LINGER` — it was information, and information that has been read has
- *   done its job.
+ *   decision sits there until it is dismissed, opened, or the person comes back
+ *   to the window — coming back is the answer to "did they see it". A finished
+ *   turn fades after `LINGER` on its own: it was information, and information
+ *   that has been read has done its job. Nothing is lost either way; the badge
+ *   and the centre still hold everything.
  * * **Never more than `MAX_VISIBLE`.** Four agents finishing at once is an
  *   ordinary Tuesday here, and a stack that grows without limit covers the work
  *   it is reporting on. The overflow is counted, not drawn.

@@ -111,6 +111,21 @@ password prompt after the bundle was ready. Running `tauri signer sign` with
 `--password=` and absolute key/artifact paths completed the signature without
 rebuilding. This was signing transport, not an NSIS failure.
 
+**The whole thing signs in one run from bash** (M14, 2026-08-24), which is
+worth preferring over building and then signing separately — a two-step release
+is a release somebody eventually forgets the second half of:
+
+```bash
+TAURI_SIGNING_PRIVATE_KEY="$(cat .keys/jarvis-updater.key)" \
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
+pnpm tauri build
+```
+
+Bash keeps an empty variable as an empty value, which is exactly what an empty
+key password needs; PowerShell deletes it, which is what sent the earlier run
+to an interactive prompt. Same key, same command, different shell. Produced
+`J.A.R.V.I.S_0.3.0_x64-setup.exe` and its `.sig` together, with no prompt.
+
 B1 still applies independently: the updater artifact is cryptographically
 signed for Tauri integrity checks, but the Windows executable has no
 Authenticode certificate and SmartScreen may show “unknown publisher”.

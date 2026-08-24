@@ -361,8 +361,9 @@ fn absorb(
                 session_id: Some(session.id.clone()),
                 project_id: Some(project_id.to_string()),
                 mission_id: mission_id.map(str::to_string),
+                // No detail code: the preview already names the operation and
+                // the command, which says more than the refusal's own reason.
                 preview: Some(format!("{}: {}", operation.as_str(), record.command)),
-                detail_code: Some(record.reason.clone()),
                 ..Default::default()
             },
         );

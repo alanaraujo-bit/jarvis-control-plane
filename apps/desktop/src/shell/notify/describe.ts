@@ -4,6 +4,31 @@ import { agentName, type Notification } from "../../app/notifications";
 type Translate = (key: MessageKey, values?: Record<string, string | number>) => string;
 
 /**
+ * The §34 stop reasons an unattended run can carry, as they arrive from the
+ * core.
+ *
+ * A closed list, checked rather than trusted. `detailCode` crosses the Tauri
+ * bridge as a plain string, and handing an arbitrary one to `t()` would render
+ * the identifier itself on screen the day the core grows a sixth reason — the
+ * raw-identifier failure §65 exists to prevent. An unrecognised code falls back
+ * to the preview instead, which always says something true.
+ */
+const RUN_STOP_REASONS = [
+  "autopilot.outOfTurns",
+  "autopilot.needsManualCheck",
+  "autopilot.awaitingApproval",
+  "autopilot.notConverging",
+  "autopilot.missionBlocked",
+] as const;
+
+function detailKey(code: string | null): MessageKey | null {
+  if (!code) return null;
+  return (RUN_STOP_REASONS as readonly string[]).includes(code)
+    ? (code as MessageKey)
+    : null;
+}
+
+/**
  * One notification, in words.
  *
  * The single place the sentence is composed. A row in the centre, an in-app
@@ -25,7 +50,16 @@ export function describe(notification: Notification, t: Translate) {
   // notification that carries one is about that mission.
   const where = notification.missionTitle ?? notification.projectName ?? null;
 
-  const body = notification.preview?.trim() || null;
+  // Why, when the reason alone does not say.
+  //
+  // "An unattended run stopped" is four different situations — out of turns,
+  // not converging, waiting on an approval, or left with something only a
+  // person can judge — and the one it was is exactly what somebody coming back
+  // to the screen needs. The core sends the §34 cause as a stable identifier
+  // that is already an i18n key, so this reads it rather than restating it.
+  const cause = detailKey(notification.detailCode);
+
+  const body = cause ? t(cause) : notification.preview?.trim() || null;
 
   const provenance =
     notification.confidence === "observed"
