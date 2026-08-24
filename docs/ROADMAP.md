@@ -416,13 +416,58 @@ window, the file was then edited on disk and **Reload showed the change** —
 the whole §46 loop, closed. Both themes, both languages, plus the empty
 state and the follow-the-active-session behaviour.
 
-## M9 — Onboarding (§13), Settings (§64)  ~
+## M9 — Onboarding (§13), Settings (§64)  ✅
 - [x] Welcome screen shown once per install, gated on a `settings` row
 - [x] Reuses the environment scan (§14) and `openFolder`, no bespoke picker
 - [x] Window reveal waits on the onboarding check, so there is no flash of
       the wrong screen — and defaults to "already seen" if the check fails,
       so a broken check can never leave the window hidden
-- [ ] Settings (§64) itself
+- [x] Settings (§64) itself — Appearance, Terminal, Agents, Environment,
+      Updates, ordered by how often they are reached rather than
+      alphabetically. Autonomy sits above Guardrails on purpose: how much an
+      agent does on its own is the broader question, and what it may never do
+      is the fence around that answer.
+- [x] **A project has settings of its own** — one more area in the project
+      workspace, hosting the project-scoped autonomy and guardrail controls.
+      `GuardrailPanel` had accepted a `projectId` since §35 and had never once
+      been given one, because global Settings renders only when no project is
+      open and structurally cannot host a project-scoped control.
+- [x] **The audit §64 asks for**, and what it found: three values the product
+      used, showed on screen, and gave nobody a way to change — the two
+      unreachable levels of the autonomy chain (§33), and the autopilot turn
+      budget, which `AutopilotPanel` renders as "turn 3 of 24" while
+      `DEFAULT_TURN_BUDGET` was a constant. Terminal type size and scrollback
+      were hard-coded too. All now configurable, none of them new features.
+- [x] One typed accessor for the `settings` table, replacing per-area SQL:
+      **unset is no row**, and a value that will not parse reads as unset
+      rather than failing the screen.
+
+### Settings, as built
+- **Bounds are enforced in the core, not just drawn in the UI.** The surface
+  renders a slider, so an out-of-range value should be impossible — which is
+  why it is not trusted: a command reachable from the webview is reachable
+  from any bug in it. Out of range is *refused* on the way in, so a stored
+  value is always one somebody could have chosen; out of range on the way
+  *out* is *clamped*, so an older build's row cannot produce an unusable
+  terminal or a zero budget that fails every run before it starts.
+- **The bounds are product decisions.** Below 4 turns an unattended run
+  cannot finish anything real and every mission would end in Failed; above
+  100, "run until done" stops being a budget at all, which is what §34's rule
+  against consuming resources indefinitely exists to prevent.
+- **A run keeps the budget it started with.** Re-reading each turn would let
+  a change in Settings move the finish line under a run already going.
+- **Preferences apply in place.** Changing the terminal's type size or
+  scrollback never rebuilds it — a rebuild kills the process and throws away
+  the scrollback. Changing the size also refits and tells the PTY, or the
+  shell keeps wrapping at the old width.
+
+**Verified in a real build:** changed the type size and watched a *running*
+shell grow, keep its scrollback, and run the next command; restarted the app
+and the preference was still there; Reset returned it to 13 and the label
+went back to "Default". Both themes, both languages — including `20.000
+linhas` with the Brazilian separator. Control alignment was checked by
+sampling pixels rather than by eye: all five settings controls share one
+left edge at x=581.
 **Verified:** fresh install simulated by deleting the local db; the welcome
 screen showed, opening a folder from it landed inside that project's own
 workspace, and relaunching afterward skipped straight to Mission Control.

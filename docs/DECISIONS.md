@@ -1140,3 +1140,96 @@ A dev server with HMR updates itself and the button is redundant. One without
 it — a static server, a Rust binary, a Python app — does not, and without a
 reload the preview silently shows the previous version. That is worse than no
 preview: it is a preview you cannot trust. The button is the difference.
+
+---
+
+## D33 — A preference is validated in the core, and "unset" is the absence of a row
+
+§64 asks for an audit of the settings scattered through the product. What it
+found was not scattered settings — it was the opposite. Three values the
+product used, **showed on screen**, and gave nobody a way to change:
+
+- the global and project levels of the autonomy chain (§33), against which
+  Mission Detail had been rendering the word "Inherited";
+- the autopilot turn budget, which `AutopilotPanel` renders as "turn 3 of 24"
+  while `DEFAULT_TURN_BUDGET` was a constant read in three places;
+- the terminal's type size and scrollback depth, hard-coded at 13px and
+  20,000 lines.
+
+None of these is a new feature. Each is the missing half of something already
+built, which is the bar for going beyond the roadmap.
+
+### Validation belongs in the core
+
+Every one of these is bounded, and the surface renders a slider — so an
+out-of-range value should be impossible. **That is exactly why it is not
+trusted.** A `#[tauri::command]` is reachable from the webview, which means it
+is reachable from any bug in the webview, and a preference that can be set to
+zero is a run that fails before it starts.
+
+The two directions are deliberately different:
+
+- **On the way in, out of range is refused.** A stored value is then always
+  one somebody could have chosen, and the database never holds a number the
+  product would have to defend against later.
+- **On the way out, out of range is clamped.** An older build's row, a
+  hand-edited database, or a bound that has since tightened must not produce
+  an unusable terminal — and `settings_set_preference` already refused
+  anything new, so a bad row means history rather than a live mistake.
+
+The key list is closed for the same reason: a typo in the webview should not
+be able to write an arbitrary row into the settings table.
+
+### The bounds are product decisions, not round numbers
+
+Below **4 turns** an unattended run cannot finish anything real, so every
+mission would end in `Failed` — a setting whose only effect is to break the
+feature is not a setting. Above **100**, "run until done" stops being a budget
+at all, and §34's rule against consuming resources indefinitely is the whole
+reason the number exists.
+
+### A run keeps the budget it started with
+
+`turn_budget` is read once, when the driver's thread starts, and held. Reading
+it each turn would let a change in Settings move the finish line under a run
+already in progress: a mission could pass the budget it began under and fail
+on a number nobody ever applied to it. A budget is part of the terms a run
+started with; the next run gets the new value.
+
+### Unset is the absence of a row
+
+`clear` deletes rather than storing an empty string or a sentinel, so
+`Option<T>` from a read means exactly what it says and no reader has to know
+which flavour of empty it is looking at. `set_global_autonomy` had already
+made this choice; the accessor makes it the rule.
+
+And **a value that will not parse reads as unset**, never as an error. A
+preference that cannot be understood is a preference nobody chose, so the
+default applies. The alternative — propagating the failure — would let one
+corrupt row stop the whole settings screen from rendering, which is a much
+worse outcome than silently using the value the product would have used
+anyway.
+
+### Why an accessor at all, for two call sites
+
+`mission::store` and `onboarding` each wrote their own SQL against `settings`
+and both were correct. Two duplicates is not a problem; the *shape* is,
+because §64 adds more, and each new site re-decides how unset is spelled and
+what a malformed value means. They drift quietly, because nothing forces them
+to agree.
+
+The existing call sites are deliberately **left alone**. They work, they are
+tested, and rewriting them to prove a point is churn — §9 asks for an audit of
+inconsistency, not for every duplicate to be hunted down the day it is found.
+
+### Preferences apply in place
+
+Changing the terminal's type size or scrollback never rebuilds the terminal. A
+rebuild kills the process running in it and throws away the scrollback — the
+same constraint that shaped split panes (§20). Both are live `options` on
+xterm, so they are simply assigned. The font size also changes how many
+columns fit, so the view is refitted and the PTY told; without that the shell
+keeps wrapping at the old width and every long line breaks in the wrong place.
+
+Verified by changing the size against a *running* shell: the type grew, the
+scrollback was still there, and the next command ran in the same session.
