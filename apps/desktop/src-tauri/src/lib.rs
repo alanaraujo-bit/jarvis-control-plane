@@ -16,6 +16,7 @@ mod guardrail;
 mod mission;
 mod onboarding;
 mod project;
+mod settings;
 mod providers;
 mod preview;
 mod pty;
@@ -191,6 +192,8 @@ pub fn run() {
             autopilot::commands::autopilot_start,
             autopilot::commands::autopilot_stop,
             search::global_search,
+            settings::settings_preferences,
+            settings::settings_set_preference,
             preview::preview_detect,
             preview::preview_open,
             preview::preview_reload,

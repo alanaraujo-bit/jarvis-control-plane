@@ -16,6 +16,7 @@ import {
   writeSession,
   type Attachment,
 } from "../../app/sessions";
+import { usePreferenceValues } from "../settings/usePreferences";
 import { PastedImage } from "./PastedImage";
 import { TerminalFind, type FindState } from "./TerminalFind";
 import { terminalSearchDecorations, terminalTheme } from "./theme";
@@ -79,6 +80,11 @@ function pasteMessage(t: (key: MessageKey) => string, code: string): string {
  */
 export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps) {
   const t = useT();
+  const preferences = usePreferenceValues();
+  // A ref so the build effect can read the current values without listing
+  // them as dependencies — see the note at `fontSize` below.
+  const prefs = useRef(preferences);
+  prefs.current = preferences;
   const hostRef = useRef<HTMLDivElement>(null);
   const resolved = useTheme((state) => state.resolved);
   const termRef = useRef<Terminal | null>(null);
@@ -109,14 +115,18 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
       // does not resolve. It then falls back to a proportional font and every
       // line renders with visibly uneven spacing.
       fontFamily: '"JetBrains Mono Variable", "JetBrains Mono", Consolas, "Courier New", monospace',
-      fontSize: 13,
+      // Read through a ref, not from the render that built this terminal.
+      // Both are applied in place below when they change; using the value
+      // here only sets the starting point, and depending on them would put
+      // them in this effect's dependency list — which rebuilds the terminal,
+      // kills the process and throws away the scrollback.
+      fontSize: prefs.current.terminalFontSize,
       lineHeight: 1.32,
       letterSpacing: 0,
       cursorBlink: true,
       cursorStyle: "bar",
       cursorWidth: 2,
-      // Deep enough for a long agent run without unbounded memory growth.
-      scrollback: 20000,
+      scrollback: prefs.current.terminalScrollback,
       allowProposedApi: true,
       macOptionIsMeta: true,
       drawBoldTextInBrightColors: false,
@@ -303,6 +313,30 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
     const term = termRef.current;
     if (term) term.options.theme = terminalTheme(resolved);
   }, [resolved]);
+
+  /**
+   * Apply preference changes in place (§64).
+   *
+   * The same reasoning as the theme effect above and for the same reason: a
+   * terminal rebuilt to change its type size would kill the process running in
+   * it. Both of these are live `options` on xterm, so they can simply be
+   * assigned.
+   *
+   * The font size changes how many columns fit, so the terminal is refitted
+   * and the PTY told — without that the shell keeps wrapping at the old width
+   * and every long line breaks in the wrong place.
+   */
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.fontSize = preferences.terminalFontSize;
+    refit.current?.();
+  }, [preferences.terminalFontSize]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (term) term.options.scrollback = preferences.terminalScrollback;
+  }, [preferences.terminalScrollback]);
 
   /**
    * Show the overview ruler only while searching.

@@ -32,7 +32,7 @@ pub fn autopilot_status(
         mission_id: run.mission_id.clone(),
         state: run.state(),
         turns: run.turns(),
-        budget: super::plan::DEFAULT_TURN_BUDGET,
+        budget: super::plan::turn_budget(&state.db),
     }))
 }
 
@@ -125,7 +125,7 @@ pub fn autopilot_start(
         mission_id,
         state: run.state(),
         turns: run.turns(),
-        budget: super::plan::DEFAULT_TURN_BUDGET,
+        budget: super::plan::turn_budget(&state.db),
     })
 }
 

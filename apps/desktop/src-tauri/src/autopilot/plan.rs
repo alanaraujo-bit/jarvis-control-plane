@@ -51,6 +51,35 @@ pub mod reason {
 /// real multi-step mission finishes well inside it.
 pub const DEFAULT_TURN_BUDGET: u32 = 24;
 
+/// Where a chosen turn budget is stored (§64).
+pub const TURN_BUDGET_KEY: &str = "autopilot.turnBudget";
+
+/// The narrowest and widest budget a person may choose.
+///
+/// Bounded on both ends deliberately. Below the floor an unattended run cannot
+/// finish anything real and every mission would end in `Failed` — a setting
+/// whose only effect is to break the feature is not a setting. Above the
+/// ceiling, "run until done" stops being a budget at all, and §34's rule
+/// against consuming resources indefinitely is the whole reason this number
+/// exists.
+pub const MIN_TURN_BUDGET: u32 = 4;
+pub const MAX_TURN_BUDGET: u32 = 100;
+
+/// How many turns an unattended run may take, as configured.
+///
+/// Read from the database rather than passed down from the command layer: the
+/// driver already holds the `Database`, and threading a number through three
+/// call sites would give three places for it to disagree.
+///
+/// A stored value outside the bounds is clamped rather than refused. The
+/// setter validates, so an out-of-range row means an older build, a
+/// hand-edited database, or a bound that has since tightened — none of which
+/// should stop a run from starting.
+pub fn turn_budget(db: &crate::db::Database) -> u32 {
+    crate::settings::get_or(db, TURN_BUDGET_KEY, DEFAULT_TURN_BUDGET)
+        .clamp(MIN_TURN_BUDGET, MAX_TURN_BUDGET)
+}
+
 /// How many consecutive verification passes may fail without anything changing
 /// before the run is called stuck.
 ///

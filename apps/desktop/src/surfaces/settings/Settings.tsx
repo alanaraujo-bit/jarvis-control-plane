@@ -4,6 +4,8 @@ import { useTheme, type ThemePreference } from "../../app/theme";
 import { EnvironmentPanel } from "../environment/EnvironmentPanel";
 import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { AutonomyPanel } from "./AutonomyPanel";
+import { NumberSetting } from "./NumberSetting";
+import { PREF, usePreferences } from "./usePreferences";
 import { Updates } from "./Updates";
 import "./Settings.css";
 
@@ -24,6 +26,7 @@ export function Settings() {
   const t = useT();
   const { locale, setLocale } = useI18n();
   const { preference, setPreference } = useTheme();
+  const { prefs, set } = usePreferences();
 
   return (
     <div className="settings">
@@ -76,13 +79,45 @@ export function Settings() {
           </div>
         </section>
 
-        {/* Agents before guardrails, on purpose: how much an agent does on its
-            own is the broader question, and what it may never do is the fence
-            around that answer. Reading them the other way round asks the user
-            to bound a behaviour they have not chosen yet. */}
+        {/* Terminal before Agents: it is the surface people spend the day in,
+            and these are the settings most likely to be changed on a first
+            visit. Frequency of use decides the order (§64). */}
+        <section className="settings__section">
+          <h2 className="settings__section-title">{t("settings.terminal")}</h2>
+          <NumberSetting
+            preference={PREF.fontSize}
+            label="settings.fontSize"
+            value={prefs.terminalFontSize}
+            onChange={(value) => void set(PREF.fontSize, value)}
+          />
+          <NumberSetting
+            preference={PREF.scrollback}
+            label="settings.scrollback"
+            unit="settings.scrollbackUnit"
+            help="settings.scrollbackHelp"
+            value={prefs.terminalScrollback}
+            onChange={(value) => void set(PREF.scrollback, value)}
+          />
+        </section>
+
+        {/* Autonomy before guardrails, on purpose: how much an agent does on
+            its own is the broader question, and what it may never do is the
+            fence around that answer. Reading them the other way round asks
+            someone to bound a behaviour they have not chosen yet. */}
         <section className="settings__section">
           <h2 className="settings__section-title">{t("settings.agents")}</h2>
           <AutonomyPanel />
+          {/* The turn limit sits under Autonomy rather than beside the
+              terminal settings: it only means anything for an Unattended run,
+              which is the choice directly above it. */}
+          <NumberSetting
+            preference={PREF.turnBudget}
+            label="settings.turnBudget"
+            unit="settings.turnBudgetUnit"
+            help="settings.turnBudgetHelp"
+            value={prefs.autopilotTurnBudget}
+            onChange={(value) => void set(PREF.turnBudget, value)}
+          />
           <GuardrailPanel />
         </section>
 

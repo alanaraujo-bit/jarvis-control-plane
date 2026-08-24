@@ -1,0 +1,146 @@
+/* A bounded number (§64).
+
+   Laid out on the same 180px label column as every other setting on this
+   screen, so the controls line up down the page rather than each finding its
+   own left edge. */
+.numset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.numset__row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.numset__label {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.numset__control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* The value and the reset control sit in a fixed-width column so the slider
+   does not resize as the number grows a digit — dragging a slider that shifts
+   under the cursor is the kind of small wrongness that reads as unfinished. */
+.numset__value {
+  flex: 0 0 auto;
+  min-width: 92px;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.numset__default,
+.numset__reset {
+  flex: 0 0 auto;
+  min-width: 104px;
+  text-align: left;
+  font-size: var(--text-xs);
+}
+
+.numset__default {
+  color: var(--text-disabled);
+}
+
+.numset__reset {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.numset__reset:hover {
+  color: var(--accent);
+}
+
+.numset__reset:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* ---- The slider itself ----------------------------------------------------
+   Styled per browser rather than left native: the default control is the one
+   element that would still look like the operating system on a screen where
+   everything else is this product's own. */
+.numset__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 260px;
+  height: 18px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.numset__slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+}
+
+.numset__slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -5px;
+  border-radius: var(--radius-full);
+  background: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.numset__slider:hover::-webkit-slider-thumb {
+  background: var(--text-primary);
+}
+
+/* Amber only while being dragged: this is a live change, and amber is the
+   colour of something happening (§6). At rest it is a setting, not an event. */
+.numset__slider:active::-webkit-slider-thumb {
+  background: var(--accent);
+}
+
+.numset__slider:focus-visible {
+  outline: none;
+}
+
+.numset__slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--accent-muted);
+  background: var(--accent);
+}
+
+.numset__help {
+  grid-column: 2;
+  margin-left: calc(180px + var(--space-6));
+  max-width: 62ch;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+/* Below this the label column and the control stop fitting side by side, and
+   the slider starts clipping. Stacking is the honest response. */
+@media (max-width: 720px) {
+  .numset__row {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: var(--space-3);
+  }
+  .numset__help {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .numset__reset,
+  .numset__slider::-webkit-slider-thumb { transition: none; }
+}

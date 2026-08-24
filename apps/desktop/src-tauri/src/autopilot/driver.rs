@@ -21,7 +21,7 @@ use crate::session::event::EventKind;
 use crate::session::manager::LiveSession;
 use crate::session::SessionLogReader;
 
-use super::plan::{self, next_instruction, Progress, Step, DEFAULT_TURN_BUDGET};
+use super::plan::{self, next_instruction, turn_budget, Progress, Step};
 
 /// How often the session log is polled for a finished turn.
 ///
@@ -206,6 +206,15 @@ pub fn start(
             let mut last_failing: Vec<String> = Vec::new();
             let mut stalled_rounds = 0u32;
 
+            // Read once, at the start, and hold it for the run.
+            //
+            // Re-reading every turn would let a change in Settings move the
+            // finish line under a run that is already going — a mission could
+            // pass the budget it started with and fail on a number nobody
+            // applied to it. A budget is part of the terms this run began
+            // under; the next one gets the new value.
+            let budget = turn_budget(&db);
+
             // The opening move.
             //
             // The loop reacts to a turn ending, and a freshly started agent has
@@ -288,7 +297,7 @@ pub fn start(
 
                 let progress = Progress {
                     turns,
-                    budget: DEFAULT_TURN_BUDGET,
+                    budget,
                     stalled_rounds,
                     approval_pending,
                 };
