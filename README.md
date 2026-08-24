@@ -32,6 +32,7 @@ Working and verified against real agents on a real machine:
 | Activity log — what happened, filterable | Working |
 | Analytics — tokens, runtime, and human leverage (§53) | Working |
 | Guardrails — sensitive operations held for a decision, per project | Working |
+| Notifications — told when an agent stops, finished or waiting on you | Working |
 | Unattended runs — an agent driven turn by turn to a verified mission | Working |
 | Files, Editor (Monaco), Diff/Review, Git write ops, Worktrees | Working |
 | Project Brain, project history, Notes | Working |

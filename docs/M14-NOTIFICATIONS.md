@@ -1,8 +1,10 @@
 # M14 — Notifications (§49)
 
-> **Live working document.** Written as the work happens so an interrupted
-> session can be picked up from here. The finished account moves into
-> `ROADMAP.md` and `DECISIONS.md` when the milestone closes.
+> **Closed.** The account of what was built and why now lives in
+> [`ROADMAP.md`](ROADMAP.md) (M14) and [`DECISIONS.md`](DECISIONS.md) (D35);
+> the traps live in [`HANDOFF.md`](HANDOFF.md) section 5, items 48-54. What is
+> kept here is the **evidence**: what four real agent CLIs actually drew, and
+> how to record it again when a provider changes its interface.
 
 ## What is being built
 
@@ -22,7 +24,7 @@ wants.
 | 5. The Notification Centre surface | **done** — bell, centre, toast stack |
 | 6. Settings | **done** — three switches and a real test button |
 | 7. Tests | 476 Rust + 9 i18n green; typecheck green |
-| 8. Verified in a real build against a real agent | in progress |
+| 8. Verified in a real build against a real agent | **done** - see below |
 
 ---
 
@@ -141,3 +143,48 @@ itself is generic. Recorded here; not load-bearing.
   activity, settings, the design tokens and the i18n catalogue.
 - `tauri-plugin-notification` added (Rust + JS + capability). `cargo check` green.
 - `notify/capture.rs` written; four captures taken against real CLIs.
+
+---
+
+## Verified, and how
+
+**In the dev build, against a real Claude Code 2.1.241 agent** in a throwaway
+project, in both themes and in pt-BR:
+
+* its folder-trust question was read off its own terminal and shown as
+  **Lido do terminal**;
+* its reply after the next turn was shown as **Informado pelo agente**, with
+  the reply itself as the preview;
+* while that session was the one on screen, **nothing was raised at all** — the
+  moment the workspace moved to Files, the same class of event produced a toast
+  and a badge;
+* clicking a row went to the session, and a toast for a session stood down as
+  soon as that session came on screen.
+
+**In the installed 0.3.0 build**, the Windows toast fires, in the interface
+language, carrying our own mark and name — on a machine that also has an
+unrelated `jarvis.exe` with a Start Menu shortcut of its own.
+
+## Reproducing the captures
+
+```bash
+cd apps/desktop/src-tauri
+JARVIS_CAPTURE_DIR=/some/dir cargo test --lib -- --ignored --nocapture capture_
+```
+
+Each test spawns a real agent CLI in a real PTY, answers the cursor-position
+query on its behalf, strips the environment markers it would otherwise inherit
+from the session running the test, types a request, and writes every byte it
+drew.
+
+`src/notify/prompts/` holds the trimmed, scrubbed regions those runs produced,
+and `detect`'s tests read them with `include_bytes!` — so the parser is always
+tested against bytes an agent genuinely wrote, never against an approximation
+of them.
+
+## If a third agent CLI arrives
+
+Add a capture for it and look at what it draws before assuming it is covered.
+The detector keys on a *shape* rather than a sentence, so the honest
+expectation is "probably", not "certainly" — and the way to find out is the
+same harness, not a guess.

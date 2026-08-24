@@ -581,7 +581,98 @@ streaming's captions together, by ear, on a real microphone.
 
 ---
 
+## M14 — Notifications (§49)  ✅
+
+The feature Alan asked for by name, against ORCA: be told when any agent stops
+working — because it finished, or because it needs a decision — with a preview
+of what it wants.
+
+- [x] The rule the whole thing turns on: **notify only about what the person is
+      not already looking at**, where watching means the window has focus *and*
+      that session is on screen. A suppressed notification is dropped entirely,
+      not stored and marked read, so the centre is a list of what you *missed*.
+      Decided in the core, in one place, and tested.
+- [x] Five sources, two confidences (§28). A finished turn, a guardrail
+      decision, a mission completing and a run stopping are **Official** —
+      something stated them. A question read off a terminal is **Observed**.
+- [x] `notify::detect` — the part nothing existing could do. Claude Code asking
+      whether it may write a file is stated nowhere: the guardrail hook returns
+      early for anything that is not a classified `Bash` command, and the
+      transcript records the answer rather than the question. Built from four
+      recordings of real CLIs (`notify::capture`), keyed on the one invariant
+      that survives all four — a numbered choice list with exactly one cursor
+      glyph — never on wording.
+- [x] `notify::render`, because these TUIs emit cursor-forward escapes where a
+      person sees a space, and a conventional `strip_ansi` turns
+      `Do you want to create hello.txt?` into `Doyouwanttocreatehello.txt?`.
+- [x] `notify::watch` — the conjunction that makes a match trustworthy: the
+      shape holds, the terminal has been quiet, and nothing has been typed
+      since. One thread per agent session, parked on a channel from the pump.
+- [x] Migration 12, read state, dedup keyed on the question rather than the
+      session, and a prune at startup.
+- [x] `notify::bus`, so a mission changing status does not need a webview
+      handle to say so.
+- [x] The surface: a bell in the titlebar, a centre under it, an in-app toast
+      stack, a Windows toast when the window is behind something else, a
+      taskbar flash, and a short synthesised sound.
+- [x] Three switches in Settings and a test button that fires the real path.
+- [x] i18n complete in en and pt-BR. The title is ours and translated; the
+      preview is the agent's own words and is deliberately not.
+
+### What a Windows toast can and cannot do, measured
+
+Fired from the installed build before the surface was written:
+
+* it **appears, attributed to us** — our own mark and name — on a machine that
+  also carries an unrelated `jarvis.exe` with its own Start Menu shortcut;
+* it does **not** appear from `pnpm dev`, because the plugin only sets the
+  AppUserModelID for a packaged binary and an unpackaged one has no shortcut to
+  be identified by;
+* **clicking it does nothing, and cannot**: `tauri-plugin-notification` 2.3.3
+  exposes activation callbacks on mobile only.
+
+So the desktop toast is an *alert* and the centre is the thing you click. Built
+the other way round, this would have shipped a toast that looks interactive and
+is not.
+
+### Verified in a real build, against a real agent
+
+A Claude Code 2.1.241 agent in a scratch project, both themes, pt-BR.
+
+Its folder-trust question was read off its own terminal and shown as
+**Lido do terminal** (Observed); its reply after the next turn was shown as
+**Informado pelo agente** (Official) with the reply itself as the preview. While
+that session was the one on screen, **nothing was raised at all** — the moment
+the workspace moved to Files, the same class of event produced a toast and a
+badge. Clicking a row went to the session, and the toast for a session stood
+down as soon as that session came on screen.
+
+### Four things found by running it, not by reading it
+
+1. **The count badge covered the bell.** A 13px badge on a 14px icon in a 38px
+   button; visible only by zooming into a real screenshot.
+2. **The toast's close button sat level with the middle of the agent's own
+   question** and read as part of the text.
+3. **Opening the centre erased the thing it was opened to see.** Marking
+   everything read is right, and it also cleared the marker showing which rows
+   were new — so two new notifications rendered exactly like two old ones.
+4. **Clicking a notification for an already-open project did nothing.** The
+   area is state read once at mount, and `App` keys the workspace on the
+   project id, so re-opening the same project is not a remount.
+
+### Deliberately not in M14
+
+Push to a phone. `ROADMAP` already called it its own scope, and it needs a
+developer account (B6). The relay snapshot (§59) already carries what needs a
+person, which is the same question answered on a different screen.
+
+
 ## Current milestone
+**M14 — Notifications (§49) is complete and verified in a real build.** An
+agent that stops — finished, or waiting on a decision — now reaches the person
+who walked away, with a preview of what it wants and an honest label for where
+that preview came from. See the section above, and D35.
+
 **M6 and M7 are both complete.** Files, the editor, Review, Git write
 operations, worktrees, the memory layer, Global Search, and an agent writing
 to its own Brain are all built and verified against real data and a real
@@ -645,3 +736,12 @@ interactive browser login and is **B6**.
    session it was said in.
 4. A manually completed mission is never asked what it learned (D27) — the
    reflection only fires at the end of an Unattended run, deliberately.
+5. **Notifications, one thing left open (§49).** The detector reads a question
+   off the terminal for Claude Code and Codex, and its evidence is four real
+   captures from those two. A third agent CLI would need its own capture
+   before anyone should assume it is covered — `notify::capture` is the
+   harness, and the invariant it keys on is a shape rather than a sentence, so
+   the honest expectation is *probably*, not *certainly*.
+6. **Push to a phone is still its own scope.** The relay snapshot already
+   carries what needs a person; delivering it as a push needs a developer
+   account (B6).

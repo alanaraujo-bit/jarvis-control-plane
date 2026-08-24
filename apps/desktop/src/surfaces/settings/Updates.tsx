@@ -4,9 +4,9 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useT } from "../../app/i18n";
 import { isTauri } from "../../app/platform";
+import { useAppVersion } from "../../app/version";
 import "./Updates.css";
 
-const APP_VERSION = "0.1.0";
 
 type Status =
   | { state: "idle" }
@@ -28,6 +28,7 @@ type Status =
 export function Updates() {
   const t = useT();
   const [status, setStatus] = useState<Status>({ state: "idle" });
+  const version = useAppVersion();
 
   const runCheck = async () => {
     if (!isTauri()) return;
@@ -71,7 +72,9 @@ export function Updates() {
       <div className="updates__head">
         <div>
           <h2 className="updates__title">{t("update.title")}</h2>
-          <p className="updates__version">{t("update.current", { version: APP_VERSION })}</p>
+          {version && (
+            <p className="updates__version">{t("update.current", { version })}</p>
+          )}
         </div>
 
         <button

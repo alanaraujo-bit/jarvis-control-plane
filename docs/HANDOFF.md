@@ -128,6 +128,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Preview (§46)** | the dev server URL read from the session's own output, opened in a separate window (never an iframe — the CSP forbids it and widening it would be an escalation), loopback only, with Reload for a server that has no hot reload |
 | **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
 | **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
+| **Notifications (§49)** | An agent that stops — finished, or waiting on a decision — reaches the person who walked away. A bell and a centre in the titlebar, an in-app toast when the window is in front, a Windows toast and a taskbar flash when it is not. The rule the whole thing turns on: **nothing is raised about a session the person is already watching**, and a suppressed notification is dropped rather than stored-and-marked-read, so the centre is a list of what you *missed*. The preview is the agent's own words — the question it drew, or the reply it just gave — and carries where it came from: Official when a provider stated it, **Observed** when it was read off the terminal (§28). `notify::detect` is that reading, and it exists because Claude Code asking whether it may write a file is stated nowhere else. See D35. |
 
 **The full loop has been executed end to end**, twice over:
 
@@ -773,6 +774,58 @@ Every one of these is real and already cost time.
     the build — handlers must import `.js`, which is what TypeScript expects
     for ESM anyway. Node's own test runner wants `.ts`, so the tests get their
     own tsconfig rather than the build's being loosened.
+
+48. **An agent CLI draws nothing until something answers ConPTY.** The first
+    run of `notify::capture` recorded exactly four bytes — `ESC [ 6 n` — and
+    stopped. Claude Code will not print a character until the cursor-position
+    query is answered. This is D6 seen from the other side: the core stands in
+    for the terminal in unattended sessions for the same reason, and any
+    harness that spawns one of these CLIs has to do it too.
+
+49. **A test that spawns an agent CLI inherits the agent session running it.**
+    The second capture recorded a Claude Code in auto mode that never asked for
+    anything, because it had picked up `CLAUDE_CODE_CHILD_SESSION`,
+    `CLAUDECODE` and half a dozen siblings from the Claude Code session running
+    the test. Strip them, and pass the permission mode explicitly rather than
+    trusting whatever this machine's settings say. `notify::capture` has the
+    list.
+
+50. **These TUIs emit cursor-forward escapes where a person sees a space.**
+    `\x1b[1C` instead of `' '`. A conventional `strip_ansi` — the one
+    `preview/detect.rs` has, which is right for a dev-server banner — turns
+    `Do you want to create hello.txt?` into `Doyouwanttocreatehello.txt?`, and
+    every pattern written against the readable form silently matches nothing.
+    `notify::render` translates the escape instead of dropping it. If you ever
+    need to read words off an agent's screen, start there and not with a regex.
+
+51. **`>` is not a safe cursor glyph.** It was in `notify::detect`'s set on the
+    reasoning that it costs nothing to accept. It costs a false positive on
+    every quoted numbered list — markdown, a mail body, a diff — which is an
+    entirely ordinary thing for an agent to print. Claude Code uses `❯`
+    (U+276F) and Codex uses `›` (U+203A); nothing observed uses `>`.
+
+52. **Marking a notification list read on open erases what it was opened to
+    show.** Both halves are right on their own: the badge has to fall the
+    moment you look, and the row has to say which ones were new. They conflict,
+    and the resolution is a snapshot taken at open. Found by opening the panel
+    in the real app and seeing two genuinely-new rows render exactly like two
+    old ones.
+
+53. **`App` keys the project workspace on the project id, so re-opening the
+    same project is not a remount.** Anything the workspace reads from props
+    *once, at mount* — the area to land on, the session to focus — is therefore
+    silently ignored when the project is already open. Clicking a notification
+    for the project you are looking at did nothing at all. `focusToken` exists
+    to distinguish one "take me there" from the next; if you add another
+    focus-like prop, it needs the same treatment.
+
+54. **A Windows toast from this app cannot be clicked.**
+    `tauri-plugin-notification` 2.3.3 exposes activation callbacks on mobile
+    only, so the desktop toast is an alert and nothing more. It also does not
+    appear at all from `pnpm dev`: the plugin sets the AppUserModelID only for
+    a packaged binary, and an unpackaged one has no Start Menu shortcut to be
+    identified by. Neither is a bug to chase. The notification centre is the
+    click-through surface for that reason, not by preference.
 
 ---
 

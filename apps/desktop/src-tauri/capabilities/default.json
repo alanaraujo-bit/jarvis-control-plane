@@ -16,6 +16,7 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:event:default",
+    "core:app:allow-version",
     "opener:default",
     "dialog:default",
     "updater:default",

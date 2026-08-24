@@ -2,6 +2,7 @@ import { CircleDot, TriangleAlert } from "lucide-react";
 import { useT } from "../app/i18n";
 import { isTauri } from "../app/platform";
 import { useEnvironment } from "../surfaces/environment/useEnvironment";
+import { useAppVersion } from "../app/version";
 import "./StatusBar.css";
 
 /**
@@ -14,6 +15,7 @@ import "./StatusBar.css";
 export function StatusBar() {
   const t = useT();
   const { report, loading } = useEnvironment();
+  const version = useAppVersion();
 
   const missingRequired =
     report?.tools.filter((tool) => tool.importance === "required" && tool.state !== "ready") ?? [];
@@ -42,7 +44,7 @@ export function StatusBar() {
           // Rust core. It must never be mistaken for the real integration (§80).
           <span className="statusbar__item statusbar__badge">Preview — fixtures</span>
         )}
-        <span className="statusbar__item statusbar__item--muted">0.2.0</span>
+        {version && <span className="statusbar__item statusbar__item--muted">{version}</span>}
       </div>
     </footer>
   );
