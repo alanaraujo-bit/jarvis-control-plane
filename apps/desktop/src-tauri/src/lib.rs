@@ -100,7 +100,54 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
 
-            let db = Database::open(data_dir.join("jarvis.db"))?;
+            // Opening the database is the one startup step that can fail in a
+            // way the user has to be told about, so it is the one that does
+            // not simply `?` its way out of `setup`.
+            //
+            // **Why this exists.** An older build opened against a database a
+            // newer build had already migrated refuses to run — correctly,
+            // because §62 forbids letting an old build write rows a new schema
+            // cannot interpret. But the refusal arrived as a panic in
+            // `setup`: the process died before any window existed, so what a
+            // person saw was an application that did nothing at all when they
+            // double-clicked it. Found by running the installed copy after a
+            // migration landed, and it is exactly the shape §81 warns about —
+            // the behaviour was right and the product looked broken.
+            //
+            // A native dialog rather than a window of our own: there is no
+            // webview yet and cannot be one, since the database it would need
+            // is the thing that failed.
+            let db = match Database::open(data_dir.join("jarvis.db")) {
+                Ok(db) => db,
+                Err(error) => {
+                    let message = match &error {
+                        db::DbError::FromTheFuture { found, supported } => format!(
+                            "This copy of J.A.R.V.I.S. is older than your data.\n\n\
+                             Your database was written by a newer version (schema {found}); \
+                             this build understands schema {supported}.\n\n\
+                             Nothing has been changed or lost. Install the current version \
+                             and it will open normally.",
+                        ),
+                        other => format!(
+                            "J.A.R.V.I.S. could not open its local database.\n\n{other}\n\n\
+                             Your data has not been changed. The database is at:\n{}",
+                            data_dir.display(),
+                        ),
+                    };
+                    tracing::error!(%error, "refusing to start");
+                    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                    app.dialog()
+                        .message(message)
+                        .title("J.A.R.V.I.S.")
+                        .kind(MessageDialogKind::Error)
+                        .blocking_show();
+                    // Exit deliberately rather than returning the error: a
+                    // returned error panics with the same silence this exists
+                    // to replace, and the dialog has already said everything
+                    // there is to say.
+                    std::process::exit(1);
+                }
+            };
             tracing::info!(path = ?data_dir, "local data directory ready");
 
             let db = Arc::new(db);

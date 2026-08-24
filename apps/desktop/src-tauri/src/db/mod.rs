@@ -153,3 +153,78 @@ mod tests {
         .unwrap();
     }
 }
+
+#[cfg(test)]
+mod future_db_tests {
+    use super::*;
+
+    /// A database from a newer build is refused rather than opened.
+    ///
+    /// This is the rule that stopped the installed copy from starting after a
+    /// migration landed (§62/§91) — correct behaviour that looked like a
+    /// broken application, because the refusal arrived as a panic before any
+    /// window existed. The refusal itself is pinned here; `lib.rs` is what
+    /// turns it into a sentence somebody can read.
+    #[test]
+    fn a_database_from_a_newer_build_is_refused_with_both_versions_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("jarvis.db");
+
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute(
+                "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)",
+                [SCHEMA_VERSION + 3],
+            )
+            .unwrap();
+        }
+
+        match Database::open(&path) {
+            Err(DbError::FromTheFuture { found, supported }) => {
+                // Both numbers, because the message shows them and a person
+                // deciding whether to update needs to know which way round it
+                // is.
+                assert_eq!(found, SCHEMA_VERSION + 3);
+                assert_eq!(supported, SCHEMA_VERSION);
+            }
+            Err(other) => panic!("expected FromTheFuture, got {other:?}"),
+            Ok(_) => panic!("an older build must refuse a newer database"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod dialog_probe {
+    use super::*;
+
+    /// Build a database that claims a schema from the future, at a path given
+    /// on the command line.
+    ///
+    /// A tool rather than an assertion: it exists so the *dialog* in `lib.rs`
+    /// can be seen with human eyes, which is the only way to know a message
+    /// meant for a person actually reads like one. `#[ignore]`d because it
+    /// writes a file and asserts nothing.
+    #[test]
+    #[ignore = "tool: writes a future-schema database for a manual dialog check"]
+    fn write_a_future_database() {
+        let path = std::env::var("JARVIS_FUTURE_DB").expect("set JARVIS_FUTURE_DB");
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations
+                 (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_migrations (version, applied_at) VALUES (99, 0)",
+            [],
+        )
+        .unwrap();
+        eprintln!("wrote a schema-99 database to {path}");
+    }
+}
