@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import type { RelayCommand, RelaySnapshot } from "@jarvis/protocol";
+import type { RelayCommand, RelaySnapshot } from "../src/protocol.ts";
 import {
   COMMAND_TTL_MS,
   MAX_PENDING,

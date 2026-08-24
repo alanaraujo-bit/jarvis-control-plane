@@ -20,7 +20,7 @@
  * correctness, and this stores kilobytes.
  */
 
-import type { RelayCommand, RelayCommandResult, RelaySnapshot } from "@jarvis/protocol";
+import type { RelayCommand, RelayCommandResult, RelaySnapshot } from "./protocol.js";
 
 /** How long a snapshot is served before the phone is told it is stale. */
 export const SNAPSHOT_TTL_MS = 60 * 60 * 1000;
