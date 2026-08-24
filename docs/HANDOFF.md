@@ -74,9 +74,9 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**422 tests** (413 Rust — 406 run, 7 intentionally `#[ignore]`d because they
+**452 tests** (421 Rust — 414 run, 7 intentionally `#[ignore]`d because they
 need a real `claude` CLI, a real microphone, or this machine's own recorded
-session history — 9 i18n) · all green.
+session history — 9 i18n, 22 relay) · all green.
 
 Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 
@@ -116,6 +116,7 @@ Installed and working on this machine at `%LOCALAPPDATA%\J.A.R.V.I.S`.
 | **Scrollback search (§20)** | Ctrl+F over the terminal, match-case, live counter, overview ruler only while searching |
 | **Image paste (§22)** | Ctrl+V writes the clipboard image into the session's own directory and types the path; a chip with a hover preview, never a bare filename |
 | **Settings (§64)** | Appearance, Terminal, Agents, Environment, Updates — ordered by frequency of use; bounds enforced in the core rather than only drawn in the UI, and preferences apply in place so changing the terminal type size never rebuilds a running session |
+| **Mobile companion (§55–§59)** | a relay on Vercel that is a blind mailbox rather than a server that knows anything; the desktop pushes a summary and collects commands, the phone reads and approves. Off unless chosen; turn the relay off and the desktop is untouched |
 | **Preview (§46)** | the dev server URL read from the session's own output, opened in a separate window (never an iframe — the CSP forbids it and widening it would be an escalation), loopback only, with Reload for a server that has no hot reload |
 | **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
 | **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
@@ -329,7 +330,9 @@ see next steps.
 
 ### Not built — deliberately absent, not stubbed
 
-Mobile PWA (§55), cloud (§59).
+Push notification (needs a developer account), and starting a mission from
+the phone (needs the same Unattended checks `autopilot_start` makes,
+including the untrusted-folder refusal in item 25).
 
 Also absent by choice: **push and pull**. Review commits but does not talk to a
 remote — see section 7.
@@ -738,6 +741,30 @@ Every one of these is real and already cost time.
     silently overwriting the first. Caught by a test that writes twice in a
     row — which is fast enough to land in one millisecond, exactly as a
     person pasting twice is.
+
+45. **A "disconnect" that only forgets locally does not disconnect.** Unpairing
+    the companion cleared the desktop's own rows and left the mailbox standing
+    on the relay, so a phone that had already paired went on reading snapshots
+    from a desktop that believed it had cut them off. A switch that leaves a
+    live token working is worse than no switch — it lies about exactly the
+    thing someone reaches for it to be sure of. **Revoke remotely first, then
+    forget locally**: after the local token is gone there is nothing left to
+    authorise the revocation with. Found by testing the real thing; reading the
+    code would not have shown it, because each half was individually correct.
+
+46. **Vercel builds an app directory alone, so a monorepo dependency is not
+    there.** `workspace:*` resolves locally and fails in the build. The relay
+    carries a generated copy of the type declarations it needs, with a test
+    that fails if the copy drifts from the source of truth — a generated file
+    nothing checks is a file that drifts.
+
+47. **On Vercel, a default export is an Express-style `(req, res)` handler;
+    named `GET`/`POST` exports get the web-standard `Request`.** The symptom
+    is `request.headers.get is not a function` in production, from code that
+    typechecks cleanly. Related: the `.ts` suffix in an import does not survive
+    the build — handlers must import `.js`, which is what TypeScript expects
+    for ESM anyway. Node's own test runner wants `.ts`, so the tests get their
+    own tsconfig rather than the build's being loosened.
 
 ---
 

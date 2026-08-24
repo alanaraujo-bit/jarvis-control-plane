@@ -480,7 +480,67 @@ workspace, and relaunching afterward skipped straight to Mission Control.
 - [x] Uninstall removes the program and **preserves user data**
 **Verified on this machine:** installed, launched, upgraded, uninstalled and
 reinstalled. Install footprint is 7.3 MB. Signing certificate is blocked (B1).
-## M11 — Mobile PWA (§55–§58) + Cloud relay (§59)
+## M11 — Mobile PWA (§55–§58) + Cloud relay (§59)  ~
+- [x] The relay — three endpoints on Vercel, a **blind mailbox** rather than
+      a server that knows anything. The desktop pushes a summary and collects
+      queued commands; the phone reads and queues. Turn it off and the desktop
+      is untouched, which is the test of whether §3 survived the cloud.
+- [x] Pairing without an account — a six-character code, single-use, five
+      minutes, attempts counted. The relay stores only a **hash** of each
+      token.
+- [x] The desktop half — one background thread, off unless chosen, every
+      failure logged and swallowed.
+- [x] The PWA — freshness first, approvals, what is running. No framework and
+      no build step.
+- [x] The pairing surface in Settings, saying what is sent **before** you
+      connect.
+- [x] Disconnect actually revokes — found by testing, see below.
+- [ ] **Not verified in a browser.** The Chrome extension is not connected in
+      this session, so the PWA has never been looked at on a phone-sized
+      viewport. Its logic is tested and its transport is proven end to end,
+      but how it *looks* is unverified. This is why M11 is `~` and not `✅`.
+- [ ] Starting a mission from the phone. Declined rather than ignored: it
+      needs the same Unattended checks `autopilot_start` makes, including the
+      untrusted-folder refusal (HANDOFF §5 item 25).
+- [ ] Push notification. Needs a developer account and is its own scope.
+
+### The decisions worth keeping
+- **Vercel, not Railway, and for cost rather than taste.** Railway already
+  bills monthly on this account (ten projects, next invoice USD 18.21);
+  Vercel has no contract and no recorded costs. The directive asks for no
+  recurring cost where an adequate free path exists — for a relay there is.
+- **A summary, never a mirror.** What needs a person, and nothing else. No
+  file contents, no terminal output, no conversation text. A relay holding a
+  copy of the work would be the second store §23 exists to prevent.
+- **Only `AllowOnce` is reachable from a phone.** §35 offers four answers and
+  three of them write a lasting policy — including `NeverAllow`. A phone has
+  a small screen and a thumb, so it gets the one answer that expires with the
+  thing it answers. A refusal from a phone is simply not approving; the
+  guardrail already refuses by default.
+- **Everything expires, enforced on read.** A serverless relay has no process
+  to sweep in, and an expired value must never be served even if nothing has
+  swept it. Commands expire far sooner than snapshots.
+
+### Four things found by running it, not by reading it
+1. **Disconnect did not disconnect.** Clearing the local pairing left the
+   mailbox standing, and a paired phone kept reading. A switch that leaves a
+   live token working is worse than no switch.
+2. **The `.ts` import suffix does not survive the Vercel build** — 500 in
+   production from code that typechecked.
+3. **`workspace:*` cannot resolve in a subdirectory deploy.** Worked locally,
+   failed in the build.
+4. **A default export gets `(req, res)`, not a `Request`.** Named `GET` /
+   `POST` exports are what select the web-standard signature.
+
+And one found by reading: `pair.ts` declared an attempts counter, checked it,
+and never incremented it — a limit that could not be reached, and one of the
+three things making a six-character code safe.
+
+**Verified end to end against real infrastructure**, including the step that
+matters most: after pairing from the real desktop UI, the background thread
+published on its own and the mailbox came back carrying `deviceName: PHANT0MX` — this machine's
+real hostname, with nobody driving it.
+
 ## M12 — Voice (§54)  ~
 - [x] Microphone input that transcribes into the terminal — dictation as an
       input method for a running session, not a separate voice-command
