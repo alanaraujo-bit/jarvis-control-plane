@@ -51,9 +51,28 @@ export function NotificationCentre({
     if (open) setNow(Date.now());
   }, [open]);
 
-  // Read is what opening means.
+  /**
+   * Which rows were new when the panel opened.
+   *
+   * Opening marks everything read — the badge has to fall the moment you look,
+   * or it is a counter of nothing. But that also erased the marker showing
+   * *which* rows were the new ones, which is the first thing anybody wants
+   * from a list they have opened because a badge appeared. Found by opening
+   * the panel in the real app and watching two genuinely-new rows render
+   * exactly like two old ones.
+   *
+   * So the marker is drawn from a snapshot taken at the moment of opening,
+   * and the database is updated immediately regardless.
+   */
+  const [wasNew, setWasNew] = useState<Set<number>>(() => new Set());
   useEffect(() => {
-    if (open) void markAllSeen();
+    if (!open) return;
+    setWasNew(new Set(items.filter((item) => item.seenAt === null).map((item) => item.id)));
+    void markAllSeen();
+    // Deliberately not keyed on `items`: the snapshot is of the moment the
+    // panel opened, and re-taking it as notifications arrive would mark
+    // everything new again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, markAllSeen]);
 
   useEffect(() => {
@@ -131,6 +150,7 @@ export function NotificationCentre({
                   <NotificationRow
                     key={item.id}
                     notification={item}
+                    isNew={wasNew.has(item.id)}
                     locale={locale}
                     onOpen={() => {
                       void markActed(item.id);
@@ -150,10 +170,13 @@ export function NotificationCentre({
 
 function NotificationRow({
   notification,
+  isNew,
   locale,
   onOpen,
 }: {
   notification: Notification;
+  /** New when this panel was opened — see the snapshot in the parent. */
+  isNew: boolean;
   locale: string;
   onOpen: () => void;
 }) {
@@ -184,7 +207,7 @@ function NotificationRow({
   );
 
   return (
-    <li className="notify-row" data-unseen={notification.seenAt === null || undefined}>
+    <li className="notify-row" data-unseen={isNew || undefined}>
       {navigable ? (
         <button type="button" className="notify-row__hit" onClick={onOpen}>
           {content}

@@ -37,7 +37,10 @@ export function NotificationBell({
       data-unread={count > 0 || undefined}
       onClick={onToggle}
       aria-label={label}
-      title={label}
+      // No native tooltip while the panel is open: it renders above everything
+      // and lands squarely on the panel's own heading, which says the same
+      // word. Seen in a real screenshot of the open centre.
+      title={open ? undefined : label}
       aria-expanded={open}
     >
       <Bell size={14} strokeWidth={1.75} aria-hidden="true" />

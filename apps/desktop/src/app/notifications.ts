@@ -191,8 +191,29 @@ export const useNotifications = create<NotificationsState>((set) => ({
 let windowFocused = true;
 let visibleSessions: string[] = [];
 
+/** Told whenever what is on screen changes, so a toast can stand down. */
+const watchers = new Set<(ids: string[]) => void>();
+
 function syncAttention() {
   useNotifications.getState().reportAttention(windowFocused, visibleSessions);
+  for (const watcher of watchers) watcher(visibleSessions);
+}
+
+/**
+ * Be told which sessions are on screen.
+ *
+ * Exists so a toast about a session can disappear the moment somebody goes to
+ * that session. It has done its job at that point, and leaving it up means the
+ * person has to dismiss a card telling them about the thing they are looking
+ * at — which is the sort of small indignity that makes people switch a feature
+ * off. Found by clicking through to a session in the real app and watching its
+ * own toast sit there afterwards.
+ */
+export function onVisibleSessions(watcher: (ids: string[]) => void): () => void {
+  watchers.add(watcher);
+  return () => {
+    watchers.delete(watcher);
+  };
 }
 
 /** Report whether the window has focus. */

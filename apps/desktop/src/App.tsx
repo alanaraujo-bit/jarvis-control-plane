@@ -77,6 +77,9 @@ export function App() {
   const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
   const [focusSessionProvider, setFocusSessionProvider] = useState<SessionKind | undefined>();
   const [focusSessionTitle, setFocusSessionTitle] = useState<string | undefined>();
+  // Distinguishes one "take me there" from the next — see `focusToken` in
+  // ProjectWorkspace for what silently did not happen without it.
+  const [focusToken, setFocusToken] = useState(0);
   const [accountsProjectId, setAccountsProjectId] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const outstanding = useNotifications((state) => state.outstanding);
@@ -104,6 +107,7 @@ export function App() {
     setFocusSessionId(focus?.sessionId);
     setFocusSessionProvider(focus?.sessionProvider);
     setFocusSessionTitle(focus?.sessionTitle);
+    if (focus?.area) setFocusToken((token) => token + 1);
   }, []);
 
   /**
@@ -404,6 +408,7 @@ export function App() {
                 focusSessionId={focusSessionId}
                 focusSessionProvider={focusSessionProvider}
                 focusSessionTitle={focusSessionTitle}
+                focusToken={focusToken}
               />
             ) : surface === "settings" ? (
               <Settings />

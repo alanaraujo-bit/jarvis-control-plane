@@ -4,7 +4,10 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 38px;
+  /* Wide enough that the count sits beside the bell's top-right rather than
+     on top of it. At 38px the badge covered the icon almost entirely — seen
+     only by zooming into a real screenshot, where it read as a smudge. */
+  width: 42px;
   height: 100%;
   color: var(--text-secondary);
   transition:
@@ -26,17 +29,17 @@
 
 .notify-bell__count {
   position: absolute;
-  top: 5px;
-  right: 5px;
-  min-width: 13px;
-  height: 13px;
-  padding: 0 3px;
+  top: 4px;
+  right: 3px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2.5px;
   display: grid;
   place-items: center;
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--text-on-accent);
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
   line-height: 1;

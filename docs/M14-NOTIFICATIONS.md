@@ -14,15 +14,15 @@ wants.
 
 | Step | State |
 |---|---|
-| 0. Spike: does a Windows toast fire from this app at all? | plugin wired, `cargo check` green; not yet fired |
-| 1. Signals: where "the agent stopped" actually comes from | decided (below) |
-| 2. The detector for the provider's own permission prompt | evidence captured |
-| 3. Storage + read state | not started |
-| 4. Dispatch and the suppression rule | not started |
-| 5. The Notification Center surface | not started |
-| 6. Settings | not started |
-| 7. Tests | not started |
-| 8. Verified in a real build against a real agent | not started |
+| 0. Spike: does a Windows toast fire from this app at all? | **done** — it does, correctly attributed; clicking it does nothing, and cannot |
+| 1. Signals: where "the agent stopped" actually comes from | **done** — five sources, two confidences |
+| 2. The detector for the provider's own permission prompt | **done** — built from four real captures, 13 tests |
+| 3. Storage + read state | **done** — migration 12, `notify::store`, 11 tests |
+| 4. Dispatch and the suppression rule | **done** — `notify::bus`, `Attention`, `useNotificationFeed` |
+| 5. The Notification Centre surface | **done** — bell, centre, toast stack |
+| 6. Settings | **done** — three switches and a real test button |
+| 7. Tests | 476 Rust + 9 i18n green; typecheck green |
+| 8. Verified in a real build against a real agent | in progress |
 
 ---
 

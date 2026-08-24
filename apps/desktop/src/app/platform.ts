@@ -22,6 +22,44 @@ const BROWSER_FIXTURES: Record<string, unknown> = {
   // time; flip this to `false` locally to preview onboarding itself.
   onboarding_status: true,
   voice_model_status: { present: true },
+  // Notifications (§49). Enough shapes to inspect the surface: a question with
+  // a long command, a finished turn with the agent's own reply, and a run that
+  // stopped — the three kinds, so the colour vocabulary can be checked at a
+  // glance in both themes.
+  notifications_centre: {
+    outstanding: 2,
+    enabled: true,
+    notifications: [
+      {
+        id: 3, tsMs: Date.now() - 40_000, kind: "needsApproval", reason: "providerPrompt",
+        confidence: "observed", projectId: "p1", projectName: "casco-api", sessionId: "s1",
+        missionId: null, missionTitle: null, provider: "claude-code",
+        preview: "Do you want to proceed? — Bash command · git push --force origin main",
+        detailCode: null, seenAt: null, actedAt: null,
+      },
+      {
+        id: 2, tsMs: Date.now() - 9 * 60_000, kind: "finished", reason: "turnEnded",
+        confidence: "official", projectId: "p1", projectName: "casco-api", sessionId: "s2",
+        missionId: "m1", missionTitle: "Rate limit the public API",
+        provider: "claude-code",
+        preview: "Added the token bucket and its tests. All 34 pass; the middleware is wired into the public router only.",
+        detailCode: null, seenAt: null, actedAt: null,
+      },
+      {
+        id: 1, tsMs: Date.now() - 3 * 3_600_000, kind: "stopped", reason: "runStopped",
+        confidence: "official", projectId: "p2", projectName: "jarvis-relay", sessionId: "s3",
+        missionId: "m2", missionTitle: "Move the relay to Node 22",
+        provider: "codex",
+        preview: "Autopilot ran out of turns",
+        detailCode: "autopilot.outOfTurns", seenAt: Date.now() - 3 * 3_600_000, actedAt: null,
+      },
+    ],
+  },
+  notifications_attention: null,
+  notifications_mark_seen: 0,
+  notifications_mark_all_seen: 0,
+  notifications_mark_acted: 0,
+  notifications_clear: null,
   scan_environment: {
     scannedAt: new Date().toISOString(),
     ready: true,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useT } from "../../app/i18n";
 import { isTauri } from "../../app/platform";
-import { useNotifications, type Notification } from "../../app/notifications";
+import { onVisibleSessions, useNotifications, type Notification } from "../../app/notifications";
 import { describe } from "./describe";
 import { chime, flashTaskbar, systemToast } from "./present";
 
@@ -59,6 +59,19 @@ export function useNotificationFeed() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A toast about a session somebody has just gone to has said what it had to
+  // say. See `onVisibleSessions`.
+  useEffect(
+    () =>
+      onVisibleSessions((ids) => {
+        if (ids.length === 0) return;
+        setToasts((current) =>
+          current.filter((item) => !(item.sessionId && ids.includes(item.sessionId))),
+        );
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!isTauri()) return;

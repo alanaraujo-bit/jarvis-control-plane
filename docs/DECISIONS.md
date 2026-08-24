@@ -1268,3 +1268,140 @@ ainda ancora o cálculo histórico, mas não aparece como countdown atual.
 **Capacidades:** `account_switching` só passou a `true` nos adaptadores depois
 que registro, sessão, transcript, troca, relé, paridade Codex e superfície
 estavam implementados e testados.
+
+---
+
+## D35 — A notification is raised only for what the person is not already looking at, and a question read off a terminal is Observed, never Official
+
+The ask was ORCA's behaviour: be told when any agent stops working, whether it
+finished or is waiting for a decision, with a preview of what it wants.
+
+**The rule is the feature.** `TurnEnded` fires on every turn, and a person
+sitting in front of a terminal sees one every minute or two. A product that
+raises each of those is unusable inside ten minutes, and — worse — it teaches
+the reader to dismiss the toast that actually mattered. So the core suppresses
+anything about a session the person is currently watching, where *watching*
+means the window has focus **and** that session is on screen. Both halves are
+required: a visible terminal in a window behind something else is not being
+watched, and a focused window on Mission Control is not watching anything.
+
+A suppressed notification is **dropped entirely**, not stored and marked read.
+That makes the notification centre a list of things you *missed* rather than a
+transcript of things you watched happen, which is what makes it worth opening.
+What happened, permanently, is `activity` (§48) — and the two bars genuinely
+disagree in both directions: a finished turn is worth a notification and is
+deliberately not worth an activity row, while a quota threshold crossed at 3am
+is worth a row and is not worth waking anybody.
+
+**The decision lives in the core, not in the surface.** The surface knows what
+is on screen so it keeps `Attention` updated; but "is this worth raising" is
+answered in one place, at the moment of raising, and is tested. Splitting it —
+core stores, surface decides — would have meant hundreds of rows per session
+and a race between the event and the frontend's idea of what was visible.
+
+### The gap that made this a milestone rather than a wiring job
+
+Everything J.A.R.V.I.S. already knew about a stopped agent came from something
+a provider *stated*: a finished turn in the transcript, a guardrail decision,
+an autopilot stop reason. But **the most ordinary "waiting for you" moment of
+all is stated nowhere.** `guardrail::guard` returns early for any tool that is
+not `Bash`, and again for a `Bash` command that classifies as nothing
+sensitive; the transcript records the answer, never the question. Claude Code
+asking whether it may write a file exists only on the screen — and the session
+log already holds every byte of it (§23).
+
+So `notify::detect` reads it off the screen, and labels it **Observed** rather
+than Official. Same discipline as usage figures (§28): the confidence travels
+with the fact, and a reading is never presented as a statement.
+
+### What the captures actually showed
+
+`notify::capture` spawns real agent CLIs in real PTYs and records every byte.
+Four captures against Claude Code 2.1.241 and Codex 0.149.1. Three findings,
+none of which would have come from reasoning about it:
+
+**The harness had to stand in for a terminal.** The first run captured exactly
+four bytes — the cursor-position query `ESC [ 6 n` — because Claude Code draws
+nothing until something answers it. D6's trap, met from the other side.
+
+**The harness inherited the session running it.** The second run captured an
+agent in auto mode that never asked anything: it had picked up
+`CLAUDE_CODE_CHILD_SESSION` and friends from the Claude Code session running
+the test. Stripped now, permission mode passed explicitly.
+
+**These TUIs emit cursor-forward escapes where a person sees a space.** A
+conventional `strip_ansi` — the one `preview/detect.rs` already has — turns
+`Do you want to create hello.txt?` into `Doyouwanttocreatehello.txt?`. Every
+pattern written against the readable form matches nothing at all. Hence
+`notify::render`, which translates cursor-forward into that many spaces and
+absolute cursor moves into line breaks. It is not a terminal emulator and must
+never become one: it answers one question, which is what words are on screen.
+
+### Why the detector keys on shape, not on wording
+
+The four captures phrase themselves completely differently — `Do you want to
+create hello.txt?`, `Do you want to proceed?`, `Choose the text style that
+looks best with your terminal` (no question mark, no footer), and Codex's own
+`Do you trust the contents of this directory?` with a different cursor glyph.
+One thing survives all four:
+
+> a numbered choice list, of which exactly one row carries a cursor glyph.
+
+That is the whole test. The wording is used only to write the preview. Matching
+on "Do you want" would have missed the theme picker and would break the day a
+provider rewords a sentence, which providers do and are entitled to.
+
+A plain `>` was in the glyph set and was removed. It is the quotation marker in
+every markdown file and diff on earth, so a quoted numbered list — an entirely
+ordinary thing for an agent to print — parsed as a live selection with the
+first row chosen. The quiet conjunction hides that mid-turn and does not hide
+it when such a list is the last thing on screen as a turn ends.
+
+**A match alone is never enough.** A notification that says an agent is waiting
+when it is working is worse than no notification. So `watch` requires the match
+to hold *and* the terminal to have been quiet for 1.4s *and* nothing to have
+been typed since. A list that scrolls past inside a turn fails the second; an
+answered question fails the third.
+
+### What the Windows toast can and cannot do
+
+Verified against a real installed build **before** the surface was written,
+and two of three answers were not the obvious ones:
+
+* **It appears, attributed to us** — our own mark and name — on a machine that
+  also carries an unrelated `jarvis.exe` with its own Start Menu shortcut. The
+  AUMID comes from the bundle identifier and NSIS writes it onto our shortcut.
+* **It does not appear from `pnpm dev`.** The plugin sets the AUMID only when
+  the executable is not under `target/debug` or `target/release`, and an
+  unpackaged binary has no shortcut to be identified by. A platform fact, not
+  a bug to chase.
+* **Clicking it does nothing, and cannot.** `tauri-plugin-notification` 2.3.3
+  exposes activation callbacks on mobile only. So the desktop toast is an
+  **alert**, and the in-app centre is the thing you click. Built the other way
+  round, this would have shipped a toast that looks interactive and is not.
+
+### Two things deliberately not raised
+
+A guardrail set to *ask* is not raised: Claude Code then draws its own question
+on the terminal, which the watcher already sees with a better preview. A
+completed unattended run is not raised: `mission::store::set_status` has
+already announced the completion it caused. Both would have been one event
+notified twice, which is the noise that makes people stop reading.
+
+### `notify::bus` is a global, and almost nothing else here is
+
+Notifications are raised from the transcript tailer, the terminal watcher, the
+guardrail decision log, a mission changing status and a run giving up. Half are
+background threads several calls below any command handler, and none of them is
+*about* notifications. Threading a database handle, an `Attention` and a webview
+channel through all of that would have put this feature's plumbing into
+`mission::store`'s signature. Not installed is a no-op, so tests and the
+guardrail hook subprocess never have to care.
+
+### The preview is the agent's own words, and is not translated
+
+`kind` and `reason` are stable identifiers the surface localises (§65).
+`preview` is the exception, deliberately: it is what the agent wrote on its own
+screen or in its own reply, and translating an agent's question would be
+inventing one. It is the only untranslated string the surface shows, and it is
+the one worth reading.

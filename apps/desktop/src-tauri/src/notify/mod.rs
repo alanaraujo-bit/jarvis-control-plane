@@ -53,6 +53,9 @@ pub mod render;
 pub mod store;
 pub mod watch;
 
+#[cfg(test)]
+mod tests;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use parking_lot::Mutex;
@@ -286,7 +289,7 @@ pub fn enabled(db: &crate::db::Database) -> bool {
 pub const PREVIEW_CHARS: usize = 140;
 
 #[cfg(test)]
-mod tests {
+mod model_tests {
     use super::*;
 
     #[test]
