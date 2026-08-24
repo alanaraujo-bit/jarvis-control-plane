@@ -793,6 +793,18 @@ row; and clicking a row for an **archived** project did nothing at all — a
 silent fall-through that turned out to have been in Global Search since §51
 (D40).
 
+- [x] **Continuing a session (D41).** A row opens a **preview** -- the
+      conversation, read-only -- and the preview offers the way back to the
+      terminal: a live session is rejoined, a finished one is continued by a new
+      agent handed the old conversation, in a tab named after it. Both CLIs
+      resume by opposite mechanisms and only one can be followed, so
+      `ResumeSupport` says which and the offer is absent with a reason where it
+      cannot work. Verified by planting a fact, closing the session, continuing
+      it and asking: **"Amber."**
+- [x] **A session starts where it says it starts (D42).** Found by continuing
+      into a deleted folder and watching a real agent open in the user's home
+      directory. True of every launch into a moved project; refused now.
+
 Full account: [`docs/M15-HISTORY.md`](M15-HISTORY.md).
 
 ## Next steps

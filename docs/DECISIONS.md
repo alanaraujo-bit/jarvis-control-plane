@@ -1553,3 +1553,88 @@ falling through without a word. And it was **not a new bug**: Global Search had
 carried exactly this failure since §51 shipped, for any conversation in a
 project since archived. Session History did not introduce it, it made it
 visible.
+
+## D41 — Continuing a session is a new session that carries the old conversation
+
+History that can only be read is an archive. The point of finding a session
+again is usually to carry on with it, so a preview offers the way back to the
+terminal: a live session is **rejoined**, a finished one is **continued**.
+
+A continuation is a **new** session — new process, new log, new row — with
+`sessions.resumed_from` naming the one it picked up from. It is not a
+resurrection: the old process is gone, and pretending otherwise would mean two
+sessions sharing one log, which is the thing §23 exists to prevent.
+
+### The providers resume by opposite mechanisms
+
+Measured on this machine, not read off a help page, and the difference decides
+whether the result can be followed at all:
+
+| | What resuming does | Consequence |
+|---|---|---|
+| **Claude Code 2.1.241** | `--resume <id> --fork-session` honours our `--session-id` and writes a **new** transcript named for it | Deterministic correlation survives |
+| **Codex 0.147.0** | `codex resume <id>` **appends** to the rollout it was given — 14 lines became 25, no new file | That rollout predates our launch, so `codex::correlate` excludes it by design |
+
+`--fork-session` is therefore not optional for Claude Code. Without it the CLI
+ignores `--session-id` and keeps writing to the original transcript, so two of
+our sessions would tail one file and each would claim the other's turns.
+
+A single `resume: bool` is true for both providers and useful for neither, so
+`ResumeSupport` sits in the capability model beside `TitleSupport` and
+`BriefingSupport`. `Fork` is offered; `AppendInPlace` is **real and not wired
+up**, and says so rather than being offered as a button that starts a fresh
+agent while claiming to continue something (§81, §26).
+
+### The boundary, and why it is per line
+
+A fork's new transcript opens with a **full copy** of the prior conversation,
+and every copied line is rewritten with the new session id — so the id cannot
+tell a copy from a new turn. What copies do keep is their **original
+timestamp**: on this machine a fork written at 17:13 carried lines stamped
+16:18–16:22. Nothing that happened before this session launched can be
+something this session did, so that is the boundary.
+
+Offsets cannot serve. The file is created by the provider *after* we launch, so
+there is no earlier position to seek past, and a seek-to-end races the first
+real turn.
+
+The test is applied to the **whole line, before anything reads it**. Gating only
+the conversation items would leave three other readers running on replayed
+history:
+
+* `quota::observe_line` would record consumption that happened hours ago;
+* the account rotation under it could switch accounts because of that;
+* `announce_turn_ended` would raise a notification **per finished turn** of a
+  conversation the person has already read — the feature that exists to let
+  somebody walk away, interrupting them on the way back.
+
+A line with **no** timestamp is deliberately not treated as a replay. Claude
+Code's `ai-title` is the only one, and taking it is right: a continued session
+should carry the name of the conversation it continues until the provider picks
+a better one.
+
+Verified in a real build. A fact was planted in a session, the session closed,
+continued from its preview, and asked "without reading any files, what is my
+favourite colour?" — **"Amber."** The two rows then read 618 tokens and **8**,
+not 618 and 626, and a sentence present in both transcripts on disk returns
+exactly **one** search hit.
+
+## D42 — A session must start where it says it starts
+
+Found by continuing a session whose project folder had since been deleted. The
+launch "succeeded": a real Claude Code process started, drew its trust prompt,
+and reported `Accessing workspace: C:\Users\Alan Araujo` — **the user's home
+directory** — with read, write and execute, while the header above it named a
+project.
+
+A non-existent working directory is not honoured by the spawn, so the child
+lands wherever the parent happens to be. This is not specific to continuing a
+session: it is true of **every** launch into a project whose folder has moved or
+been removed, which `Project` has always reported as `exists: false` and nothing
+ever acted on. Archiving a scratch project or removing a worktree (§45) makes it
+the ordinary case rather than the edge.
+
+Working somewhere other than where you said is the worst available outcome —
+worse than not starting — so `launch` refuses with `session.cwdMissing`, and a
+history row carries `project_exists` so the surface offers reading instead of a
+Continue the core would refuse. Both halves: the core enforces, the UI explains.

@@ -38,6 +38,7 @@ Working and verified against real agents on a real machine:
 | Project Brain, project history, Notes | Working |
 | Global Search — knowledge, notes, missions, activity, conversations | Working |
 | Session History — every session, titled, searchable, openable (§88) | Working |
+| Continuing a past session — preview it, then carry on in the terminal (§88) | Working |
 | Windows installer + updater | Working (unsigned — see `docs/BLOCKERS.md`) |
 
 Not built yet — deliberately absent rather than stubbed (§81):

@@ -249,13 +249,60 @@ verbatim, including one that reads `CRead README.md and describe…`. That leadi
 which is the right behaviour — but it is worth knowing that a derived title can
 inherit a typing artifact, and that renaming is the answer.
 
-## 7. Open — pick this up first
+## 7. Continuing a session (D41/D42)
+
+Alan's correction after the first pass, and he was right: history you can only
+read is an archive. **A row opens a preview, and the preview offers the way back
+to the terminal.**
+
+* **Live** session — rejoined. The agent never stopped.
+* **Finished** session — continued: a new agent process handed the old
+  conversation, in a tab named after it.
+* **Cannot be** — said, with the reason, never a button that would fail (§81).
+
+The preview renders through `ConversationView`, the same component the live
+session uses, so it cannot drift from the real thing.
+
+### What was measured
+
+| | Resuming does | Consequence |
+|---|---|---|
+| Claude Code 2.1.241 | `--resume <id> --fork-session` writes a **new** transcript, honouring our `--session-id` | Correlation survives; **offered** |
+| Codex 0.147.0 | `codex resume <id>` **appends** to the given rollout — 14 lines became 25, no new file | It predates our launch, so `correlate` cannot find it; **not offered** |
+
+The fork copies the whole prior conversation, every line rewritten with the new
+session id — so only the **timestamp** distinguishes a copy from a new turn. The
+boundary drops such lines whole, before anything reads them; see D41 for the
+three readers that would otherwise run on replayed history.
+
+### Verified in a real build
+
+Planted a fact in a session, closed it, continued it from the preview, and asked
+without letting it read files: **"Amber."** The two rows then read 618 tokens
+and **8** — not 618 and 626 — and a sentence present in both transcripts on disk
+returns exactly **one** search hit.
+
+### The hazard this pass found
+
+Continuing a session whose project folder had been deleted started a real agent
+in the user's **home directory** (D42). True of every launch into a moved or
+deleted project, not just a continuation. The core refuses now
+(`session.cwdMissing`) and the row says "folder no longer on disk".
+
+## 8. Open — pick this up first
 
 The feature is built, committed and verified end to end (§6). Four things are
 outstanding, in priority order. The first is the only one that could make the
 feature *wrong* on a real machine.
 
-1. **Confirm migration 13's indexes actually exist on the databases that
+1. ~~**Confirm migration 13's indexes actually exist**~~ -- **addressed** by
+   migration 14, which re-creates both with `CREATE INDEX IF NOT EXISTS`: a
+   no-op where they are present and a repair where they are not. Adding a
+   statement to a version that has already run is only ever correct as a **new**
+   migration. The original note is kept below because the *reasoning* it warns
+   against is the point.
+
+1. **(superseded) Confirm migration 13's indexes actually exist on the databases that
    matter — HANDOFF item 9.** Migration 13's SQL was edited after it was first
    written (`idx_usage_session` was added later in the same session). The
    reasoning says every edit landed before the first launch, so the dev
@@ -281,7 +328,15 @@ feature *wrong* on a real machine.
    HANDOFF items 17 and 32. One test: insert a notification for `s1`, delete
    the session, assert zero rows.
 
-3. **Scope of the "verified in a real build" claim.** Everything in §6 ran
+3. **Codex resume is measured but not built.** `ResumeSupport::AppendInPlace`
+   records exactly what it does; wiring it needs locating the rollout **by id**
+   rather than by correlation (`codex::session_id_from_path` exists and the
+   tailer now records the id), plus the same replay boundary, which already
+   handles Codex envelopes -- there is a test for that. An hour of work, and it
+   should be verified with a live Codex session rather than assumed from the
+   Claude Code pass.
+
+4. **Scope of the "verified in a real build" claim.** Everything in §6 ran
    against the **dev** build's data directory (`%APPDATA%\dev.jarvis.desktop`).
    The installed 0.3.0 copy at `%LOCALAPPDATA%\J.A.R.V.I.S` has its own
    database, still on schema 12; it will migrate on next launch, and that

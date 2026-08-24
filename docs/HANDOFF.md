@@ -82,7 +82,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**547 tests** (516 Rust — 502 run, 14 intentionally `#[ignore]`d — 9 i18n,
+**560 tests** (529 Rust — 515 run, 14 intentionally `#[ignore]`d — 9 i18n,
 22 relay) · all green.
 
 The fourteen ignored ones are ignored for two different reasons, and it is
@@ -140,6 +140,7 @@ version **0.3.0**.
 | **Preview (§46)** | the dev server URL read from the session's own output, opened in a separate window (never an iframe — the CSP forbids it and widening it would be an escalation), loopback only, with Reload for a server that has no hot reload |
 | **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
 | **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
+| **Continuing a session (§88, D41)** | A history row opens a **preview** -- the conversation, read-only -- and the preview offers the way back to the terminal: a live session is rejoined, a finished one is **continued** by a new agent handed the old conversation. Both CLIs resume by opposite mechanisms and only one can be followed: Claude Code forks into a transcript we own, Codex appends to the original, which `correlate` cannot find. `ResumeSupport` says which, and the button is absent with a reason where it cannot work. The fork copies the whole prior conversation, so a per-line **timestamp boundary** drops replayed lines before anything reads them -- without it every token is counted twice and a notification fires per already-read turn. |
 | **Session History (§88)** | Every session this machine has ever run, in one place: titled, searchable, grouped by when it happened, openable read-only, renameable and deletable. The two facts that made this the gap it was: `sessions.title` had existed since migration 1 with **no writer at all**, and `session_list` filters `ended_at IS NULL`, so a finished session was unreachable. Claude Code names its own sessions and nobody was reading it (`ai-title`, in 89 of the 124 transcripts here); Codex names none, which is a real capability difference and now says so. A name a person types outranks both, forever (D36). The search runs over **what was actually said**, on §51's own FTS5 index. Delete takes the index rows and the log directory with it and says what it freed (D39) -- and that is the only pruning there is, on purpose. See D36--D40 and `docs/M15-HISTORY.md`. |
 | **Notifications (§49)** | An agent that stops — finished, or waiting on a decision — reaches the person who walked away. A bell and a centre in the titlebar, an in-app toast when the window is in front, a Windows toast and a taskbar flash when it is not. The rule the whole thing turns on: **nothing is raised about a session the person is already watching**, and a suppressed notification is dropped rather than stored-and-marked-read, so the centre is a list of what you *missed*. The preview is the agent's own words — the question it drew, or the reply it just gave — and carries where it came from: Official when a provider stated it, **Observed** when it was read off the terminal (§28). `notify::detect` is that reading, and it exists because Claude Code asking whether it may write a file is stated nowhere else. See D35. |
 
@@ -901,6 +902,38 @@ Every one of these is real and already cost time.
     Conversation View. If you ever need something the noise filter drops, lift
     it *before* the filter rather than loosening it; the filter is right for
     every other reader. See D37.
+
+59. **A session launched into a folder that is not there runs in the user's home
+    directory.** Not an error, not a refusal — a real Claude Code process
+    started, drew its trust prompt, and reported `Accessing workspace:
+    C:\Users\Alan Araujo`, with read, write and execute, while the header above
+    it named a project. A non-existent `cwd` is simply not honoured by the
+    spawn, so the child lands wherever the parent happens to be.
+
+    It is not exotic: it is true of **every** launch into a project whose folder
+    has moved or been deleted, and archiving a scratch project or removing a
+    worktree (§45) makes that the ordinary case. `Project` has reported
+    `exists: false` since it was written and nothing ever acted on it. `launch`
+    now refuses with `session.cwdMissing`, and Session History carries
+    `project_exists` so the surface explains instead of offering a Continue the
+    core would reject. See D42.
+
+60. **Resuming is not one thing, and the two providers do it opposite ways.**
+    Claude Code's `--resume --fork-session` writes a **new** transcript and
+    honours our `--session-id`; drop `--fork-session` and it keeps writing to
+    the *original*, so two of our sessions tail one file and each claims the
+    other's turns. Codex's `codex resume <id>` **appends** to the rollout it was
+    given — 14 lines became 25, no new file — and that rollout predates our
+    launch, so `codex::correlate` cannot find it at all.
+
+    A fork also opens with a **full copy** of the prior conversation, every line
+    rewritten with the *new* session id. The id therefore cannot tell a copy
+    from a new turn; only the **timestamp** can, because copies keep their
+    original one. And the boundary has to drop the whole **line** before
+    anything reads it: gating only the conversation items still lets
+    `quota::observe_line` record hours-old consumption, lets the account
+    rotation act on it, and raises a notification per finished turn of a
+    conversation the person has already read. See D41.
 
 ---
 
