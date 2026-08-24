@@ -14,7 +14,7 @@ import type { RelayCommandResult, RelaySnapshot } from "../src/protocol.js";
 
 import { fail, isDesktop, json, readJsonBody } from "../src/http.js";
 import { SNAPSHOT_TTL_MS, collectCommands, live } from "../src/mailbox.js";
-import { readMailbox, writeMailbox } from "../src/store.js";
+import { deleteMailbox, readMailbox, writeMailbox } from "../src/store.js";
 
 export const config = { runtime: "nodejs" };
 
@@ -56,4 +56,32 @@ export async function POST(request: Request): Promise<Response> {
   });
 
   return json({ commands: collected.commands });
+}
+
+/**
+ * Unpair: delete the mailbox, revoking every device at once.
+ *
+ * **Found by testing the real thing.** Disconnecting on the desktop cleared
+ * the local pairing and left the mailbox standing, so a phone that had already
+ * paired kept reading snapshots from a desktop that believed it had cut them
+ * off. A switch marked "disconnect" that leaves a live token working is worse
+ * than no switch — it is one that lies.
+ *
+ * Deleting the mailbox rather than removing device tokens one by one: the
+ * desktop is discarding its own token in the same breath, so nothing is left
+ * that could use the mailbox anyway, and "revoke everything" is the only
+ * meaning "disconnect" can honestly have here.
+ */
+export async function DELETE(request: Request): Promise<Response> {
+  const mailboxId = new URL(request.url).searchParams.get("mailbox");
+  if (!mailboxId) return fail("relay.badRequest", 400);
+
+  const mailbox = await readMailbox(mailboxId);
+  // Answering the same way for "gone" and "not yours" keeps an id from being
+  // probed — and a mailbox that is already gone is the state being asked for.
+  if (!mailbox) return json({ ok: true });
+  if (!(await isDesktop(request, mailbox))) return fail("relay.unauthorised", 401);
+
+  await deleteMailbox(mailboxId);
+  return json({ ok: true });
 }

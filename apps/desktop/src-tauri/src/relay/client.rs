@@ -95,6 +95,23 @@ pub fn push<T: serde::Serialize>(pairing: &Pairing, snapshot: &T) -> Result<Vec<
     Ok(collected.commands)
 }
 
+
+/// Revoke the mailbox, cutting off every paired device at once.
+///
+/// Called before the desktop forgets its own token — after that there is
+/// nothing left to authorise the call with.
+pub fn unpair(pairing: &Pairing) -> Result<(), String> {
+    ureq::delete(&format!(
+        "{RELAY_ORIGIN}/api/desktop?mailbox={}",
+        pairing.mailbox_id
+    ))
+    .timeout(TIMEOUT)
+    .set("authorization", &format!("Bearer {}", pairing.desktop_token))
+    .call()
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

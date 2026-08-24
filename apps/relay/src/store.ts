@@ -126,3 +126,12 @@ export async function sweep(olderThanMs: number, now: number): Promise<number> {
   }
   return removed;
 }
+
+/** Delete a mailbox outright, revoking every device paired to it. */
+export async function deleteMailbox(id: string): Promise<void> {
+  try {
+    await del(mailboxPath(id));
+  } catch {
+    // Already gone, which is the outcome we wanted.
+  }
+}

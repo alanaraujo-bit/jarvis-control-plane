@@ -224,6 +224,25 @@ pub async fn relay_pair(state: State<'_, AppState>) -> Result<RelayStatus, Strin
 /// thing nobody expects.
 #[tauri::command]
 pub fn relay_unpair(state: State<'_, AppState>) -> Result<RelayStatus, String> {
+    // **Tell the relay first, then forget locally.**
+    //
+    // Found by testing the real thing: clearing only the local rows left the
+    // mailbox standing, and a phone that had already paired went on reading
+    // snapshots from a desktop that believed it had cut them off. A switch
+    // marked "disconnect" that leaves a live token working is worse than no
+    // switch.
+    //
+    // A failure here is logged and does not stop the local half: if the relay
+    // cannot be reached, the desktop stops publishing anyway, so the phone
+    // sees a snapshot that goes stale and then says so (§28). Refusing to
+    // disconnect because a server is unreachable would be the wrong answer to
+    // "I want this off".
+    if let Some(pairing) = pairing(&state.db) {
+        if let Err(e) = client::unpair(&pairing) {
+            tracing::warn!(error = %e, "could not revoke the mailbox; disconnecting locally anyway");
+        }
+    }
+
     crate::settings::clear(&state.db, MAILBOX_KEY)?;
     crate::settings::clear(&state.db, TOKEN_KEY)?;
     crate::settings::set(&state.db, ENABLED_KEY, &false)?;
