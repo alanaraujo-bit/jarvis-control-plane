@@ -729,6 +729,59 @@ export const en = {
   "search.everyProject": "Every project",
   "search.historicalTab": "Opened from Search — read-only",
 
+
+  // ---- Notifications (§49) --------------------------------------------------
+  //
+  // `notify.title.<reason>` mirrors `notify::Reason` in the core exactly. The
+  // core sends a stable identifier and never prose, so a reason added there
+  // without a line here is a compile error in pt-BR rather than a raw
+  // identifier rendered on screen (§65).
+  "notify.title": "Notifications",
+  "notify.open": "Notifications",
+  "notify.unread": "{count} waiting",
+  "notify.unread_one": "1 waiting",
+  "notify.empty": "Nothing is waiting.",
+  "notify.emptyHint": "When an agent finishes, or stops to ask you something, it shows up here.",
+  "notify.markAllSeen": "Mark all as read",
+  "notify.clear": "Clear",
+  "notify.goTo": "Open",
+  "notify.disabled": "Notifications are off.",
+  "notify.disabledHint": "Turn them back on in Settings.",
+  "notify.more": "and {count} more",
+  "notify.more_one": "and 1 more",
+  "notify.coalesced": "{count} agents want you",
+  "notify.someProject": "this project",
+
+  // What kind of stop it was. The agent's own words go underneath, verbatim.
+  "notify.title.providerPrompt": "{agent} is asking",
+  "notify.title.guardrailPending": "A guardrail is holding this",
+  "notify.title.guardrailAsked": "{agent} needs approval",
+  "notify.title.turnEnded": "{agent} finished",
+  "notify.title.missionCompleted": "Mission complete",
+  "notify.title.runCompleted": "Ran to done on its own",
+  "notify.title.sessionEnded": "{agent} closed",
+  "notify.title.sessionFailed": "{agent} stopped unexpectedly",
+  "notify.title.missionBlocked": "A mission needs you",
+  "notify.title.runStopped": "An unattended run stopped",
+
+  // Where the fact came from (§28). Shown quietly, and only where there is room.
+  "notify.from.official": "Reported by the agent",
+  "notify.from.observed": "Read from the terminal",
+
+  "notify.group.now": "Just now",
+  "notify.group.today": "Earlier today",
+  "notify.group.earlier": "Earlier",
+
+  "settings.notifications": "Notifications",
+  "settings.notifications.enabled": "Tell me when an agent stops",
+  "settings.notifications.enabledHelp": "Only when you are not already watching that session. An agent finishing in front of you is not news.",
+  "settings.notifications.system": "Also show a desktop notification",
+  "settings.notifications.systemHelp": "So it reaches you while J.A.R.V.I.S. is behind another window.",
+  "settings.notifications.sound": "Play a sound",
+  "settings.notifications.test": "Send a test notification",
+  "settings.notifications.testSent": "Sent",
+  "settings.notifications.testPreview": "Do you want to proceed?",
+
   // ---- Generic -------------------------------------------------------------
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

@@ -70,8 +70,12 @@ pub use store::Notification;
 pub struct Attention {
     /// Whether the application window has keyboard focus.
     focused: AtomicBool,
-    /// The session whose terminal or conversation is on screen, if any.
-    visible_session: Mutex<Option<String>>,
+    /// Every session on screen right now.
+    ///
+    /// A list, not one id: split panes put up to four terminals side by side
+    /// (§20), and treating only the focused one as watched would notify about
+    /// an agent the person can see finishing.
+    visible_sessions: Mutex<Vec<String>>,
     /// Whether the person wants to be told at all (§64).
     enabled: AtomicBool,
 }
@@ -84,7 +88,7 @@ impl Default for Attention {
             // first turn of the first session after every launch, before the
             // webview has had a chance to report anything.
             focused: AtomicBool::new(true),
-            visible_session: Mutex::new(None),
+            visible_sessions: Mutex::new(Vec::new()),
             enabled: AtomicBool::new(true),
         }
     }
@@ -95,8 +99,8 @@ impl Attention {
         self.focused.store(focused, Ordering::SeqCst);
     }
 
-    pub fn set_visible_session(&self, session_id: Option<String>) {
-        *self.visible_session.lock() = session_id;
+    pub fn set_visible_sessions(&self, session_ids: Vec<String>) {
+        *self.visible_sessions.lock() = session_ids;
     }
 
     pub fn set_enabled(&self, enabled: bool) {
@@ -116,10 +120,13 @@ impl Attention {
         if !self.focused.load(Ordering::SeqCst) {
             return false;
         }
-        match (session_id, self.visible_session.lock().as_deref()) {
-            (Some(asked), Some(visible)) => asked == visible,
-            _ => false,
-        }
+        let Some(asked) = session_id else {
+            // Something with no session behind it — a mission, a held
+            // verification — is never "already on screen". Nothing can be
+            // watching it, so it is always worth raising.
+            return false;
+        };
+        self.visible_sessions.lock().iter().any(|id| id == asked)
     }
 }
 
@@ -323,7 +330,7 @@ mod tests {
     fn watching_needs_both_focus_and_the_right_session_on_screen() {
         let attention = Attention::default();
         attention.set_focused(true);
-        attention.set_visible_session(Some("a".into()));
+        attention.set_visible_sessions(vec!["a".into()]);
 
         assert!(attention.is_watching(Some("a")));
         assert!(!attention.is_watching(Some("b")));

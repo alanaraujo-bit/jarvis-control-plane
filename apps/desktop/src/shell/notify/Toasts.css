@@ -1,0 +1,152 @@
+/* The in-app toast stack (§49).
+   Bottom-right, above the status bar, clear of the terminal prompt and the
+   editor cursor — the two places somebody is actually typing. */
+.toasts {
+  position: fixed;
+  right: var(--space-6);
+  bottom: calc(var(--statusbar-height) + var(--space-6));
+  z-index: 70;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: var(--space-3);
+  width: 340px;
+  pointer-events: none;
+}
+
+.toasts > * {
+  pointer-events: auto;
+}
+
+.toasts__overflow {
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-tertiary);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- One toast ---------------------------------------------------------- */
+.toast {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: toast-in var(--duration-base) var(--ease-out);
+}
+
+/* A leading edge in the state's own colour. It is the same vocabulary as the
+   status dot, one step louder, because a toast is read in peripheral vision. */
+.toast::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--state-idle);
+}
+
+.toast[data-kind="needsApproval"]::before { background: var(--state-waiting); }
+.toast[data-kind="finished"]::before      { background: var(--state-success); }
+.toast[data-kind="stopped"]::before       { background: var(--state-danger); }
+
+.toast[data-leaving] {
+  animation: toast-out var(--duration-fast) var(--ease-out) forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateX(12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast[data-leaving] { animation: none; }
+}
+
+.toast__hit {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-3) var(--space-5) var(--space-5);
+  text-align: left;
+  transition: background-color var(--duration-instant) linear;
+}
+
+.toast__hit:hover {
+  background: var(--bg-hover);
+}
+
+.toast .status-dot {
+  margin-top: 5px;
+}
+
+.toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.toast__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The agent's own words, in the same monospace the centre uses for them. */
+.toast__body {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.toast__where {
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast__close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  align-self: stretch;
+  color: var(--text-disabled);
+  transition:
+    background-color var(--duration-instant) linear,
+    color var(--duration-fast) var(--ease-out);
+}
+
+.toast__close:hover {
+  background: var(--bg-active);
+  color: var(--text-secondary);
+}

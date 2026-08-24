@@ -5,6 +5,7 @@ import { EnvironmentPanel } from "../environment/EnvironmentPanel";
 import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { AutonomyPanel } from "./AutonomyPanel";
 import { CompanionPanel } from "./CompanionPanel";
+import { NotificationsPanel } from "./NotificationsPanel";
 import { NumberSetting } from "./NumberSetting";
 import { PREF, usePreferences } from "./usePreferences";
 import { Updates } from "./Updates";
@@ -120,6 +121,14 @@ export function Settings() {
             onChange={(value) => void set(PREF.turnBudget, value)}
           />
           <GuardrailPanel />
+        </section>
+
+        {/* Notifications sit after Agents because what they report on is
+            agents stopping, and before the companion because they are the
+            same question answered on this machine rather than on a phone. */}
+        <section className="settings__section">
+          <h2 className="settings__section-title">{t("settings.notifications")}</h2>
+          <NotificationsPanel />
         </section>
 
         {/* The companion sits after Agents and before Environment: it is

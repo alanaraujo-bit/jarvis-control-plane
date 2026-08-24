@@ -1,0 +1,50 @@
+/* The bell in the titlebar (§49). Sized to the caption buttons beside it so
+   the strip reads as one row of controls rather than as chrome plus a widget. */
+.notify-bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 100%;
+  color: var(--text-secondary);
+  transition:
+    background-color var(--duration-instant) linear,
+    color var(--duration-fast) var(--ease-out);
+}
+
+.notify-bell:hover,
+.notify-bell[data-open] {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* Amber is agent work (§6), and an unread notification *is* agent work waiting.
+   The bell takes the accent only while something is outstanding. */
+.notify-bell[data-unread] {
+  color: var(--accent);
+}
+
+.notify-bell__count {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 9px;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  /* A ring in the titlebar's own colour, so the badge reads as sitting on top
+     of the bell rather than merging into its stroke. */
+  box-shadow: 0 0 0 1.5px var(--bg-base);
+}
+
+.notify-bell[data-open] .notify-bell__count {
+  box-shadow: 0 0 0 1.5px var(--bg-raised);
+}

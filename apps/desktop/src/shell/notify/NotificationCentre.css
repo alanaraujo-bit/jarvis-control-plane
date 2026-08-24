@@ -1,0 +1,233 @@
+/* The panel under the bell (§49).
+   Anchored to the titlebar rather than floated, so it reads as part of the
+   window chrome and not as a web dropdown. */
+.notify-centre {
+  position: absolute;
+  top: calc(var(--titlebar-height) + 4px);
+  right: var(--space-5);
+  z-index: 60;
+  width: 380px;
+  max-height: min(560px, calc(100vh - var(--titlebar-height) - 48px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: notify-centre-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes notify-centre-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notify-centre { animation: none; }
+}
+
+/* ---- Head --------------------------------------------------------------- */
+.notify-centre__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  flex: 0 0 auto;
+}
+
+.notify-centre__title {
+  flex: 1 1 auto;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+.notify-centre__actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.notify-centre__action {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.notify-centre__action:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+/* ---- Empty -------------------------------------------------------------- */
+.notify-centre__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-8) var(--space-11);
+  color: var(--text-disabled);
+  text-align: center;
+}
+
+.notify-centre__empty-title {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.notify-centre__empty-hint {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-tertiary);
+  max-width: 30ch;
+}
+
+/* ---- List --------------------------------------------------------------- */
+.notify-centre__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.notify-centre__group + .notify-centre__group {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.notify-centre__group-title {
+  padding: var(--space-4) var(--space-5) var(--space-2);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-disabled);
+}
+
+.notify-centre__list {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--space-3);
+}
+
+/* ---- Row ----------------------------------------------------------------
+   The unseen marker is a hairline on the leading edge, not a filled row or a
+   coloured chip. It has to survive being scanned at a glance without turning
+   the list into stripes (§7). */
+.notify-row {
+  position: relative;
+}
+
+.notify-row[data-unseen]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  background: var(--accent);
+}
+
+.notify-row__hit {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  text-align: left;
+  transition: background-color var(--duration-instant) linear;
+}
+
+button.notify-row__hit:hover {
+  background: var(--bg-hover);
+}
+
+button.notify-row__hit:active {
+  background: var(--bg-active);
+}
+
+.notify-row__hit--static {
+  cursor: default;
+}
+
+/* The dot sits on the first line of type, not on the top of the box. */
+.notify-row .status-dot {
+  margin-top: 5px;
+}
+
+.notify-row__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.notify-row__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.notify-row__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notify-row__time {
+  flex: 0 0 auto;
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+}
+
+/* The agent's own words. Monospace, because they are usually a command or a
+   path, and because it marks them as quoted rather than written by us. */
+.notify-row__body {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.notify-row__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  margin-top: var(--space-1);
+}
+
+.notify-row__where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 20ch;
+}
+
+/* Provenance (§28) is real information and is not decoration, so it is present
+   and quiet rather than absent or loud. */
+.notify-row__provenance {
+  flex: 0 0 auto;
+  letter-spacing: var(--tracking-wide);
+}

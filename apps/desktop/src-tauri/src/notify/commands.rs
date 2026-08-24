@@ -51,10 +51,10 @@ pub fn notifications_centre(state: State<'_, AppState>) -> Result<Centre> {
 pub fn notifications_attention(
     state: State<'_, AppState>,
     focused: bool,
-    session_id: Option<String>,
+    session_ids: Vec<String>,
 ) {
     state.attention.set_focused(focused);
-    state.attention.set_visible_session(session_id);
+    state.attention.set_visible_sessions(session_ids);
 }
 
 #[tauri::command]

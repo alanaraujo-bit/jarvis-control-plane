@@ -6,6 +6,11 @@ export interface Preferences {
   terminalFontSize: number;
   terminalScrollback: number;
   autopilotTurnBudget: number;
+  /** Notifications (§49). Switches rather than numbers, so they have their own
+      setter — the numeric one validates against a range these do not have. */
+  notificationsEnabled: boolean;
+  notificationsSystem: boolean;
+  notificationsSound: boolean;
 }
 
 /**
@@ -16,6 +21,13 @@ export const PREF = {
   fontSize: "terminal.fontSize",
   scrollback: "terminal.scrollback",
   turnBudget: "autopilot.turnBudget",
+} as const;
+
+/** The notification switches, mirrored from `notify`'s own key constants. */
+export const SWITCH = {
+  notifications: "notifications.enabled",
+  system: "notifications.system",
+  sound: "notifications.sound",
 } as const;
 
 /** The bounds and defaults, mirrored from the core so a slider can be drawn. */
@@ -37,6 +49,11 @@ const INITIAL: Preferences = {
   terminalFontSize: BOUNDS[PREF.fontSize].default,
   terminalScrollback: BOUNDS[PREF.scrollback].default,
   autopilotTurnBudget: BOUNDS[PREF.turnBudget].default,
+  // On by default. A product that has to be switched on before it will tell
+  // you an agent is waiting has the default the wrong way round.
+  notificationsEnabled: true,
+  notificationsSystem: true,
+  notificationsSound: true,
 };
 
 let cache: Preferences = INITIAL;
@@ -93,7 +110,17 @@ export function usePreferences() {
     }
   }, []);
 
-  return { prefs, error, set };
+  /** Flip one of the notification switches (§49, §64). */
+  const setSwitch = useCallback(async (key: string, value: boolean) => {
+    try {
+      publish(await invoke<Preferences>("settings_set_notification", { key, value }));
+      setError(null);
+    } catch (cause) {
+      setError(String(cause));
+    }
+  }, []);
+
+  return { prefs, error, set, setSwitch };
 }
 
 /** Read-only access, for surfaces that consume a preference but never set it. */

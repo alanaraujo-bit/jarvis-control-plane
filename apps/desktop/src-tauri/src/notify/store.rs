@@ -337,7 +337,7 @@ mod tests {
         let db = db();
         let attention = Attention::default();
         attention.set_focused(true);
-        attention.set_visible_session(Some("s1".into()));
+        attention.set_visible_sessions(vec!["s1".into()]);
 
         assert!(raise_one(&db, &attention, "s1", "Do you want to proceed?").is_none());
         // And it is dropped, not stored-and-marked-read: the centre is a list
@@ -349,7 +349,7 @@ mod tests {
     fn a_different_session_is_still_raised_while_one_is_watched() {
         let db = db();
         let attention = Attention::default();
-        attention.set_visible_session(Some("s1".into()));
+        attention.set_visible_sessions(vec!["s1".into()]);
         assert!(raise_one(&db, &attention, "s2", "Do you want to proceed?").is_some());
     }
 

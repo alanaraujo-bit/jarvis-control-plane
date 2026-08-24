@@ -13,7 +13,16 @@ import "./TitleBar.css";
  * identity, the current location, and the command palette — the primary
  * keyboard entry point into the whole product (§50).
  */
-export function TitleBar({ onOpenPalette }: { onOpenPalette: () => void }) {
+export function TitleBar({
+  onOpenPalette,
+  notifications,
+}: {
+  onOpenPalette: () => void;
+  /** The notification bell (§49), passed in rather than reached for: the
+      titlebar draws window chrome and should not have to know what a
+      notification is. */
+  notifications?: React.ReactNode;
+}) {
   const t = useT();
   const [maximized, setMaximized] = useState(false);
 
@@ -58,6 +67,7 @@ export function TitleBar({ onOpenPalette }: { onOpenPalette: () => void }) {
       </button>
 
       <div className="titlebar__controls">
+        {notifications}
         <button
           type="button"
           className="titlebar__control"

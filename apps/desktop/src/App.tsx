@@ -6,6 +6,16 @@ import { TitleBar } from "./shell/TitleBar";
 import { StatusBar } from "./shell/StatusBar";
 import { CommandPalette, type Command } from "./shell/CommandPalette";
 import { GlobalSearch } from "./shell/GlobalSearch";
+import { NotificationBell } from "./shell/notify/NotificationBell";
+import { NotificationCentre } from "./shell/notify/NotificationCentre";
+import { Toasts } from "./shell/notify/Toasts";
+import { useNotificationFeed } from "./shell/notify/useNotificationFeed";
+import {
+  setWindowFocused,
+  useNotifications,
+  type Notification,
+} from "./app/notifications";
+import { usePreferences } from "./surfaces/settings/usePreferences";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
 import { Analytics } from "./surfaces/analytics/Analytics";
@@ -68,6 +78,10 @@ export function App() {
   const [focusSessionProvider, setFocusSessionProvider] = useState<SessionKind | undefined>();
   const [focusSessionTitle, setFocusSessionTitle] = useState<string | undefined>();
   const [accountsProjectId, setAccountsProjectId] = useState<string | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const outstanding = useNotifications((state) => state.outstanding);
+  const { toasts, dismiss, clearToasts, setChannels } = useNotificationFeed();
+  const { prefs } = usePreferences();
 
   type Focus = {
     area?: Area;
@@ -180,6 +194,64 @@ export function App() {
       cancelAnimationFrame(frame);
     };
   }, [onboardingSeen]);
+
+  // Keep the presentation channels current without rebuilding the listener.
+  useEffect(() => {
+    setChannels(prefs.notificationsSystem, prefs.notificationsSound);
+  }, [prefs.notificationsSystem, prefs.notificationsSound, setChannels]);
+
+  // Whether the window has focus is half of the suppression rule (§49), and
+  // the core cannot see it. Reported here rather than per-surface because it
+  // is a fact about the window, not about what is open in it.
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      setWindowFocused(await win.isFocused());
+      const stop = await win.onFocusChanged(({ payload }) => {
+        setWindowFocused(payload);
+        // Coming back to the window is the person arriving. Whatever the
+        // toasts were telling them is now something they can see for
+        // themselves, and a stack of stale toasts over the work is the exact
+        // clutter this feature has to avoid being.
+        if (payload) clearToasts();
+      });
+      if (cancelled) stop();
+      else unlisten = stop;
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [clearToasts]);
+
+  /**
+   * Go to what a notification is about (§49).
+   *
+   * The one click-through in the feature, because it is the only one there can
+   * be: a Windows toast has no activation callback on the desktop. A
+   * notification with a session opens that project's workspace; one with only
+   * a mission goes to the mission; one with neither has nowhere to go and is
+   * never given a hit target in the first place.
+   */
+  const openNotification = useCallback(
+    (notification: Notification) => {
+      dismiss(notification.id);
+      if (notification.missionId && !notification.sessionId) {
+        setOpenProject(null);
+        setFocusMission(notification.missionId);
+        setSurface("missions");
+        return;
+      }
+      if (notification.projectId) {
+        openProjectById(notification.projectId, { area: "sessions" });
+      }
+    },
+    [dismiss, openProjectById],
+  );
 
   const togglePalette = useCallback(() => setPaletteOpen((open) => !open), []);
 
@@ -297,7 +369,24 @@ export function App() {
 
   return (
     <div className="app">
-      <TitleBar onOpenPalette={togglePalette} />
+      <TitleBar
+        onOpenPalette={togglePalette}
+        notifications={
+          onboardingSeen !== false ? (
+            <NotificationBell
+              count={outstanding}
+              open={notificationsOpen}
+              onToggle={() => setNotificationsOpen((open) => !open)}
+            />
+          ) : undefined
+        }
+      />
+
+      <NotificationCentre
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        onOpenNotification={openNotification}
+      />
 
       {onboardingSeen === false ? (
         <Onboarding onOpenProject={(project) => openProjectDirect(project)} />
@@ -356,6 +445,8 @@ export function App() {
       )}
 
       {onboardingSeen !== false && <StatusBar />}
+
+      <Toasts items={toasts} onOpen={openNotification} onDismiss={dismiss} />
 
       <CommandPalette open={paletteOpen} commands={commands} onClose={() => setPaletteOpen(false)} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchResult} />
