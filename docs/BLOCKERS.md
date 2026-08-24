@@ -30,7 +30,12 @@ again.** Back it up somewhere safe.
 ---
 
 ## B2 — A place to publish updates (§62)
-**Status:** Partially blocked. The mechanism works; it has nowhere public to point.
+**Status:** Still open, but the obstacle changed. B3 is resolved, so option 2
+below is now reachable — the relay deployment could serve `latest.json` and
+the installers. Not done in this pass: the updater endpoint is a separate
+decision from the companion relay, and pointing release artifacts at a
+function that exists to pass small JSON around deserves its own thought
+rather than being bolted on because the account happened to be available.
 
 The updater is configured against
 `https://github.com/alanaraujo-bit/jarvis-control-plane/releases/latest/download/latest.json`.
@@ -49,18 +54,34 @@ pretending to be up to date.
 ---
 
 ## B3 — Vercel / cloud provisioning (§59)
-**Status:** Blocked on an interactive sign-in.
+**Status: RESOLVED, 2026-08-23.** Not by a change of plan — the CLIs turned
+out to be authenticated all along.
 
-The Vercel connector for this session is unauthenticated, and the session is
-non-interactive, so the OAuth flow cannot be completed here.
+`vercel whoami` answers `alanarauj0`, `railway whoami` answers
+`alanvitoraraujo2a@gmail.com`, and `gh auth status` answers
+`alanaraujo-bit`. The earlier entry said the connector was unauthenticated
+and the OAuth flow could not be completed here; that was true of the *MCP
+connector* and never checked against the CLIs, which were already logged in.
 
-**What I need from you:** authorize the Vercel connector, or run `vercel login`
-in a terminal.
+**The lesson is the same one item 29 records:** a status written from what
+was assumed rather than probed. One command would have settled it.
 
-**Impact: none on the product as it stands.** This is local-first paying off
-(§3) — projects, sessions, the terminal, agents, conversation, Git and the
-local database all work fully offline with no account. Cloud only gates the
-mobile companion, push notifications, and billing.
+**What was built on it:** the M11 relay, deployed to the Vercel project
+`jarvis-desktop-relay` with a private Blob store `jarvis-relay-mailbox`.
+
+### Two things a future session must not do
+
+1. **Do not touch the Vercel project `jarvis` or the Railway project
+   `jarvis-guardian`.** They look like this product and are something else
+   entirely — Alan said so directly. `jarvis.aionixdev.com` is live and
+   serving. New resources for this product get names that cannot be
+   confused with those.
+2. **Railway bills monthly and Vercel does not.** The Railway account has an
+   active subscription (next invoice USD 18.21 at the time of writing) and
+   ten projects; Vercel `aionixdev` has no contract and no recorded costs.
+   That is why the relay went to Vercel — the directive asks for no
+   recurring cost where an adequate free path exists, and for a relay there
+   is one.
 
 ---
 
