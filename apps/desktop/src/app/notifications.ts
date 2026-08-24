@@ -217,6 +217,24 @@ export function onVisibleSessions(watcher: (ids: string[]) => void): () => void 
   };
 }
 
+/**
+ * Whether the window had focus the last time it said so.
+ *
+ * Read rather than re-queried, and that is the point. Asking
+ * `getCurrentWindow().isFocused()` at the moment a notification arrives
+ * returned **true for a minimised window** on Windows — so the surface decided
+ * the person was right there, showed an in-app toast nobody could see, and the
+ * desktop toast never fired. Caught by minimising the real app, letting a real
+ * agent finish, and finding the notification in the centre but nothing in
+ * Windows' own notification history.
+ *
+ * This value comes from `onFocusChanged`, which is the same signal the core
+ * was given, so the two halves cannot disagree about where the person is.
+ */
+export function isWindowFocused(): boolean {
+  return windowFocused;
+}
+
 /** Report whether the window has focus. */
 export function setWindowFocused(focused: boolean) {
   if (windowFocused === focused) return;

@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useT } from "../../app/i18n";
 import { isTauri } from "../../app/platform";
-import { onVisibleSessions, useNotifications, type Notification } from "../../app/notifications";
+import {
+  isWindowFocused,
+  onVisibleSessions,
+  useNotifications,
+  type Notification,
+} from "../../app/notifications";
 import { describe } from "./describe";
 import { chime, flashTaskbar, systemToast } from "./present";
 
@@ -84,11 +89,17 @@ export function useNotificationFeed() {
         const notification = event.payload;
         receive(notification);
 
-        const focused = await getCurrentWindow()
-          .isFocused()
-          .catch(() => true);
+        // Two signals, and neither alone is enough. The tracked focus state is
+        // what the core was told, so using it keeps both halves agreeing; the
+        // minimised check is there because a minimised window is not where
+        // anybody is looking whatever it claims about focus. See
+        // `isWindowFocused` for what asking afresh actually returned.
+        const minimised = await getCurrentWindow()
+          .isMinimized()
+          .catch(() => false);
+        const here = isWindowFocused() && !minimised;
 
-        if (focused) {
+        if (here) {
           setToasts((current) =>
             current.some((item) => item.id === notification.id)
               ? current

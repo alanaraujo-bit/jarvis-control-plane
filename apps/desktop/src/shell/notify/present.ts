@@ -1,4 +1,5 @@
 import { getCurrentWindow, UserAttentionType } from "@tauri-apps/api/window";
+import { isWindowFocused } from "../../app/notifications";
 import { isTauri } from "../../app/platform";
 
 /**
@@ -85,9 +86,10 @@ export async function systemToast(toast: SystemToast): Promise<void> {
 export async function flashTaskbar(): Promise<void> {
   if (!isTauri()) return;
   try {
-    const win = getCurrentWindow();
-    if (await win.isFocused()) return;
-    await win.requestUserAttention(UserAttentionType.Informational);
+    // The tracked state, not a fresh query — see `isWindowFocused` for what
+    // asking a minimised window about its own focus returns on Windows.
+    if (isWindowFocused()) return;
+    await getCurrentWindow().requestUserAttention(UserAttentionType.Informational);
   } catch {
     // Not every platform has a taskbar.
   }

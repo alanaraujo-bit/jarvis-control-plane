@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Languages, Moon, RefreshCw, Search, Sun, SunMoon } from "lucide-react";
+import { Bell, Languages, Moon, RefreshCw, Search, Sun, SunMoon } from "lucide-react";
 import { LOCALES, LOCALE_NAMES } from "@jarvis/i18n";
 import { Rail, RAIL_ITEMS, type SurfaceId } from "./shell/Rail";
 import { TitleBar } from "./shell/TitleBar";
@@ -347,6 +347,18 @@ export function App() {
 
     const actions: Command[] = [
       {
+        // The palette is this product's primary keyboard entry point (§50), and
+        // a surface that can only be reached by aiming at a 14px bell is one
+        // half the people who need it will not find.
+        id: "notify.open",
+        title: t("notify.title"),
+        group: "Go to",
+        icon: Bell,
+        keywords: "notifications alerts notificações alertas avisos bell sino",
+        hint: outstanding > 0 ? t("notify.unread", { count: outstanding }) : undefined,
+        run: () => setNotificationsOpen(true),
+      },
+      {
         id: "search.open",
         title: t("search.title"),
         group: "Go to",
@@ -369,7 +381,7 @@ export function App() {
     ];
 
     return [...navigation, ...appearance, ...actions];
-  }, [t, locale, preference, setLocale, setPreference, rescanEnvironment, goTo]);
+  }, [t, locale, preference, setLocale, setPreference, rescanEnvironment, goTo, outstanding]);
 
   return (
     <div className="app">

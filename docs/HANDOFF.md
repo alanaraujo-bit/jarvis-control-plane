@@ -827,6 +827,32 @@ Every one of these is real and already cost time.
     identified by. Neither is a bug to chase. The notification centre is the
     click-through surface for that reason, not by preference.
 
+55. **`isFocused()` returns `true` for a minimised window on Windows.** The
+    notification feed asked it the moment a notification arrived, concluded the
+    person was sitting right there, drew an in-app toast onto a window nobody
+    could see, and never fired the desktop toast — which is the entire point of
+    the feature. It was invisible from the code and from the in-app behaviour:
+    the notification appeared correctly in the centre, so everything *looked*
+    right. Caught by minimising the real app, letting a real agent finish, and
+    then asking **Windows** what it had been handed:
+
+    ```powershell
+    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+    [Windows.UI.Notifications.ToastNotificationManager]::History.GetHistory('dev.jarvis.desktop')
+    ```
+
+    The history held three toasts, all from earlier manual tests, and none from
+    the run that had just happened. That query is the honest oracle for "did a
+    toast actually fire" — a screenshot only proves it if you catch the few
+    seconds it is on screen.
+
+    The fix is not a better call, it is *not calling*: `isWindowFocused()`
+    returns the state `onFocusChanged` last reported, which is the same signal
+    the core was given, so the two halves of the feature cannot disagree about
+    where the person is. `isMinimized()` is checked alongside it, because a
+    minimised window is not where anybody is looking whatever it says about its
+    own focus.
+
 ---
 
 ## 6. Commands

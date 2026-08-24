@@ -647,7 +647,25 @@ the workspace moved to Files, the same class of event produced a toast and a
 badge. Clicking a row went to the session, and the toast for a session stood
 down as soon as that session came on screen.
 
-### Four things found by running it, not by reading it
+### The one that would have shipped broken
+
+**`isFocused()` returns `true` for a minimised window on Windows.** The feed
+asked it the instant a notification arrived, concluded the person was sitting
+right there, drew an in-app toast onto a window nobody could see, and never
+fired the desktop toast — which is the entire point of the feature. Nothing in
+the interface looked wrong: the notification appeared correctly in the centre.
+Caught by asking *Windows* what it had actually been handed
+(`ToastNotificationManager::History`), and finding nothing from the run that had
+just happened. The fix is not a better call but no call: the surface now reads
+the focus state `onFocusChanged` last reported — the same signal the core was
+given — and checks `isMinimized()` beside it. See HANDOFF §5 item 55.
+
+**Then verified properly:** window minimised, a real Claude Code agent finishing
+a real turn, and Windows showed *Claude Code terminou / This is a throwaway
+scratch project used to verify notifications end to end.* — the agent's own
+reply, from the installed build.
+
+### Four more found by running it, not by reading it
 
 1. **The count badge covered the bell.** A 13px badge on a 14px icon in a 38px
    button; visible only by zooming into a real screenshot.
