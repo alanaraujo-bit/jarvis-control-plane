@@ -135,6 +135,44 @@ export function Gauge({
 }
 
 /**
+ * Two weeks of this account's work, one column per day.
+ *
+ * Columns rather than a line, because the series is *counts of discrete days*
+ * and a line between them draws values on the hours in between that nobody
+ * measured. Scaled to its own busiest day, so it answers "was this a heavy week
+ * for this account" — the question the card is next to — rather than trying to
+ * be comparable with the card beside it, which a shared scale would imply and
+ * which different plans make meaningless.
+ *
+ * Empty days are drawn as a hairline rather than skipped: the flat stretch
+ * before a spike is what makes the spike read as unusual.
+ */
+export function Sparkline({
+  values,
+  label,
+}: {
+  values: number[];
+  label: string;
+}) {
+  const peak = Math.max(1, ...values);
+  return (
+    <div className="sparkline" role="img" aria-label={label}>
+      {values.map((value, index) => (
+        <span
+          key={index}
+          className="sparkline__day"
+          data-empty={value === 0 || undefined}
+          // The last column is today, which is still being written; it reads
+          // as in-progress rather than as a day that finished this quiet.
+          data-today={index === values.length - 1 || undefined}
+          style={{ height: `${value === 0 ? 0 : Math.max(9, (value / peak) * 100)}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
  * The same reading as a slim horizontal bar, for the windows that are not
  * binding.
  *

@@ -39,7 +39,6 @@
 .accounts__card-head,
 .accounts__window-head,
 .accounts__window-foot,
-.accounts__facts,
 .accounts__actions,
 .accounts__add-actions {
   display: flex;
@@ -669,15 +668,58 @@
 .accounts__summary-main .accounts__reset { margin-left: auto; }
 .accounts__summary-hint { color: var(--text-tertiary); font-size: var(--text-xs); }
 
-.accounts__facts {
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-5);
+/* ---- Two weeks of what this account actually did ----------------------
+   The windows above say what is left; this says how it got there. Columns
+   rather than a line: the series is counts of discrete days, and a line
+   between them draws values for hours nobody measured.                    */
+
+.accounts__history {
   margin-top: var(--space-6);
-  padding-top: var(--space-4);
+  padding-top: var(--space-5);
   border-top: 1px solid var(--border-subtle);
+}
+
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 34px;
+  margin-bottom: var(--space-4);
+}
+.sparkline__day {
+  flex: 1;
+  min-width: 0;
+  border-radius: 1.5px 1.5px 0 0;
+  background: var(--accounts-meter-observed);
+  transition: height var(--duration-slow) var(--ease-out);
+}
+/* A day with nothing on it is a hairline on the baseline, not a gap: the flat
+   stretch before a spike is what makes the spike read as unusual. */
+.sparkline__day[data-empty] {
+  height: 1px !important;
+  align-self: flex-end;
+  background: var(--border-default);
+}
+/* Today is still being written, so it does not read as a day that finished
+   this quiet. */
+.sparkline__day[data-today] { background: var(--accent); }
+.sparkline__day[data-today][data-empty] { background: var(--accent-border); }
+
+.accounts__history-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
   color: var(--text-tertiary);
   font-size: var(--text-micro);
 }
+.accounts__history-total { color: var(--text-secondary); }
+.accounts__history-cost {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .accounts__live-note { color: var(--state-waiting); }
 
 .accounts__trust-note {

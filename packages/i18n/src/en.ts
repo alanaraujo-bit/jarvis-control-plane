@@ -588,6 +588,8 @@ export const en = {
   "accounts.autoSwitch.thresholdDisclosure": "Also switches at {percent}% used. Where a provider states its own percentage that number is official; otherwise it is J.A.R.V.I.S.'s estimate and the card says so.",
   "accounts.resetPanel.label": "Resets in",
   "accounts.resetPanel.unknown": "Not stated",
+  "accounts.history.total": "{tokens} tokens in {days} days",
+  "accounts.history.label": "Daily usage over {days} days — {tokens} tokens in total",
   "accounts.error": "The account operation did not complete. Nothing was changed silently.",
 
   "analytics.title": "Analytics",

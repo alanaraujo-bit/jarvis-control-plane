@@ -328,6 +328,27 @@ pub struct AccountQuota {
     /// Live sessions currently running on this account. A switch never touches
     /// them, and the surface has to be able to say so.
     pub live_sessions: i64,
+    /// Tokens this account spent on each of the last [`HISTORY_DAYS`] days,
+    /// oldest first, with today last.
+    ///
+    /// Always present and always the same length, including the zeroes: a
+    /// sparkline with the quiet days removed is a different shape from the one
+    /// the days actually made, and the flat stretch before a spike is the part
+    /// that tells you the spike was unusual.
+    ///
+    /// Observed, never Official — these are our own sums of what the provider
+    /// reported per turn, and they are a record of *this machine's* work on the
+    /// account, which is not the same as everything the account has done.
+    pub daily_tokens: Vec<i64>,
+    /// Tokens over that whole window, so the sparkline has a magnitude.
+    pub window_tokens: i64,
+    /// What the provider itself priced that at, when it prices anything.
+    ///
+    /// `None` for a subscription, where per-turn cost is not reported and
+    /// inventing one from public rates would be a guess wearing the same
+    /// typeface as a fact (§28). A subscription's real cost is the plan, and
+    /// the panel already shows what is left of it.
+    pub window_cost_usd: Option<f64>,
     /// The newest thing the provider said when asked directly (M16).
     ///
     /// `None` only before an account has ever been probed. Everything else —
@@ -504,6 +525,65 @@ fn implied_allowance(db: &Database, account_id: &str, window: &str, length_ms: i
         .min()
 }
 
+/// How many days of usage history a card carries.
+///
+/// Two weeks: long enough to contain a whole weekly allowance and the one
+/// before it, so "is this week heavier than usual" is a question the shape can
+/// answer, and short enough to stay legible at the width of a card.
+pub const HISTORY_DAYS: i64 = 14;
+
+/// Tokens per day for one account, oldest first, zero-filled.
+///
+/// Bucketed by **UTC** calendar day, matching `analytics::report`. That is one
+/// day-boundary convention across the product rather than two that disagree by
+/// a few hours; a sparkline is read for its shape, and the shape does not
+/// change when the boundary moves.
+fn daily_tokens(db: &Database, account_id: &str, now: i64) -> Vec<i64> {
+    let since = now - HISTORY_DAYS * 86_400_000;
+    let day_of = |ts: i64| ((ts - since) / 86_400_000).clamp(0, HISTORY_DAYS - 1) as usize;
+
+    let mut days = vec![0i64; HISTORY_DAYS as usize];
+    let _ = db.with(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT ts_ms,
+                    COALESCE(input_tokens,0) + COALESCE(output_tokens,0)
+                  + COALESCE(cache_write_tokens,0)
+               FROM usage_samples
+              WHERE account_id = ?1 AND ts_ms >= ?2",
+        )?;
+        let rows = stmt.query_map(params![account_id, since], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+        })?;
+        for row in rows.flatten() {
+            days[day_of(row.0)] += row.1;
+        }
+        Ok(())
+    });
+    days
+}
+
+/// What the provider charged for this account's work in the window, if it says.
+///
+/// `NULL` and `0` are both "nothing was priced" and neither becomes a zero on
+/// screen: a subscription reports no per-turn cost, and printing "$0.00" over
+/// a fortnight of real work states something false about a real number.
+fn window_cost(db: &Database, account_id: &str, since: i64) -> Option<f64> {
+    db.with(|conn| {
+        Ok(conn
+            .query_row(
+                "SELECT SUM(cost_usd) FROM usage_samples
+                  WHERE account_id = ?1 AND ts_ms >= ?2 AND cost_usd IS NOT NULL",
+                params![account_id, since],
+                |row| row.get::<_, Option<f64>>(0),
+            )
+            .optional()?
+            .flatten())
+    })
+    .ok()
+    .flatten()
+    .filter(|cost| *cost > 0.0)
+}
+
 /// Build one window's picture from everything known about it.
 fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> QuotaWindow {
     let length = window_length_ms(window).unwrap_or(FIVE_HOUR_MS);
@@ -628,6 +708,7 @@ pub fn for_account(db: &Database, account: &Account) -> AccountQuota {
         })
         .unwrap_or(0);
 
+    let history = daily_tokens(db, &account.id, now);
     let live = super::live::stored(db, &account.id);
 
     // A live reading is the sharpest statement of exhaustion there is: the
@@ -666,6 +747,9 @@ pub fn for_account(db: &Database, account: &Account) -> AccountQuota {
         refusal_detail,
         tokens_today: tokens_between(db, &account.id, now - 24 * 60 * 60 * 1000, now + 1),
         live_sessions,
+        window_tokens: history.iter().sum(),
+        daily_tokens: history,
+        window_cost_usd: window_cost(db, &account.id, now - HISTORY_DAYS * 86_400_000),
         live_stale: super::live::is_stale(live.as_ref(), now),
         live,
     }
@@ -767,6 +851,35 @@ mod tests {
             .find(|window| window.window == "five_hour")
             .unwrap();
         assert_eq!(window.tokens, 100);
+    }
+
+    #[test]
+    fn usage_history_is_zero_filled_and_belongs_to_one_account() {
+        let db = Database::open_in_memory().unwrap();
+        let account = insert_account(&db, "a", "claude-code");
+        insert_account(&db, "b", "claude-code");
+        let now = now_ms();
+
+        usage(&db, Some("a"), now - 1_000, 500); // today
+        usage(&db, Some("a"), now - 2 * 86_400_000, 300); // two days ago
+        usage(&db, Some("b"), now - 1_000, 9_999); // the other account
+        usage(&db, None, now - 1_000, 7_777); // recorded before accounts existed
+        usage(&db, Some("a"), now - 30 * 86_400_000, 4_444); // outside the window
+
+        let quota = for_account(&db, &account);
+        assert_eq!(
+            quota.daily_tokens.len(),
+            HISTORY_DAYS as usize,
+            "the quiet days are the shape — a series with them removed is a \
+             different picture from the one the days actually made"
+        );
+        assert_eq!(*quota.daily_tokens.last().unwrap(), 500, "today");
+        assert_eq!(quota.window_tokens, 800, "only this account, only the window");
+        assert_eq!(
+            quota.window_cost_usd, None,
+            "a subscription prices no turn, and $0.00 over a fortnight of real \
+             work states something false about a real number"
+        );
     }
 
     #[test]

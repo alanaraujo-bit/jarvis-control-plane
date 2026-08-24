@@ -100,6 +100,11 @@ export interface AccountQuota {
   refusalDetail: string | null;
   tokensToday: number;
   liveSessions: number;
+  /** Tokens per day over the trailing window, oldest first, zero-filled. */
+  dailyTokens: number[];
+  windowTokens: number;
+  /** `null` for a subscription, which prices no individual turn. */
+  windowCostUsd: number | null;
   /** `null` only before this account has ever been asked. */
   live: LiveStatus | null;
   liveStale: boolean;

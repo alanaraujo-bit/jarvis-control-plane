@@ -47,7 +47,7 @@ import {
   type ProviderId,
   type QuotaWindow,
 } from "./useAccounts";
-import { Bar, Gauge } from "./Gauge";
+import { Bar, Gauge, Sparkline } from "./Gauge";
 import {
   countdown,
   duration,
@@ -684,13 +684,45 @@ function AccountCardView({
 
       {reading && <SpendBlock reading={reading} />}
 
-      <div className="accounts__facts">
-        <span>{t("accounts.tokens.today", { tokens: formatTokens(quota.tokensToday, locale) })}</span>
-        {quota.liveSessions > 0 && (
-          <span className="accounts__live-note">
-            {t("accounts.liveSessions", { count: quota.liveSessions })}
-          </span>
+      {/* What this account has actually been doing. The windows above say what
+          is left; this says how it got there, which is the other half of what
+          "usage statistics" means and the only part that survives a reset. */}
+      <div className="accounts__history" data-empty={quota.windowTokens === 0 || undefined}>
+        {/* Fourteen hairlines over "0 tokens" is not a history, it is the
+            absence of one — and on a card that also says "not signed in" it is
+            the second empty thing in a row saying the same nothing. */}
+        {quota.windowTokens > 0 && (
+          <Sparkline
+            values={quota.dailyTokens}
+            label={t("accounts.history.label", {
+              days: quota.dailyTokens.length,
+              tokens: formatTokens(quota.windowTokens, locale),
+            })}
+          />
         )}
+        <div className="accounts__history-facts">
+          {quota.windowTokens > 0 && (
+            <span className="accounts__history-total">
+              {t("accounts.history.total", {
+                days: quota.dailyTokens.length,
+                tokens: formatTokens(quota.windowTokens, locale),
+              })}
+            </span>
+          )}
+          <span>
+            {t("accounts.tokens.today", { tokens: formatTokens(quota.tokensToday, locale) })}
+          </span>
+          {quota.windowCostUsd !== null && (
+            <span className="accounts__history-cost">
+              {formatMoney(quota.windowCostUsd, "USD", 2, locale)}
+            </span>
+          )}
+          {quota.liveSessions > 0 && (
+            <span className="accounts__live-note">
+              {t("accounts.liveSessions", { count: quota.liveSessions })}
+            </span>
+          )}
+        </div>
       </div>
 
       {account.provider === "claude-code" && !account.adopted && (

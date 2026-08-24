@@ -555,6 +555,8 @@ export const ptBR: Record<MessageKey, string> = {
   "accounts.autoSwitch.thresholdDisclosure": "Também troca com {percent}% usado. Onde o provedor informa a própria porcentagem, o número é oficial; caso contrário é a estimativa do J.A.R.V.I.S. e o cartão diz isso.",
   "accounts.resetPanel.label": "Reseta em",
   "accounts.resetPanel.unknown": "Não informado",
+  "accounts.history.total": "{tokens} tokens em {days} dias",
+  "accounts.history.label": "Uso diário em {days} dias — {tokens} tokens no total",
   "accounts.error": "A operação de conta não foi concluída. Nada foi alterado silenciosamente.",
 
   "analytics.title": "Métricas",
