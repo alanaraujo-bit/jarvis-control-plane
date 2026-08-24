@@ -783,6 +783,122 @@ mod tests {
         );
     }
 
+    /// A title Claude Code chose for itself, from a fixture of the real line.
+    ///
+    /// Verbatim from a transcript on this machine, including the two things
+    /// that make it unlike every other entry: it carries **no `timestamp`** and
+    /// no `uuid`.
+    #[test]
+    fn an_ai_title_line_becomes_a_title_and_not_noise() {
+        let items = parse_line(
+            r#"{"type":"ai-title","aiTitle":"hello.txt file creation","sessionId":"a7e2f226-7797-461d-be42-0c818689475a"}"#,
+        );
+
+        match items.as_slice() {
+            [ConversationItem::Title { text, ts_ms }] => {
+                assert_eq!(text, "hello.txt file creation");
+                // Stamped when it was read, because the line does not say.
+                assert!(*ts_ms > 1_500_000_000_000);
+            }
+            other => panic!("expected one Title, got {other:?}"),
+        }
+    }
+
+    /// The filter that used to drop it must go on dropping everything else.
+    #[test]
+    fn lifting_the_title_did_not_open_the_noise_filter() {
+        for line in [
+            r#"{"type":"queue-operation","timestamp":"2026-08-22T21:57:01.375Z"}"#,
+            r#"{"type":"last-prompt","timestamp":"2026-08-22T21:57:01.375Z"}"#,
+            r#"{"type":"frame-link","timestamp":"2026-08-22T21:57:01.375Z"}"#,
+        ] {
+            assert!(parse_line(line).is_empty(), "{line} should still be dropped");
+        }
+        // And a title with nothing in it is not a title.
+        assert!(parse_line(r#"{"type":"ai-title","aiTitle":"   "}"#).is_empty());
+        assert!(parse_line(r#"{"type":"ai-title"}"#).is_empty());
+    }
+
+    /// Every `ai-title` Claude Code has actually written on this machine.
+    ///
+    /// The fixture above proves the parser handles the shape I believe in;
+    /// this proves it handles the shape on disk, across every version of
+    /// Claude Code that has ever run here (§80). It is the evidence behind
+    /// `TitleSupport::Provider` — that the provider really does name its own
+    /// sessions, often enough for a history list to lean on it.
+    ///
+    ///   cargo test --lib -- --ignored --nocapture
+    #[test]
+    #[ignore = "reads the local Claude Code transcript store"]
+    fn recovers_a_title_from_every_local_transcript_that_has_one() {
+        let Some(root) = home().map(|h| h.join(".claude").join("projects")) else {
+            return;
+        };
+        let Ok(dirs) = std::fs::read_dir(&root) else {
+            return;
+        };
+
+        let mut transcripts = 0usize;
+        let mut with_a_title = 0usize;
+        let mut titles = 0usize;
+
+        for dir in dirs.flatten() {
+            let Ok(entries) = std::fs::read_dir(dir.path()) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                transcripts += 1;
+
+                let found: Vec<String> = text
+                    .lines()
+                    .flat_map(parse_line)
+                    .filter_map(|item| match item {
+                        ConversationItem::Title { text, .. } => Some(text),
+                        _ => None,
+                    })
+                    .collect();
+
+                // The raw count, read without the parser, is what says whether
+                // the parser missed any — a parser checked against its own
+                // output can only ever agree with itself.
+                let raw = text.lines().filter(|l| l.contains(r#""type":"ai-title""#)).count();
+                assert_eq!(
+                    found.len(),
+                    raw,
+                    "{} has {raw} ai-title lines and the parser recovered {}",
+                    path.display(),
+                    found.len()
+                );
+
+                if !found.is_empty() {
+                    with_a_title += 1;
+                    titles += found.len();
+                    for title in &found {
+                        assert!(!title.trim().is_empty());
+                        assert!(title.chars().count() <= MAX_TITLE_CHARS + 1);
+                    }
+                }
+            }
+        }
+
+        println!(
+            "{transcripts} transcripts, {with_a_title} carrying {titles} titles between them"
+        );
+        assert!(transcripts > 0, "expected at least one local transcript");
+        assert!(
+            with_a_title > 0,
+            "no transcript on this machine states a title — TitleSupport::Provider \
+             would be a claim with nothing behind it"
+        );
+    }
+
     /// The autopilot's stopping condition, checked against reality (§32).
     ///
     /// The whole loop turns on `TurnEnded` being recovered from what the

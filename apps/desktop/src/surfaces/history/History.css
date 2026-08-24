@@ -185,7 +185,16 @@
 .hist__row {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* Four in-flow items: the state dot, the body, the time, and the actions.
+     The row's own hit target is absolutely positioned and is deliberately not
+     one of them.
+
+     Three columns here cost every row about forty pixels of empty space: the
+     fourth item wrapped onto an implicit second row, and because the actions
+     are `opacity: 0` until the row is hovered, that row was invisible while
+     still taking its height. The list looked airy rather than broken, which is
+     why it survived until a screenshot was measured against the design. */
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: start;
   gap: var(--space-5);
   padding: var(--space-5) var(--space-6);

@@ -129,15 +129,25 @@ export const useHistory = create<HistoryState>((set, get) => ({
       set({ loading: false, error: String(error) });
     }
 
-    // The facets and the disk figure change far more slowly than the list, and
-    // neither is worth blocking the rows on — so they are read alongside rather
-    // than awaited before anything renders.
-    void historyProviders()
-      .then((providers) => set({ providers }))
-      .catch(() => {});
-    void historyStorage()
-      .then((storage) => set({ storage }))
-      .catch(() => {});
+    // The facets and the disk figure are read alongside the rows rather than
+    // before them: neither is worth making the list wait for.
+    //
+    // And **once**, not on every load. `history_storage` walks every session
+    // log directory on the machine to add up its bytes — cheap at the 42
+    // directories here, and a few thousand filesystem calls for somebody with
+    // a year of agent work, which is exactly who this surface is for. Typing
+    // into the search box would have paid that on every keystroke. It is
+    // refreshed only when it actually changes, which is a delete.
+    if (!get().storage) {
+      void historyStorage()
+        .then((storage) => set({ storage }))
+        .catch(() => {});
+    }
+    if (get().providers.length === 0) {
+      void historyProviders()
+        .then((providers) => set({ providers }))
+        .catch(() => {});
+    }
   },
 
   loadMore: async () => {

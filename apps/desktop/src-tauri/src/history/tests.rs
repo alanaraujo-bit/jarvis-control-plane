@@ -389,7 +389,7 @@ fn renaming_refuses_an_empty_name_rather_than_clearing_one() {
 
     assert_eq!(rename(&db, "s1", "   ").unwrap_err(), "history.emptyTitle");
     assert_eq!(
-        entry(&db, &[], "s1").unwrap().unwrap().title.as_deref(),
+page(&db, &[], &Query::default()).unwrap().entries[0].title.as_deref(),
         Some("Login form")
     );
 }
@@ -401,7 +401,6 @@ fn a_live_session_is_reported_as_live() {
 
     let page = page(&db, &["s1".to_string()], &Query::default()).unwrap();
     assert!(page.entries[0].live);
-    assert!(entry(&db, &["s1".to_string()], "s1").unwrap().unwrap().live);
 }
 
 #[test]

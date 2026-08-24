@@ -1433,3 +1433,123 @@ from the `autopilot_stop` command. A run also ends **on its own** — completed,
 out of turns, not converging — on a thread that has no `AppState` to reach for,
 and a flag that outlived the run that set it would silence the person who then
 took that session over by hand.
+
+---
+
+## D36 — A title has a source, and a person's rename outranks a machine's
+
+`sessions.title` existed from migration 1 and **nothing ever wrote to it**. Three
+different things can name a session, and they are not equally trustworthy:
+
+| Source | Where it comes from |
+|---|---|
+| `user` | Somebody renamed it here. |
+| `provider` | The provider named it itself — Claude Code's `ai-title`. |
+| `derived` | Cut from the first thing typed in the session. |
+
+`title_source` travels with the title for the same reason a confidence travels
+with a usage figure (§28): a title Claude Code chose and a title we cut out of
+somebody's first sentence are not the same claim, and a list that renders them
+identically asserts something the product does not know. The surface labels the
+two machine sources and says nothing for a name a person typed — they already
+know where it came from.
+
+Precedence is **user > provider > derived**, and it is enforced in the `WHERE`
+clause of the update rather than by reading the current value and deciding in
+Rust. The transcript tailer and a rename from the UI can arrive in either order,
+and a check-then-write loses that race exactly as often as it is close.
+
+Two asymmetries in that rule are deliberate:
+
+* the two *stated* sources may replace themselves — renaming twice means the
+  second name, and Claude Code re-writes `ai-title` as a conversation grows, so
+  the later one is the better summary;
+* a *derived* title may not. It is the **first** message; re-deriving on every
+  message would rename the session continuously. A session called by its latest
+  sentence is not titled, it flickers.
+
+Verified live, not only in a unit test: a session was renamed, three more agent
+turns followed during which Claude Code wrote its `ai-title` again, the tailer
+demonstrably processed that batch (the row's turn and token counters moved), and
+the person's name stayed.
+
+## D37 — The title travels through the log, like everything else
+
+`ConversationItem::Title`, logged as a `Lifecycle` frame. It is a fact about the
+session, not something anybody said, so filing it as a `Message` would put a
+stray bubble in Conversation View — which reads `Message` frames and has no way
+to know that one is not part of the conversation.
+
+It goes through the log at all because §23 means everything does: the frame that
+updates the row sits on disk beside the conversation it names.
+
+The lift happens **before** `claude::is_internal_noise`, not by loosening it.
+That filter drops `ai-title` on purpose and is right to (§24: a transcript is
+full of machinery). One reader wants it; that reader takes it early, and the
+filter goes on meaning exactly what it says for everybody else.
+
+## D38 — The title backfill reads the index, not the logs
+
+D30's backfill had to walk every session log because the content it wanted was
+only there. This one does not: `session_events` already holds every user message
+of every session, put there by that same walk. A derived title is one indexed
+lookup per session, not a filesystem walk.
+
+The ordering between the two is made safe rather than assumed. They run in
+different threads at the same launch, so the candidate query requires
+`events_backfilled_at IS NOT NULL`: a session whose conversation is not indexed
+yet is simply not a candidate, and is picked up on a later launch. Without that
+clause a session looked at first would find no events, be stamped as done, and
+stay untitled for the rest of the installation's life.
+
+Old sessions get a *derived* title only. Their `ai-title` is still in Claude
+Code's own transcript on disk, and re-reading 124 provider transcripts to
+improve titles that are already usable is work out of proportion to it. Stated
+so it is a decision rather than an oversight.
+
+## D39 — Delete is the whole session, and nothing else prunes
+
+`session_events_fts` is a **standalone** FTS5 table, not `content=`-linked —
+migration 9's own comment says why: `session_events` is `WITHOUT ROWID` and FTS5
+content tables key against an integer rowid. The consequence is that there is no
+trigger and no cascade. `ON DELETE CASCADE` clears `session_events`; the index
+would keep its rows forever, and Global Search would go on returning hits, with
+snippets, for a conversation that no longer exists anywhere.
+
+So a delete removes, explicitly and in one transaction: the FTS rows, the
+`session_events` rows, the `notifications` rows (that column carries no foreign
+key, so nothing cleans it up either), and the `sessions` row — and then the
+`sessions/<id>/` directory on disk, last, because a log with no row pointing at
+it is invisible and harmless while a row pointing at a missing log renders as a
+session that will not open.
+
+A **live** session cannot be deleted. Taking an agent's log out from under it
+while it is writing is not a delete, it is a crash.
+
+And that is all the pruning there is. Nothing removes a session log
+automatically; the log **is** the record (§23). What Session History adds is the
+half that was missing — it says how much disk the logs actually take, so
+retention is a decision somebody can make rather than a surprise they discover.
+
+## D40 — A history row must reach a project that has been archived
+
+`list_projects` filters `archived = 0`, which is right for a list of places to
+work. The webview then looks a project up in that list whenever something hands
+it only an id — a Global Search hit, a notification, a history row. For an
+archived project that lookup finds nothing and **falls through in silence**: no
+error, no navigation, a click that is simply inert.
+
+Archiving is exactly what happens to a scratch project and to a removed worktree
+(§45), and their sessions are still history. Being unable to open them is the
+one thing a history list may not do.
+
+`project::get_project` returns one project by id with no archived filter, and
+`openProjectAnywhere` tries the loaded list first and falls back to it.
+
+Two things worth keeping from how this was found. It only showed up by clicking
+a row in the real app and watching nothing happen — it is HANDOFF item 33's
+shape a second time, a lookup that misses returning `undefined` and the caller
+falling through without a word. And it was **not a new bug**: Global Search had
+carried exactly this failure since §51 shipped, for any conversation in a
+project since archived. Session History did not introduce it, it made it
+visible.

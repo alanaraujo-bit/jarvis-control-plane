@@ -748,6 +748,53 @@ Full account, including everything measured and every trap:
 [`docs/M13-ACCOUNTS.md`](M13-ACCOUNTS.md). Signing in to accounts 2–4 needs an
 interactive browser login and is **B6**.
 
+## M15 — Session History (§88)  ✅
+
+Every session this machine has ever run, in one place: titled, searchable,
+grouped by when it happened, openable read-only, renameable and deletable.
+
+Two facts made this the gap it was. `sessions.title` had existed since migration
+1 and **nothing had ever written to it**, so every session in the database was
+untitled; and `session_list` filters `ended_at IS NULL`, which is right for the
+terminal tabs it feeds and meant a finished session was unreachable from
+anywhere in the product except by stumbling on one of its own sentences in
+Global Search.
+
+- [x] **Titles that mean something (D36/D37).** Claude Code names its own
+      sessions and nobody was reading it: `ai-title`, in 89 of the 124
+      transcripts on this machine. It is lifted before the noise filter that
+      correctly drops it for Conversation View. Codex states no title at all —
+      a real capability difference, expressed as `TitleSupport` with a test that
+      fails if the two providers ever describe themselves identically (§26).
+      Precedence is user > provider > derived, enforced in SQL.
+- [x] **A derived title for everything older (D38)**, backfilled off the startup
+      path from the search index rather than from the logs, with the ordering
+      against `search::backfill` made safe rather than assumed.
+- [x] **The surface.** Grouped by day, keyset-paginated (never `OFFSET`), filters
+      for range, provider and project, inline rename, inline delete confirmation.
+- [x] **Search over what was actually said**, through the FTS5 index §51 already
+      built — the part the reference this was modelled on cannot do. A title
+      match sorts above a body match; a body match shows the line it matched.
+- [x] **Delete that really deletes (D39)** — rows, FTS index entries, and the log
+      directory — and says how many bytes it freed. A live session is refused.
+- [x] **Storage made visible.** No retention policy was invented (HANDOFF item
+      38 flags that as a decision nobody should make casually); the surface just
+      says what the logs cost, so it is a decision somebody *can* make.
+- [x] Verified in a real build against a real Claude Code 2.1.241 session, in
+      both themes and both languages.
+
+Not built, deliberately (§81): the **Web** tab in the reference screenshot.
+Those are Claude's cloud sessions; this product is local-first (§3) and does not
+have them.
+
+Two bugs the looking found: every row was forty pixels too tall because a
+four-item grid had three columns and the fourth wrapped onto an invisible second
+row; and clicking a row for an **archived** project did nothing at all — a
+silent fall-through that turned out to have been in Global Search since §51
+(D40).
+
+Full account: [`docs/M15-HISTORY.md`](M15-HISTORY.md).
+
 ## Next steps
 
 1. Re-verify voice dictation end to end by ear on a real microphone — the

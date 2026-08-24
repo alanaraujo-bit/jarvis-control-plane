@@ -82,13 +82,13 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**524 tests** (493 Rust — 480 run, 13 intentionally `#[ignore]`d — 9 i18n,
+**547 tests** (516 Rust — 502 run, 14 intentionally `#[ignore]`d — 9 i18n,
 22 relay) · all green.
 
-The thirteen ignored ones are ignored for two different reasons, and it is
+The fourteen ignored ones are ignored for two different reasons, and it is
 worth knowing which is which before assuming one is broken:
 
-* **nine need something only this machine has** — a real `claude` CLI, a real
+* **ten need something only this machine has** — a real `claude` CLI, a real
   microphone, a running whisper server, or this machine's own recorded session
   history;
 * **four are the `notify::capture` harness** (§49), which spawns a real,
@@ -140,6 +140,7 @@ version **0.3.0**.
 | **Preview (§46)** | the dev server URL read from the session's own output, opened in a separate window (never an iframe — the CSP forbids it and widening it would be an escalation), loopback only, with Reload for a server that has no hot reload |
 | **Global Search backfill (§51, D30)** | sessions recorded *before* search existed are indexed once, in the background, idempotently — verified against this machine's own recorded sessions |
 | **Real-time streaming transcription (§54, D31)** | live captions while recording, VS Code/Cursor-style; a warm `whisper-server.exe` polled every second or so, LocalAgreement-style commit/tail split, animated as each word settles — never touches what gets typed, which still comes from one complete unstreamed pass on stop |
+| **Session History (§88)** | Every session this machine has ever run, in one place: titled, searchable, grouped by when it happened, openable read-only, renameable and deletable. The two facts that made this the gap it was: `sessions.title` had existed since migration 1 with **no writer at all**, and `session_list` filters `ended_at IS NULL`, so a finished session was unreachable. Claude Code names its own sessions and nobody was reading it (`ai-title`, in 89 of the 124 transcripts here); Codex names none, which is a real capability difference and now says so. A name a person types outranks both, forever (D36). The search runs over **what was actually said**, on §51's own FTS5 index. Delete takes the index rows and the log directory with it and says what it freed (D39) -- and that is the only pruning there is, on purpose. See D36--D40 and `docs/M15-HISTORY.md`. |
 | **Notifications (§49)** | An agent that stops — finished, or waiting on a decision — reaches the person who walked away. A bell and a centre in the titlebar, an in-app toast when the window is in front, a Windows toast and a taskbar flash when it is not. The rule the whole thing turns on: **nothing is raised about a session the person is already watching**, and a suppressed notification is dropped rather than stored-and-marked-read, so the centre is a list of what you *missed*. The preview is the agent's own words — the question it drew, or the reply it just gave — and carries where it came from: Official when a provider stated it, **Observed** when it was read off the terminal (§28). `notify::detect` is that reading, and it exists because Claude Code asking whether it may write a file is stated nowhere else. See D35. |
 
 **The full loop has been executed end to end**, twice over:
@@ -864,6 +865,42 @@ Every one of these is real and already cost time.
     where the person is. `isMinimized()` is checked alongside it, because a
     minimised window is not where anybody is looking whatever it says about its
     own focus.
+
+56. **A grid child that is absolutely positioned is not a grid item, and the
+    count of the rest still has to match the columns.** Session History's row
+    has four in-flow items — the state dot, the body, the time, the actions —
+    plus a hit target laid over the whole row with `position: absolute`, which
+    correctly takes no column. The template declared **three** columns, so the
+    fourth item wrapped onto an implicit second row. Because the actions are
+    `opacity: 0` until the row is hovered, that row was **invisible while still
+    taking about forty pixels of height on every row in the list**. Nothing
+    looked broken — the list simply looked airy — and no test could have seen
+    it. It was found by measuring a screenshot against the density the design
+    called for. When a CSS grid has mysterious extra height, count the in-flow
+    children before looking at anything else.
+
+57. **A lookup into `projects` misses for an *archived* project, and the caller
+    falls through in silence.** `list_projects` filters `archived = 0`, which is
+    right for a list of places to work, and the webview looks a project up in
+    that list whenever something hands it only an id — a Global Search hit, a
+    notification, a history row. Clicking a Session History row for an archived
+    project therefore did nothing at all: no error, no navigation, an inert
+    click. This is item 33 a second time with the id missing for a different
+    reason, and it is worth noticing that it was **not a new bug** — Global
+    Search had carried it since §51 for any conversation in a project since
+    archived, and History only made it visible. Archiving is what happens to a
+    scratch project and to a removed worktree (§45), so it is the common case,
+    not the edge. `project::get_project` and `openProjectAnywhere` are the fix;
+    see D40.
+
+58. **Claude Code writes `ai-title`, and it is the best title this product can
+    show.** 4,938 of them across 89 of the 124 transcripts on this machine. The
+    line is unlike every other transcript entry in two ways that matter to a
+    parser: it carries **no `timestamp`** and **no `uuid`**. It was also, until
+    §88, in `claude::is_internal_noise`'s drop list — correctly, for
+    Conversation View. If you ever need something the noise filter drops, lift
+    it *before* the filter rather than loosening it; the filter is right for
+    every other reader. See D37.
 
 ---
 

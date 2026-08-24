@@ -370,24 +370,6 @@ fn search(conn: &Connection, query: &Query, text: &str) -> rusqlite::Result<Vec<
         .collect())
 }
 
-/// One session by id, so a row can redraw itself after a rename without
-/// re-fetching the page it sits in.
-pub fn entry(db: &Database, live: &[String], session_id: &str) -> Result<Option<Entry>> {
-    let found = db
-        .with(|conn| {
-            let sql = format!("{SELECT} WHERE s.id = ?1");
-            let mut stmt = conn.prepare(&sql)?;
-            let mut rows = stmt.query_map([session_id], |row| read_entry(row, None))?;
-            rows.next().transpose()
-        })
-        .map_err(|e| e.to_string())?;
-
-    Ok(found.map(|mut entry| {
-        entry.live = live.iter().any(|id| id == &entry.id);
-        entry
-    }))
-}
-
 /// Rename a session (§88, D36).
 ///
 /// `Source::User` outranks everything, so nothing the provider says afterwards

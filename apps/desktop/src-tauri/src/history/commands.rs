@@ -7,7 +7,7 @@
 
 use tauri::State;
 
-use super::{Deleted, Entry, Page, Query, Storage};
+use super::{Deleted, Page, Query, Storage};
 use crate::AppState;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -46,9 +46,3 @@ pub fn history_providers(state: State<'_, AppState>) -> Result<Vec<String>> {
     super::providers_seen(&state.db)
 }
 
-/// One session, by id — for a row the surface needs to redraw on its own after
-/// a rename, without re-fetching the page it sits in.
-#[tauri::command]
-pub fn history_entry(state: State<'_, AppState>, session_id: String) -> Result<Option<Entry>> {
-    super::entry(&state.db, &state.sessions.ids(), &session_id)
-}

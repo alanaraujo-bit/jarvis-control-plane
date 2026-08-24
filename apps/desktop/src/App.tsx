@@ -16,6 +16,7 @@ import {
   type Notification,
 } from "./app/notifications";
 import { usePreferences } from "./surfaces/settings/usePreferences";
+import { invoke } from "./app/platform";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
 import { History, kindOf } from "./surfaces/history/History";
@@ -133,6 +134,38 @@ export function App() {
     [projects, openProjectDirect],
   );
 
+  /**
+   * Go to a project by id, **even one that has been archived**.
+   *
+   * `openProjectById` looks the id up in the loaded list, and that list is
+   * `list_projects`, which filters archived projects out — correctly, because
+   * it is the list of places to work. Anything that arrives holding only an id
+   * therefore silently does nothing when the project has been archived: no
+   * error, no navigation, a click that is simply inert.
+   *
+   * That is not hypothetical. Archiving is what happens to a scratch project
+   * and to a removed worktree (§45), and their sessions are still history.
+   * Found by clicking a Session History row in the real app and watching
+   * nothing at all happen — the same silent-fall-through shape as HANDOFF
+   * item 33, with the id missing for a different reason.
+   *
+   * The store is still tried first: it is already in memory, and this is only
+   * a fallback for the case it cannot answer.
+   */
+  const openProjectAnywhere = useCallback(
+    async (projectId: string, focus?: Focus) => {
+      if (openProjectById(projectId, focus)) return;
+      try {
+        const project = await invoke<Project | null>("get_project", { id: projectId });
+        if (project) openProjectDirect(project, focus);
+      } catch {
+        // Nothing to navigate to. Staying put is the honest outcome — better
+        // than a blank workspace for a project that is genuinely gone.
+      }
+    },
+    [openProjectById, openProjectDirect],
+  );
+
   const handleSearchResult = useCallback(
     (result: SearchResult) => {
       if (result.kind === "mission" && result.missionId) {
@@ -149,7 +182,10 @@ export function App() {
       }
       if (!result.projectId) return;
       if (result.kind === "conversation" && result.sessionId) {
-        openProjectById(result.projectId, {
+        // `openProjectAnywhere`, not `openProjectById`: a conversation can
+        // perfectly well have happened in a project since archived, and this
+        // is the one gesture that has to reach it.
+        void openProjectAnywhere(result.projectId, {
           area: "sessions",
           sessionId: result.sessionId,
           sessionProvider: (result.sessionProvider as SessionKind | null) ?? "shell",
@@ -159,7 +195,7 @@ export function App() {
         openProjectById(result.projectId, { area: "brain" });
       }
     },
-    [openProjectById],
+    [openProjectById, openProjectAnywhere],
   );
 
   const goTo = useCallback(
@@ -451,7 +487,10 @@ export function App() {
                 // `focusToken` is what makes it work when the project is
                 // already open (HANDOFF item 53).
                 onOpenSession={(entry) => {
-                  openProjectById(entry.projectId, {
+                  // `openProjectAnywhere`: a history row very often belongs to
+                  // a project that has since been archived -- a scratch folder,
+                  // a removed worktree -- and its sessions are still history.
+                  void openProjectAnywhere(entry.projectId, {
                     area: "sessions",
                     sessionId: entry.id,
                     // A live session is opened as itself; only a finished one

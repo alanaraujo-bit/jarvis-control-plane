@@ -189,6 +189,34 @@ pub fn open_project(state: State<'_, AppState>, path: String) -> Result<Project>
     open(&state.db, Path::new(&path))
 }
 
+/// One project by id, **including an archived one**.
+///
+/// ## Why this exists
+///
+/// `list_projects` filters `archived = 0`, which is right for a list of places
+/// to work. The webview then looks a project up in that list whenever something
+/// hands it only an id — a Global Search hit, a notification, a history row.
+///
+/// For an archived project that lookup finds nothing and falls through
+/// silently: no error, no navigation, a click that does nothing at all. It is
+/// HANDOFF item 33 again, with the id missing for a different reason.
+///
+/// Found by clicking a Session History row whose project had been archived, in
+/// the real app. Archiving is exactly what happens to a scratch project or a
+/// removed worktree (§45), and their sessions are still history — being unable
+/// to open them is the one thing a history list may not do.
+///
+/// Archiving is not deletion (see `archive_project`), so the row is still
+/// there and this is only a matter of asking for it by name.
+#[tauri::command]
+pub fn get_project(state: State<'_, AppState>, id: String) -> Result<Option<Project>> {
+    Ok(state.db.with(|conn| {
+        let mut stmt = conn.prepare("SELECT * FROM projects WHERE id = ?1")?;
+        let mut rows = stmt.query_map([&id], row_to_project)?;
+        rows.next().transpose()
+    })?)
+}
+
 /// Remove a project from J.A.R.V.I.S.
 ///
 /// Archives rather than deletes, and never touches the folder on disk — the

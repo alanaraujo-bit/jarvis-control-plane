@@ -1,6 +1,7 @@
 # M15 — Session History (§88)
 
-> **Status: in progress.** This file is the working record: what was measured,
+> **Status: built and verified in a real build.** This file is the working
+> record: what was measured,
 > what was decided and why, and what is left. It is written the way
 > `M13-ACCOUNTS.md` and `M14-NOTIFICATIONS.md` are — findings first, because
 > the findings are what the design rests on.
@@ -143,16 +144,107 @@ pruner, no age limit, no "clean up" button that decides for them.
 A live session cannot be deleted. Taking an agent's log out from under it is not
 a delete, it is a crash.
 
-## 5. Plan
+### D40 — A history row must reach a project that has been archived
 
-- [ ] Migration 12 — `sessions.title_source`, a global `sessions (created_at DESC)`
-      index (the existing one is `(project_id, created_at DESC)` and does not
-      serve a cross-project query), and the derived-title backfill bookmark.
-- [ ] `TitleSupport` in the capability model, and the §26 test.
-- [ ] `ConversationItem::Title` + `claude::parse_line` lifting `ai-title`.
-- [ ] `session::title` — precedence-respecting write, derivation, backfill.
-- [ ] `history` — list (keyset-paginated), search (FTS), rename, delete, storage.
-- [ ] The surface: rail entry, grouped rows, search, filters, inline rename,
+`list_projects` filters `archived = 0`, and the webview looks a project up in
+that list whenever something hands it only an id. For an archived project that
+lookup finds nothing and **falls through silently** — no error, no navigation, a
+click that is simply inert.
+
+Archiving is exactly what happens to a scratch project and to a removed
+worktree (§45), and their sessions are still history. `get_project` returns one
+project by id with no archived filter, and `openProjectAnywhere` in `App.tsx`
+tries the loaded list first and falls back to it.
+
+This was a pre-existing bug that Session History only made visible: **Global
+Search had the same silent failure** for a conversation in an archived project,
+and now goes through the same path. See §6 below for how it was found.
+
+## 5. Plan — done
+
+- [x] Migration 13 — `sessions.title_source`, `sessions.title_backfilled_at`,
+      a global `sessions (created_at DESC)` index (the existing one is
+      `(project_id, created_at DESC)`, a prefix a cross-project ORDER BY cannot
+      use) and `usage_samples (session_id)` (every index on that table was by
+      time, project or account, so a per-session token sum would have scanned
+      the whole table once per row on the page).
+- [x] `TitleSupport` in the capability model, and the §26 test.
+- [x] `ConversationItem::Title` + `claude::parse_line` lifting `ai-title`.
+- [x] `session::title` — precedence-respecting write, derivation, backfill.
+- [x] `history` — list (keyset-paginated), search (FTS), rename, delete, storage.
+- [x] The surface: rail entry, grouped rows, search, filters, inline rename,
       delete confirmation.
-- [ ] Both i18n catalogues.
-- [ ] Verified in a real build, by looking at it, in both themes.
+- [x] Both i18n catalogues.
+- [x] Verified in a real build, by looking at it, in both themes and both
+      languages.
+
+## 6. What was actually verified, and how
+
+Everything below happened in a `pnpm tauri build --no-bundle` binary against
+this machine's real database, not in tests.
+
+**The parser, against every transcript here.** `recovers_a_title_from_every_local_transcript_that_has_one`
+(`#[ignore]`d) parses all **124** Claude Code transcripts on this machine and
+recovers **4,938 titles across 89 of them** — and asserts the count against a
+raw `grep`-equivalent of the file, not against the parser's own output, because
+a parser checked against itself can only ever agree with itself.
+
+**A provider title, end to end, live.** Opened a fresh scratch repository as a
+project, started a real Claude Code 2.1.241 session, answered its trust prompt
+(HANDOFF item 25, as predicted for a brand-new folder), and asked it to read the
+README. Claude Code wrote `"aiTitle":"README.md review"` into its own transcript;
+the tailer read it, the log took a `Title` frame, and the row appeared in History
+as **README.md review** labelled *named by the agent*, with the project, the
+provider, 1 turn, 2m, 114 tokens and 1.7 KB beside it.
+
+**Search over what was said.** Searched `scratch repository` — words that appear
+in no title anywhere — and got that session back with the agent's own sentence
+as the snippet.
+
+**Rename, with an accent.** Renamed it to *Verificação do M15*. The accent
+survived, and the provenance label correctly disappeared: a name a person typed
+needs no qualification.
+
+**D36, proven live rather than only in a unit test.** Three more agent turns
+followed the rename, during which Claude Code wrote its `ai-title` line **again**.
+The tailer definitely processed that batch — the row's counters moved from 1 turn
+/ 114 tokens to 4 turns / 455 tokens in the same window — and the title stayed
+*Verificação do M15*. A person's name outranked the machine's, in the real app,
+with a real agent.
+
+**D39, delete.** Closed the session, deleted it from the row. Sessions went
+7 → 6 and disk went 522 KB → 434 KB, matching the 89 KB the row reported. The
+log directory was gone from `%APPDATA%\dev.jarvis.desktop\sessions`. The same
+`scratch repository` search that had returned a hit two minutes earlier returned
+nothing — **and neither did Global Search**, which is the failure D39 exists to
+prevent.
+
+**Both themes, both languages.** Light theme sampled with `GetPixel` rather than
+judged from the screenshot (HANDOFF item 42): page `#FFFFFF`, hovered row
+`#F5F5F5`. English and pt-BR both complete, including the singular forms
+("1 turn").
+
+### Two bugs the looking found
+
+1. **Every row was about forty pixels too tall.** The row is a grid with four
+   in-flow items — dot, body, time, actions — and three columns. The fourth
+   wrapped onto an implicit second row, and because the actions are
+   `opacity: 0` until hover, that row was **invisible while still taking its
+   height**. The list looked airy rather than broken, which is why only
+   measuring a screenshot against the intended density caught it.
+
+2. **Clicking a row for an archived project did nothing at all.** See D40. Found
+   by clicking a session belonging to a previous milestone's scratch project,
+   watching the surface not move, and going looking for why. It is HANDOFF item
+   33's shape a second time — a lookup that misses returns `undefined` and the
+   caller falls through in silence — and it had been sitting in Global Search
+   the whole time.
+
+### Left honest rather than claimed
+
+The **derived** titles on this machine's older sessions are the first message
+verbatim, including one that reads `CRead README.md and describe…`. That leading
+`C` is really in the transcript: typing into an agent CLI is lossy (HANDOFF item
+11) and it reproduced live during this pass. The title is faithful to the record,
+which is the right behaviour — but it is worth knowing that a derived title can
+inherit a typing artifact, and that renaming is the answer.

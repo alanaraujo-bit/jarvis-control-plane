@@ -37,6 +37,7 @@ Working and verified against real agents on a real machine:
 | Files, Editor (Monaco), Diff/Review, Git write ops, Worktrees | Working |
 | Project Brain, project history, Notes | Working |
 | Global Search — knowledge, notes, missions, activity, conversations | Working |
+| Session History — every session, titled, searchable, openable (§88) | Working |
 | Windows installer + updater | Working (unsigned — see `docs/BLOCKERS.md`) |
 
 Not built yet — deliberately absent rather than stubbed (§81):
@@ -99,7 +100,8 @@ See `docs/ARCHITECTURE.md`.
 apps/desktop/          Tauri v2 application
   src/                   React UI — shell, surfaces, design system
   src-tauri/src/
-    session/             event log, live runtime, transcript following
+    session/             event log, live runtime, transcript following, titles
+    history/             every session ever run -- search, rename, delete
     pty/                 pseudo-terminals, Windows job containment
     providers/           adapter trait, Claude Code, Codex
     db/                  SQLite schema and migrations
