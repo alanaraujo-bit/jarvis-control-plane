@@ -54,9 +54,26 @@ use super::render::{render, Rendered};
 
 /// The glyphs an agent CLI uses to mark the selected row.
 ///
-/// `❯` is Claude Code and `›` is Codex, both from real captures. The others are
-/// the conventional alternatives and cost nothing to accept.
-const CURSOR_GLYPHS: &[char] = &['\u{2771}', '\u{203a}', '\u{25b6}', '\u{276f}', '>'];
+/// `❯` (U+276F) is Claude Code and `›` (U+203A) is Codex, both from real
+/// captures. The two ornament variants are their near neighbours in the same
+/// family, which a CLI could reasonably use instead.
+///
+/// **A plain `>` is deliberately not here**, though it was at first. It is the
+/// quotation marker in every markdown file, mail body and diff on earth, so
+/// this — a completely ordinary thing for an agent to print —
+///
+/// ```text
+/// > 1. First item
+///   2. Second item
+/// ```
+///
+/// parses as a live selection with the first row chosen. The quiet conjunction
+/// in `watch` hides that while the list scrolls past mid-turn, and does not
+/// hide it when the list is the last thing on screen as a turn ends: the
+/// notification would then say an agent needs approval when it has finished,
+/// which is the wrong-notification case that teaches people to ignore the next
+/// one. Accepting `>` bought nothing — no captured CLI uses it — and cost that.
+const CURSOR_GLYPHS: &[char] = &['\u{276f}', '\u{203a}', '\u{2771}', '\u{25b6}'];
 
 /// How far back from the choice list to look for the question it belongs to.
 const QUESTION_LOOKBACK: usize = 8;
@@ -369,6 +386,14 @@ mod tests {
     fn ordinary_output_that_happens_to_be_numbered_is_not_a_question() {
         // A printed list. Nothing is selected, so nothing is being chosen.
         let text = "Files changed:\n1. src/main.rs\n2. src/lib.rs\n3. Cargo.toml\n";
+        assert_eq!(prompt(text.as_bytes()), None);
+    }
+
+    /// A quoted numbered list — markdown, a mail body, a diff — is the most
+    /// ordinary thing an agent can print, and it must never read as a choice.
+    #[test]
+    fn a_quoted_markdown_list_is_not_a_question() {
+        let text = "Steps to reproduce:\n> 1. Open the file\n  2. Press save\n  3. Watch it hang\n";
         assert_eq!(prompt(text.as_bytes()), None);
     }
 

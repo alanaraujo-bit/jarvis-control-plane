@@ -328,6 +328,30 @@ fn absorb(
         );
     }
 
+    // A refusal is also the end of what that agent was going to do, and the
+    // person it stopped is not necessarily at the screen (§49).
+    //
+    // A guardrail set to *ask* is deliberately **not** raised here. Claude Code
+    // then draws its own permission question on the terminal, which `notify`'s
+    // own watcher already sees — with a better preview, because it reads what
+    // the provider actually wrote. Raising both would notify twice for one
+    // question, which is precisely the noise that makes people stop reading.
+    if status == Status::Denied {
+        crate::notify::bus::raise(
+            crate::notify::Reason::MissionBlocked,
+            // The guard reported its own decision (§28).
+            crate::session::event::Confidence::Official,
+            crate::notify::Raise {
+                session_id: Some(session.id.clone()),
+                project_id: Some(project_id.to_string()),
+                mission_id: mission_id.map(str::to_string),
+                preview: Some(format!("{}: {}", operation.as_str(), record.command)),
+                detail_code: Some(record.reason.clone()),
+                ..Default::default()
+            },
+        );
+    }
+
     // Nobody was attached to answer, so the agent has been stopped rather than
     // left waiting on a prompt that could never be answered (§34). The mission
     // has to say so, or the run is silently going nowhere.

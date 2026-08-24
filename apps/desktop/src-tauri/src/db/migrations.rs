@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 11;
+pub const SCHEMA_VERSION: u32 = 12;
 
 struct Migration {
     version: u32,
@@ -542,6 +542,65 @@ const MIGRATIONS: &[Migration] = &[Migration {
     ALTER TABLE usage_samples ADD COLUMN account_id TEXT;
     CREATE INDEX idx_usage_account ON usage_samples (account_id, ts_ms);
 "#,
+    },
+    Migration {
+        version: 12,
+        sql: r#"
+    -- ---- Notifications (§49) ------------------------------------------------
+    --
+    -- What needed a person, and whether they have seen it yet.
+    --
+    -- ## Why this is not the activity log
+    --
+    -- The two look alike and are not. `activity` is an immutable record of what
+    -- happened, written at the bar "would a person want to know this later".
+    -- A notification is written at the bar "does somebody need to look at this
+    -- now", it carries read state, and it is deduplicated. Folding them
+    -- together would mean either an activity log with a mutable column that
+    -- means nothing for most of its rows, or a notification list that has to
+    -- re-derive what needs attention out of prose every time it is opened.
+    --
+    -- The two bars genuinely disagree in both directions. A finished agent turn
+    -- is worth a notification and is deliberately *not* worth an activity row —
+    -- there are dozens per session, and §48 says a log that records everything
+    -- is a log nobody reads. A quota threshold crossed at 3am is worth an
+    -- activity row and is not worth waking anybody.
+    --
+    -- ## What is stored, and what is not
+    --
+    -- `kind` and `reason` are stable identifiers the UI localises (§65), never
+    -- prose. `preview` is the exception and is deliberate: it is the agent's
+    -- own words — the question it drew on its own screen — and translating an
+    -- agent's question would be inventing one. It is short, and it is the only
+    -- untranslated string the surface shows.
+    --
+    -- `confidence` travels with the row for the same reason it travels with a
+    -- usage figure (§28): a question read off a terminal is Observed, a turn
+    -- the provider declared finished is Official, and the surface must be able
+    -- to tell them apart rather than presenting a reading as a statement.
+    CREATE TABLE notifications (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts_ms       INTEGER NOT NULL,
+        -- needsApproval | finished | stopped
+        kind        TEXT NOT NULL,
+        -- Which flavour of that kind, e.g. providerPrompt, turnEnded.
+        reason      TEXT NOT NULL,
+        -- official | observed
+        confidence  TEXT NOT NULL,
+        project_id  TEXT REFERENCES projects (id) ON DELETE CASCADE,
+        session_id  TEXT,
+        mission_id  TEXT,
+        provider    TEXT,
+        preview     TEXT,
+        -- When the person laid eyes on it. NULL is the whole point of the row.
+        seen_at     INTEGER,
+        -- When they went to it from here, as against merely seeing it.
+        acted_at    INTEGER
+    );
+    CREATE INDEX idx_notifications_recent ON notifications (ts_ms DESC);
+    CREATE INDEX idx_notifications_unseen ON notifications (seen_at, ts_ms DESC);
+    CREATE INDEX idx_notifications_session ON notifications (session_id, ts_ms DESC);
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -651,6 +710,7 @@ mod tests {
             (9, 0x5843_2197_f138_27bd),
             (10, 0xee5e_755e_d603_e551),
             (11, 0xd1c1_2851_e515_228c),
+            (12, 0x4ea3_d5cb_46cb_d4a8),
         ];
 
         for migration in MIGRATIONS {
@@ -724,6 +784,7 @@ mod tests {
                 "sessions",
                 "projects",
                 "session_events",
+                "notifications",
             ] {
                 assert_eq!(
                     columns(&stepped, table),

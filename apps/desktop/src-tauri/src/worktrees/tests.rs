@@ -18,6 +18,7 @@ fn state(data_dir: &std::path::Path) -> AppState {
         sessions: SessionManager::default(),
         autopilots: crate::autopilot::driver::Autopilots::default(),
         voice: crate::voice::VoiceState::default(),
+        attention: Arc::new(crate::notify::Attention::default()),
         data_dir: data_dir.to_path_buf(),
     }
 }

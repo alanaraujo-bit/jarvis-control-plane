@@ -92,6 +92,12 @@ pub struct Preferences {
     pub terminal_font_size: u32,
     pub terminal_scrollback: u32,
     pub autopilot_turn_budget: u32,
+    /// Whether an agent stopping is worth interrupting the person for (§49).
+    pub notifications_enabled: bool,
+    /// Whether that interruption also reaches the desktop, so it can be seen
+    /// while the application is behind something else.
+    pub notifications_system: bool,
+    pub notifications_sound: bool,
 }
 
 /// Terminal type size, in CSS pixels.
@@ -118,7 +124,39 @@ pub fn settings_preferences(state: tauri::State<'_, crate::AppState>) -> Prefere
         terminal_scrollback: get_or(db, TERMINAL_SCROLLBACK_KEY, DEFAULT_TERMINAL_SCROLLBACK)
             .clamp(MIN_TERMINAL_SCROLLBACK, MAX_TERMINAL_SCROLLBACK),
         autopilot_turn_budget: crate::autopilot::plan::turn_budget(db),
+        notifications_enabled: get_or(db, crate::notify::ENABLED_KEY, true),
+        notifications_system: get_or(db, crate::notify::SYSTEM_KEY, true),
+        notifications_sound: get_or(db, crate::notify::SOUND_KEY, true),
     }
+}
+
+/// Turn one of the notification switches on or off (§49, §64).
+///
+/// Separate from `settings_set_preference` because these are booleans and that
+/// one validates against numeric bounds. Folding a `bool` into a function whose
+/// whole contract is "reject anything outside a range" would mean inventing a
+/// range for a value that has none.
+///
+/// `enabled` is applied to the live `Attention` as well as stored, because it
+/// is read on the raising path in background threads that never look at the
+/// database — turning notifications off has to stop the next one, not the one
+/// after a restart.
+#[tauri::command]
+pub fn settings_set_notification(
+    state: tauri::State<'_, crate::AppState>,
+    key: String,
+    value: bool,
+) -> Result<Preferences> {
+    match key.as_str() {
+        crate::notify::ENABLED_KEY => {
+            set(&state.db, &key, &value)?;
+            state.attention.set_enabled(value);
+        }
+        crate::notify::SYSTEM_KEY | crate::notify::SOUND_KEY => set(&state.db, &key, &value)?,
+        // A closed list, for the reason `settings_set_preference` gives.
+        _ => return Err("settings.unknownKey".into()),
+    }
+    Ok(settings_preferences(state))
 }
 
 /// Change one preference, and answer with the whole set.

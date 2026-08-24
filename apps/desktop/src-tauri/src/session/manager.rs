@@ -101,6 +101,12 @@ pub struct LiveSession {
     state: Arc<Mutex<SessionState>>,
     /// Set when the session ends, so background followers wind down.
     stopped: Arc<AtomicBool>,
+    /// The notification watcher, when this session has one (§49).
+    ///
+    /// An unbounded `Sender`, so this can never block the pump. The pump is
+    /// what keeps the terminal and the log alive, and a watcher that fell
+    /// behind must cost nothing more than its own lateness.
+    watch: Arc<Mutex<Option<Sender<crate::notify::watch::Beat>>>>,
 }
 
 impl LiveSession {
@@ -111,8 +117,21 @@ impl LiveSession {
             kind: EventKind::PtyInput,
             payload: data.to_vec(),
         });
+        // Something was answered. The watcher needs to know before it decides a
+        // question is still outstanding (§49).
+        if let Some(watch) = self.watch.lock().as_ref() {
+            let _ = watch.send(crate::notify::watch::Beat::Input);
+        }
         self.pty.write(data)?;
         Ok(())
+    }
+
+    /// Point this session's terminal stream at a notification watcher (§49).
+    ///
+    /// Separate from `start` because a watcher needs the database, the project
+    /// and the provider, none of which the session manager knows or should.
+    pub fn set_watch(&self, tx: Sender<crate::notify::watch::Beat>) {
+        *self.watch.lock() = Some(tx);
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {
@@ -249,6 +268,7 @@ impl SessionManager {
             sink: Arc::new(Mutex::new(None)),
             state: Arc::new(Mutex::new(SessionState::Starting)),
             stopped: Arc::new(AtomicBool::new(false)),
+            watch: Arc::new(Mutex::new(None)),
         });
 
         spawn_pump(Arc::clone(&session), pty, pty_rx, log_tx);
@@ -268,6 +288,7 @@ fn spawn_pump(
     let sink = Arc::clone(&session.sink);
     let view_attached = Arc::clone(&session.view_attached);
     let state = Arc::clone(&session.state);
+    let watch = Arc::clone(&session.watch);
     let id = session.id.clone();
 
     std::thread::Builder::new()
@@ -300,6 +321,14 @@ fn spawn_pump(
                             kind: EventKind::PtyOutput,
                             payload: bytes.clone(),
                         });
+
+                        // The notification watcher sees the same bytes (§49).
+                        // Sent, never inspected here: whether this output means
+                        // anything is entirely the watcher's business, and the
+                        // pump must stay a pump.
+                        if let Some(watch) = watch.lock().as_ref() {
+                            let _ = watch.send(crate::notify::watch::Beat::Output(bytes.clone()));
+                        }
 
                         // Stand in for the terminal when nobody is watching.
                         // Without this the session stalls forever in unattended
@@ -334,6 +363,9 @@ fn spawn_pump(
                             Some(0) | None => SessionState::Completed,
                             Some(_) => SessionState::Failed,
                         };
+                        if let Some(watch) = watch.lock().as_ref() {
+                            let _ = watch.send(crate::notify::watch::Beat::Exited(code));
+                        }
                         let _ = log_tx.send(LogCommand::Stop);
                         break;
                     }

@@ -324,6 +324,39 @@ pub fn set_status(
         );
     }
 
+    // And worth interrupting somebody for, when it is a mission ending rather
+    // than a mission starting (§49).
+    //
+    // No session id, deliberately. A mission is not one agent's session — it
+    // can have had several — so there is nothing here for the "already
+    // watching" rule to match against, and a completed mission is therefore
+    // always announced. That is right: a mission finishing is the event this
+    // product exists to produce, and it is worth saying even to somebody
+    // sitting in front of it.
+    let notify_reason = match status {
+        MissionStatus::Completed => Some(crate::notify::Reason::MissionCompleted),
+        MissionStatus::Blocked | MissionStatus::Failed | MissionStatus::Waiting => {
+            Some(crate::notify::Reason::MissionBlocked)
+        }
+        _ => None,
+    };
+    if let Some(reason) = notify_reason {
+        crate::notify::bus::raise(
+            reason,
+            // The core decided this itself, against verified evidence (§30).
+            crate::session::event::Confidence::Official,
+            crate::notify::Raise {
+                project_id: Some(mission.project_id.clone()),
+                mission_id: Some(mission.id.clone()),
+                preview: mission
+                    .blocked_reason
+                    .clone()
+                    .or_else(|| Some(mission.title.clone())),
+                ..Default::default()
+            },
+        );
+    }
+
     Ok(mission)
 }
 
@@ -580,6 +613,21 @@ fn hold_for_guardrail(
 
     if denied {
         record_refusal(db, &criterion.id, matched.operation.as_str())?;
+    } else {
+        // Held, and nothing moves until somebody decides. This is the one
+        // guardrail state that genuinely waits — an agent's tool call cannot
+        // be paused mid-flight, but a verification can — so it is the one that
+        // is a question rather than a refusal (§35, §49).
+        crate::notify::bus::raise(
+            crate::notify::Reason::GuardrailPending,
+            crate::session::event::Confidence::Official,
+            crate::notify::Raise {
+                project_id: Some(mission.project_id.clone()),
+                mission_id: Some(mission.id.clone()),
+                preview: Some(format!("{}: {}", matched.operation.as_str(), command)),
+                ..Default::default()
+            },
+        );
     }
     Ok(true)
 }

@@ -59,6 +59,7 @@ fn kind_for(item: &ConversationItem) -> EventKind {
 ///
 /// `provider` is the id from the capability model. A provider without a
 /// transcript simply never starts a tailer.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn(
     session: Arc<LiveSession>,
     db: Arc<Database>,
@@ -69,6 +70,7 @@ pub fn spawn(
     cwd: String,
     launched_at_ms: i64,
     stop: Arc<AtomicBool>,
+    mission_id: Option<String>,
 ) {
     if provider == "shell" {
         return;
@@ -96,6 +98,7 @@ pub fn spawn(
             tracing::info!(session = %session_id, path = ?path, "following provider transcript");
 
             let mut tailer = JsonlTailer::new(path);
+            let mut last_said: Option<String> = None;
             while !stop.load(Ordering::Relaxed) {
                 match tailer.poll() {
                     Ok(lines) => {
@@ -115,6 +118,29 @@ pub fn spawn(
                                 _ => Vec::new(),
                             };
                             for item in items {
+                                // What the agent last said, kept so a finished
+                                // turn can carry it as its preview. The reply
+                                // arrives immediately before the `TurnEnded`
+                                // that closes the turn, in the same batch.
+                                if let ConversationItem::Message {
+                                    role: crate::providers::conversation::Role::Assistant,
+                                    text,
+                                    ..
+                                } = &item
+                                {
+                                    if !text.trim().is_empty() {
+                                        last_said = Some(text.clone());
+                                    }
+                                }
+                                if matches!(item, ConversationItem::TurnEnded { .. }) {
+                                    announce_turn_ended(
+                                        &session_id,
+                                        &project_id,
+                                        &provider,
+                                        mission_id.as_deref(),
+                                        last_said.take(),
+                                    );
+                                }
                                 if let Ok(payload) = serde_json::to_vec(&item) {
                                     session.log(kind_for(&item), payload);
                                 }
@@ -170,6 +196,34 @@ pub fn spawn(
             }
         })
         .expect("spawn transcript tailer");
+}
+
+/// Tell somebody the agent finished a turn (§49).
+///
+/// The preview is the agent's **last reply**, not a sentence of ours. Somebody
+/// coming back to the screen wants to know what it said, and a translated
+/// "the agent finished" tells them nothing they did not already know from the
+/// fact that they were notified at all.
+fn announce_turn_ended(
+    session_id: &str,
+    project_id: &str,
+    provider: &str,
+    mission_id: Option<&str>,
+    last_said: Option<String>,
+) {
+    crate::notify::bus::raise(
+        crate::notify::Reason::TurnEnded,
+        // The provider said so; we did not infer it (§28).
+        crate::session::event::Confidence::Official,
+        crate::notify::Raise {
+            session_id: Some(session_id.to_string()),
+            project_id: Some(project_id.to_string()),
+            mission_id: mission_id.map(str::to_string),
+            provider: Some(provider.to_string()),
+            preview: last_said,
+            detail_code: None,
+        },
+    );
 }
 
 /// Wait for the provider to create its transcript, then return its path.

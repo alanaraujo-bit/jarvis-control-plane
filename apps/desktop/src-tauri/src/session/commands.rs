@@ -403,6 +403,25 @@ fn launch(
         crate::accounts::stamp_used(&state.db, account_id);
     }
 
+    // Watch this session's terminal for the moment it stops and asks (§49).
+    //
+    // Agent sessions only. A shell is the person's own machine doing what they
+    // told it to; interrupting them about their own `git status` finishing is
+    // not a notification, it is an intrusion — the same line §35 draws when it
+    // says guardrails govern agents and not people.
+    if kind != SessionKind::Shell {
+        let watcher = crate::notify::watch::spawn(
+            crate::notify::watch::Watched {
+                session_id: id.clone(),
+                project_id: project_id.clone(),
+                provider: kind.provider_id().to_string(),
+                mission_id: mission_id.clone(),
+            },
+            session.stop_flag(),
+        );
+        session.set_watch(watcher);
+    }
+
     // Follow the provider's structured transcript into the same log, so the
     // conversation and the terminal are two views of one stream (§23).
     transcript::spawn(
@@ -415,6 +434,7 @@ fn launch(
         cwd.clone(),
         created_at,
         session.stop_flag(),
+        mission_id.clone(),
     );
 
     // Follow what the guard decided, in its separate process, into this same

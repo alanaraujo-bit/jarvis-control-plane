@@ -717,6 +717,29 @@ fn finish(run: &Autopilot, db: &Database, project_id: &str, title: &str, code: &
         &run.session_id,
         &run.mission_id,
     );
+
+    // A run ending is the moment nobody is watching for, by construction: an
+    // unattended run (§32) is one the person walked away from (§49).
+    //
+    // A completed run is not raised here. `mission::store::set_status` has
+    // already announced the completion it caused, and this would be the same
+    // fact a second time under a different name.
+    if code != "autopilot.completed" {
+        crate::notify::bus::raise(
+            crate::notify::Reason::RunStopped,
+            crate::session::event::Confidence::Official,
+            crate::notify::Raise {
+                session_id: Some(run.session_id.clone()),
+                project_id: Some(project_id.to_string()),
+                mission_id: Some(run.mission_id.clone()),
+                preview: Some(title.to_string()),
+                // The §34 cause, so the surface can say which of them it was
+                // rather than "a run stopped".
+                detail_code: Some(code.to_string()),
+                ..Default::default()
+            },
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -59,6 +59,9 @@ pub struct AppState {
     pub autopilots: autopilot::driver::Autopilots,
     /// The one voice recording that can be in progress at a time (§54).
     pub voice: voice::VoiceState,
+    /// What the person is currently looking at, which is what decides whether a
+    /// stopped agent is worth telling them about (§49).
+    pub attention: Arc<notify::Attention>,
     /// Root for session logs and other bulk local data.
     pub data_dir: PathBuf,
 }
@@ -179,12 +182,31 @@ pub fn run() {
                 Arc::new(std::sync::atomic::AtomicBool::new(false)),
             );
 
+            // Notifications kept from every past run would make the centre an
+            // archive of things long since dealt with. Pruned once, here, off
+            // any hot path (§49).
+            if let Err(error) = notify::store::prune(&db, notify::commands::KEEP_ON_DISK) {
+                tracing::warn!(%error, "could not prune old notifications");
+            }
+
+            let attention = Arc::new(notify::Attention::default());
+            attention.set_enabled(notify::enabled(&db));
+
+            // Where every "an agent stopped" in the application ends up (§49).
+            // Installed once, before anything can raise one.
+            notify::bus::install(
+                Arc::clone(&db),
+                Arc::clone(&attention),
+                notify::watch::announce_to(app.handle().clone()),
+            );
+
             app.manage(AppState {
                 db,
                 data_dir,
                 sessions: SessionManager::default(),
                 autopilots: autopilot::driver::Autopilots::default(),
                 voice: voice::VoiceState::default(),
+                attention,
             });
             Ok(())
         })
@@ -270,8 +292,15 @@ pub fn run() {
             relay::relay_status,
             relay::relay_pair,
             relay::relay_unpair,
+            notify::commands::notifications_centre,
+            notify::commands::notifications_attention,
+            notify::commands::notifications_mark_seen,
+            notify::commands::notifications_mark_all_seen,
+            notify::commands::notifications_mark_acted,
+            notify::commands::notifications_clear,
             settings::settings_preferences,
             settings::settings_set_preference,
+            settings::settings_set_notification,
             preview::preview_detect,
             preview::preview_open,
             preview::preview_reload,
