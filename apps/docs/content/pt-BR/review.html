@@ -1,1 +1,87 @@
-<p>TODO</p>
+<p>Você deixou um agente trabalhando e voltou. A Revisão responde a única pergunta que importa:
+<em>o que ele mudou de verdade?</em></p>
+
+<figure class="fig">
+  <img src="../img/review.png" alt="A área Revisão listando dois arquivos alterados com suas contagens de linhas adicionadas e removidas, e um diff unificado do arquivo selecionado.">
+  <figcaption><b>Comparado com o branch atual.</b> Contagens de adição e remoção por arquivo, e os
+  blocos como o Git produziu.</figcaption>
+</figure>
+
+<h2>O Git decide o que mudou</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A regra</span>
+  <p><code>git status --porcelain=v1 -z</code> para a lista. <code>git diff -M HEAD</code> para os
+  blocos. <strong>A gente analisa; a gente nunca calcula um diff por conta própria torcendo para
+  ele concordar com o seu <code>git</code>.</strong></p>
+</div>
+
+<p>O <code>-M</code> é por que um arquivo renomeado aparece como uma linha alterada em vez de um
+arquivo inteiro apagado mais um arquivo inteiro adicionado — verificado renomeando um arquivo e
+lendo o resultado, não presumido da documentação da flag.</p>
+
+<h2>A atribuição é um join, não uma invenção</h2>
+
+<p>A Revisão consegue te dizer <em>qual agente</em> mudou um arquivo. Ela não precisa de um livro
+separado para isso: <a href="page:session-log">o log da sessão</a> já registra um quadro
+<code>FileChange</code> para todo arquivo que uma sessão tocou, então a resposta é uma consulta
+sobre dados que já estavam sendo escritos de qualquer jeito.</p>
+
+<p>Um arquivo mudado por uma sessão real do Claude Code aparece no topo da lista, atribuído ao
+<strong>Claude Code</strong>. Um arquivo que você mesmo mudou é simplesmente um arquivo que
+nenhuma sessão reivindica.</p>
+
+<h2>Operações de escrita do Git</h2>
+
+<p>Adicionar ao índice, remover do índice, descartar, restaurar e commitar — tudo daqui, tudo
+rodando Git de verdade.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Ação</th><th>Protegida?</th><th>Por quê</th></tr></thead>
+  <tbody>
+    <tr><td>Adicionar · Remover do índice</td><td>Não</td><td>Mexem no índice e são reversíveis.</td></tr>
+    <tr><td>Commitar</td><td>Não</td><td>Reversível, e o Git guarda cópia de tudo que está dentro.</td></tr>
+    <tr><td>Restaurar um arquivo apagado</td><td>Não</td><td>Cria; não destrói.</td></tr>
+    <tr><td><strong>Descartar mudanças</strong></td><td><strong>Sim</strong> — <code>git.discard-changes</code></td><td>A única coisa da qual o Git <em>não guarda cópia</em>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Proteger só o descarte é uma escolha deliberada, e o raciocínio se generaliza: perguntar sobre
+adicionar ao índice te ensinaria a desligar a proteção, e aí o descarte também fica desprotegido.
+<a href="page:guardrails">Proteger tudo é como se acaba não protegendo nada.</a></p>
+
+<h3>A trava nomeia a operação dela</h3>
+
+<p>A Revisão não monta uma string de comando e depois entrega ao classificador para descobrir o
+que ela mesma acabou de decidir fazer. Ela <em>nomeia</em> a operação diretamente. E não escreve
+linha pendente nenhuma — você está na tela, então a pergunta é feita e respondida ali mesmo em
+vez de virar algo para resolver depois.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Toda grafia de Git foi conferida antes de ser escrita</span>
+  <p>O <code>git restore</code> simples restaura a partir do <strong>índice</strong>, então um
+  descarte construído em cima dele mantém conteúdo staged em silêncio — você apertaria
+  <em>descartar</em>, veria a árvore de trabalho mudar, e ainda teria a versão staged parada ali.
+  O descarte daqui vai até o <code>HEAD</code>, e isso foi confirmado <em>em disco</em>
+  descartando um arquivo que carregava mudanças staged e de árvore de trabalho ao mesmo
+  tempo.</p>
+</div>
+
+<h2>Dentro de uma worktree</h2>
+
+<p>A Revisão dentro de uma <a href="page:worktrees">worktree</a> compara contra o branch da
+própria worktree. Não existe código específico de worktree aqui — uma worktree é um projeto,
+então funciona porque todo o resto já funciona.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado no app instalado</span>
+  <p>Um agente Claude Code real foi rodado num repositório de rascunho, observado criando um
+  arquivo, e esse arquivo apareceu no topo da Revisão atribuído ao Claude Code. Um arquivo foi
+  adicionado e removido do índice; um arquivo com mudanças staged e de árvore de trabalho foi
+  descartado e confirmado em disco como tendo chegado ao <code>HEAD</code>; um arquivo apagado foi
+  restaurado; três arquivos staged foram commitados. Depois <em>Nunca permitir</em> foi definido
+  para descarte e o descarte seguinte foi recusado com a árvore de trabalho intocada. Os dois
+  temas, os dois idiomas.</p>
+</div>

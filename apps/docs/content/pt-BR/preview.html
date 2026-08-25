@@ -1,1 +1,70 @@
-<p>TODO</p>
+<p>O ciclo é <em>pedir → modificar → rodar → <strong>ver</strong> → inspecionar → consertar</em>.
+Todo passo menos o <em>ver</em> já morava neste produto: um agente edita arquivos, sobe um
+servidor num terminal de verdade, e o diff está na Revisão. A Prévia é o passo que faltava.</p>
+
+<h2>Nada para configurar, nenhuma porta para adivinhar</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">De onde vem o endereço</span>
+  <p>A URL do servidor de desenvolvimento é lida da <strong>saída da própria sessão</strong>.
+  Quando um agente roda <code>npm run dev</code>, o endereço que ele imprimiu já está
+  <a href="page:session-log">no log que este produto guarda</a>. Não existe configuração de porta,
+  nem chute, nem varredura.</p>
+</div>
+
+<p>Essa é também a única coisa que um navegador não pode saber: <strong>qual sessão subiu este
+servidor</strong>. A Prévia acompanha a sessão ativa, então alternar entre dois agentes rodando
+dois servidores te mostra o certo sem perguntar.</p>
+
+<p>Se uma sessão estiver servindo mais de uma coisa, a escolha é oferecida em vez de uma ser
+escolhida por você.</p>
+
+<h2>A detecção é automática; abrir é um clique</h2>
+
+<p>Nada abre sozinho. O endereço é detectado assim que é impresso, e a Prévia espera por você. Um
+agente reiniciando um servidor de desenvolvimento não deveria fazer uma janela aparecer por cima
+do que você estava lendo.</p>
+
+<h2>Só loopback, e isso é uma fronteira de segurança</h2>
+
+<p>A Prévia renderiza dentro da nossa própria janela. Se ela apontasse para qualquer host só
+porque uma string apareceu na saída do terminal, então <strong>qualquer programa que uma sessão
+rodar poderia escolher o que este produto exibe</strong>.</p>
+
+<p>Então o endereço tem que ser loopback, e isso é aplicado no comando que abre — não só no
+scanner que encontrou. Os dois usam a mesma checagem, e ela analisa a URL direito, com uma
+biblioteca de URL em vez de casar um prefixo.</p>
+
+<pre><code><span class="g">✓ permitido</span>  http://localhost:4173
+<span class="g">✓ permitido</span>  http://127.0.0.1:5173
+
+<span class="r">✗ recusado</span>   http://127.0.0.1.evil.com
+<span class="r">✗ recusado</span>   http://localhost.evil.com
+<span class="c">              os dois passam batido numa checagem de prefixo</span>
+<span class="r">✗ recusado</span>   http://192.168.1.40:4173
+<span class="c">              um endereço de LAN não é loopback, mesmo sendo seu</span></code></pre>
+
+<h2>Uma janela separada, não um iframe</h2>
+
+<p>O iframe era a primeira escolha óbvia e não funciona. A política de segurança de conteúdo do
+aplicativo é <code>default-src 'self'</code>. Alargar ela colocaria a página de um servidor de
+desenvolvimento num contexto <em>adjacente à superfície que consegue invocar todo comando deste
+produto</em> — uma escalação de privilégio real trocada por uma conveniência de layout.</p>
+
+<p>Um webview separado tem o próprio conjunto de capacidades, vazio. Então a Prévia abre ao lado
+do app em vez de dentro dele.</p>
+
+<h2>Recarregar</h2>
+
+<p>O botão <em>isso mudou alguma coisa mesmo?</em>, para um servidor de desenvolvimento sem hot
+reload. Ele existe porque a alternativa é sair do app, e sair do app é onde o contexto da sessão
+se perde.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado de ponta a ponta contra um servidor real</span>
+  <p>O <code>npx serve</code> imprimiu um endereço Local e um de rede. A Prévia ofereceu
+  <code>localhost:4173</code> e <strong>excluiu silenciosamente o endereço de LAN</strong>. Abrir
+  renderizou a página real na janela própria dela; o arquivo foi então editado em disco e
+  <strong>Recarregar mostrou a mudança</strong> — o ciclo inteiro, fechado. Os dois temas, os dois
+  idiomas, mais o estado vazio e o comportamento de acompanhar a sessão ativa.</p>
+</div>

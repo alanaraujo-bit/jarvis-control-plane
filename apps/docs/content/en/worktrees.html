@@ -1,1 +1,72 @@
-<p>TODO</p>
+<p>A Git worktree is a second checkout of the same repository, on its own branch, in its own
+folder. It is the cleanest way to let an agent work on something without touching what you have
+open.</p>
+
+<figure class="fig">
+  <img src="../img/worktrees.png" alt="The Worktrees area of a project, listing worktrees with their branches and paths.">
+  <figcaption>Worktrees of this repository, each with the branch it is on.</figcaption>
+</figure>
+
+<h2>A worktree is a project</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The decision this page is built on</span>
+  <p>Creating a worktree creates a <a href="page:projects">project</a>. Opening it opens it
+  <em>everywhere</em>: <a href="page:review">Review</a> inside it compares against that
+  worktree's branch, <a href="page:files-editor">Files</a> browses that checkout, sessions start
+  in that directory, and it has its own <a href="page:brain">Brain</a>.</p>
+  <p>There is <strong>no worktree-specific code</strong> in the file, editor, Review or Git
+  surfaces. That absence is the evidence the decision had the right shape.</p>
+</div>
+
+<h2>Branch names become folder names, safely</h2>
+
+<p>A branch called <code>agent/login-form</code> would become a nested directory if the name were
+used literally. The slash becomes a dash: <code>agent-login-form</code>. Verified by creating
+exactly that branch and confirming a single flat folder rather than a directory tree.</p>
+
+<h2>Removing one asks twice, for two different reasons</h2>
+
+<p>This is worth understanding because it looks like a duplicated confirmation and is not.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Git refuses, because there is uncommitted work</strong>
+    <p>That is <em>information</em>, and it deserves a plain answer: remove it anyway, or don't.
+    Nothing about guardrails is involved yet.</p>
+  </li>
+  <li>
+    <strong>The forced removal is a guarded operation</strong>
+    <p>Only now is <code>fs.recursive-delete</code> in play, and only now are the
+    <a href="page:guardrails">guardrail choices</a> offered.</p>
+  </li>
+</ol>
+
+<p><strong><code>--force</code> is never passed speculatively.</strong> The first attempt is the
+honest one, and the forced attempt only happens because you said so.</p>
+
+<p>Removing a worktree archives its project row rather than deleting it — the sessions that ran
+there, and their history, are still yours.</p>
+
+<h2>Why this matters for agents</h2>
+
+<p>An agent working in a worktree cannot break the checkout you are reading, cannot leave your
+working tree dirty, and cannot fight you over a file. Combined with
+<a href="page:autonomy">Unattended</a>, it is the setup where leaving a run going is genuinely
+low-risk.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">One trap, and it is handled</span>
+  <p>A worktree is always a <strong>brand-new folder</strong>, and Claude Code asks whether you
+  trust a folder the first time it opens one. An unattended run started in a fresh worktree would
+  therefore hang forever on a question nobody is present to answer. Starting is
+  <em>refused</em> instead, with the reason — see <a href="page:autonomy">Autonomy</a>.</p>
+</div>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified in the installed app</span>
+  <p>A worktree was created for <code>agent/login-form</code>, the slash became a dash rather
+  than a nested directory, it was opened as a project and its own diff was read in Review. Then
+  it was removed — first refused by Git for having work in it, then held by the guardrail, then
+  done, with its project row archived. Both themes, both languages.</p>
+</div>

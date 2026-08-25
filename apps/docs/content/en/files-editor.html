@@ -1,1 +1,87 @@
-<p>TODO</p>
+<p>Browse the project, open a file, edit it, save it. The interesting part is not the editor —
+it is what happens when an agent is writing to the same file you have open.</p>
+
+<figure class="fig">
+  <img src="../img/files.png" alt="The Files area of a project showing a file tree with node_modules and build.log dimmed as Git-ignored.">
+  <figcaption><b><code>node_modules</code> and <code>build.log</code> are dimmed because Git
+  ignores them</b>, and <code>.git</code> is absent entirely. Git decides what is noise; we do
+  not keep our own list.</figcaption>
+</figure>
+
+<h2>The tree</h2>
+
+<p>Git-ignored entries are dimmed rather than hidden — you can still open one when you need to,
+and you can see at a glance which parts of the tree are generated. <code>.git</code> itself is
+not listed at all.</p>
+
+<p>Every path is <a href="page:projects">confined to the project root</a>, checked twice: once on
+the shape of the request, and once on the resolved path against the real filesystem.</p>
+
+<h2>The editor</h2>
+
+<figure class="fig">
+  <img src="../img/editor.png" alt="A file open in the Monaco editor inside a project, with the file tree beside it.">
+  <figcaption>Monaco, loaded on demand rather than at startup.</figcaption>
+</figure>
+
+<p>Monaco, with syntax highlighting, and <span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span> to
+save. It ships <strong>without its language services</strong>, deliberately.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Why there are no red squiggles</span>
+  <p>Monaco's TypeScript, CSS, HTML and JSON workers are excluded because they would be
+  <em>confidently wrong without project context</em> — no <code>tsconfig</code>, no
+  <code>node_modules</code>, no path aliases. Diagnostics you have to learn to ignore are worse
+  than no diagnostics. Real ones arrive with a language server; the boundary for it is already
+  in the architecture.</p>
+  <p>The cost of leaving them out was measured on the real installer, not estimated:
+  <strong>+1.04 MB</strong>.</p>
+</div>
+
+<h2>A save will not silently overwrite an agent</h2>
+
+<p>This is the part that matters here more than in an ordinary editor, because this product
+exists so that an agent can be working in one tab while you read in another. The conflict is the
+<em>normal case</em>, not an edge case.</p>
+
+<p>The editor remembers the file's modification time when it opened it. The core refuses a write
+when the file on disk is no longer the one that was opened:</p>
+
+<ul>
+  <li><strong>Nothing is written.</strong></li>
+  <li><strong>Your buffer is untouched</strong> — no merge, no reload, no lost typing.</li>
+  <li>The surface says what happened and names the two ways out.</li>
+</ul>
+
+<p>Saving again overwrites, deliberately. Once you have been told, the decision is yours.</p>
+
+<h2>Closing a dirty tab asks first</h2>
+
+<p>Closing disposes the model, and the undo history goes with it. A single click must not be able
+to destroy an edit the dirty dot was advertising.</p>
+
+<h2>Line endings are not rewritten</h2>
+
+<p>A file saved from this editor keeps the line endings it had. This was verified on disk rather
+than assumed — an editor that silently converts LF to CRLF on a Windows machine turns a one-line
+change into a whole-file diff, and does it to every file you touch.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified in the installed app</span>
+  <p>The tree was browsed with <code>node_modules</code> and <code>build.log</code> dimmed and
+  <code>.git</code> absent. A file was opened, edited, saved with
+  <span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span>, and confirmed <em>on disk</em> to have
+  changed content and unchanged LF line endings. Both themes screenshotted.</p>
+</div>
+
+<h2>One shortcut the editor gives up</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> is resolved globally, before any widget
+sees it. Monaco treats it as a chord prefix and called <code>stopPropagation</code>, so the
+command palette silently stopped opening whenever the editor had focus — while the titlebar went
+on advertising the shortcut.</p>
+
+<p>It is now handled in the capture phase. The side effect is real and worth stating: Ctrl+K no
+longer reaches a shell as readline's kill-to-end-of-line. That is the same trade VS Code and
+Cursor make, and it is <a href="page:shortcuts">documented rather than left for you to
+discover</a>.</p>

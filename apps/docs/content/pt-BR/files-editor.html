@@ -1,1 +1,89 @@
-<p>TODO</p>
+<p>Navegue pelo projeto, abra um arquivo, edite, salve. A parte interessante não é o editor — é o
+que acontece quando um agente está escrevendo no mesmo arquivo que você tem aberto.</p>
+
+<figure class="fig">
+  <img src="../img/files.png" alt="A área Arquivos de um projeto mostrando uma árvore com node_modules e build.log esmaecidos por serem ignorados pelo Git.">
+  <figcaption><b><code>node_modules</code> e <code>build.log</code> estão esmaecidos porque o Git
+  ignora eles</b>, e <code>.git</code> está ausente por completo. O Git decide o que é ruído; nós
+  não mantemos uma lista própria.</figcaption>
+</figure>
+
+<h2>A árvore</h2>
+
+<p>Entradas ignoradas pelo Git são esmaecidas em vez de escondidas — você ainda consegue abrir uma
+quando precisa, e enxerga de relance quais partes da árvore são geradas. O próprio
+<code>.git</code> não é listado.</p>
+
+<p>Todo caminho é <a href="page:projects">confinado à raiz do projeto</a>, conferido duas vezes:
+uma no formato da requisição, e outra no caminho resolvido contra o sistema de arquivos real.</p>
+
+<h2>O editor</h2>
+
+<figure class="fig">
+  <img src="../img/editor.png" alt="Um arquivo aberto no editor Monaco dentro de um projeto, com a árvore de arquivos ao lado.">
+  <figcaption>Monaco, carregado sob demanda e não na inicialização.</figcaption>
+</figure>
+
+<p>Monaco, com destaque de sintaxe, e <span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span> para
+salvar. Ele vem <strong>sem os serviços de linguagem</strong>, deliberadamente.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Por que não existem rabiscos vermelhos</span>
+  <p>Os workers de TypeScript, CSS, HTML e JSON do Monaco estão excluídos porque seriam
+  <em>confiantemente errados sem contexto de projeto</em> — sem <code>tsconfig</code>, sem
+  <code>node_modules</code>, sem aliases de caminho. Diagnósticos que você tem que aprender a
+  ignorar são piores do que diagnóstico nenhum. Os de verdade chegam com um language server; a
+  fronteira para ele já está na arquitetura.</p>
+  <p>O custo de deixá-los de fora foi medido no instalador real, não estimado:
+  <strong>+1,04 MB</strong>.</p>
+</div>
+
+<h2>Um save não vai sobrescrever um agente em silêncio</h2>
+
+<p>Esta é a parte que importa mais aqui do que em um editor comum, porque este produto existe
+para que um agente possa estar trabalhando em uma aba enquanto você lê em outra. O conflito é o
+<em>caso normal</em>, não um caso de borda.</p>
+
+<p>O editor lembra a data de modificação do arquivo quando ele foi aberto. O núcleo recusa uma
+escrita quando o arquivo no disco não é mais o que foi aberto:</p>
+
+<ul>
+  <li><strong>Nada é escrito.</strong></li>
+  <li><strong>Seu buffer fica intocado</strong> — sem merge, sem recarga, sem digitação
+  perdida.</li>
+  <li>A superfície diz o que aconteceu e nomeia as duas saídas.</li>
+</ul>
+
+<p>Salvar de novo sobrescreve, deliberadamente. Depois de avisado, a decisão é sua.</p>
+
+<h2>Fechar uma aba suja pergunta antes</h2>
+
+<p>Fechar descarta o modelo, e o histórico de desfazer vai junto. Um clique só não pode conseguir
+destruir uma edição que o pontinho de "não salvo" estava anunciando.</p>
+
+<h2>Fins de linha não são reescritos</h2>
+
+<p>Um arquivo salvo deste editor mantém os fins de linha que tinha. Isso foi verificado em disco,
+não presumido — um editor que converte LF para CRLF em silêncio numa máquina Windows transforma
+uma mudança de uma linha em um diff de arquivo inteiro, e faz isso com todo arquivo que você
+toca.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado no app instalado</span>
+  <p>A árvore foi navegada com <code>node_modules</code> e <code>build.log</code> esmaecidos e
+  <code>.git</code> ausente. Um arquivo foi aberto, editado, salvo com
+  <span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span>, e confirmado <em>em disco</em> com o
+  conteúdo alterado e os fins de linha LF inalterados. Os dois temas fotografados.</p>
+</div>
+
+<h2>Um atalho que o editor abre mão</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> é resolvido globalmente, antes de
+qualquer widget ver. O Monaco trata ele como prefixo de acorde e chamava
+<code>stopPropagation</code>, então a paleta de comandos parava de abrir em silêncio sempre que o
+editor tinha o foco — enquanto a barra de título seguia anunciando o atalho.</p>
+
+<p>Agora ele é tratado na fase de captura. O efeito colateral é real e vale declarar: o Ctrl+K
+não chega mais a um shell como o matar-até-o-fim-da-linha do readline. É a mesma troca que o VS
+Code e o Cursor fazem, e ela é
+<a href="page:shortcuts">documentada em vez de deixada para você descobrir</a>.</p>

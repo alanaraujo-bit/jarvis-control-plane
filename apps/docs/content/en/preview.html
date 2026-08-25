@@ -1,1 +1,70 @@
-<p>TODO</p>
+<p>The loop is <em>ask → modify → run → <strong>see</strong> → inspect → fix</em>. Every step but
+<em>see</em> already lived in this product: an agent edits files, runs a server in a real
+terminal, and the diff is in Review. Preview is the missing step.</p>
+
+<h2>Nothing to configure, no port to guess</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Where the address comes from</span>
+  <p>The dev server's URL is read from <strong>the session's own output</strong>. When an agent
+  runs <code>npm run dev</code>, the address it printed is already in
+  <a href="page:session-log">the log this product keeps</a>. There is no port setting, no
+  guessing, and no scanning.</p>
+</div>
+
+<p>This is also the one thing a browser cannot know: <strong>which session started this
+server</strong>. Preview follows the active session, so switching between two agents running two
+servers shows you the right one without asking.</p>
+
+<p>If a session is serving more than one thing, you are offered the choice rather than having one
+picked for you.</p>
+
+<h2>Detection is automatic; opening is a click</h2>
+
+<p>Nothing opens by itself. The address is detected as soon as it is printed, and Preview waits
+for you. An agent restarting a dev server should not make a window appear over what you were
+reading.</p>
+
+<h2>Loopback only, and that is a security boundary</h2>
+
+<p>Preview renders inside our own window. If it would point at any host because a string appeared
+in terminal output, then <strong>any program a session runs could choose what this product
+displays</strong>.</p>
+
+<p>So the address must be loopback, and this is enforced in the command that opens it — not only
+in the scanner that found it. Both use the same check, and it parses the URL properly with a URL
+library rather than matching a prefix.</p>
+
+<pre><code><span class="g">✓ allowed</span>  http://localhost:4173
+<span class="g">✓ allowed</span>  http://127.0.0.1:5173
+
+<span class="r">✗ refused</span>  http://127.0.0.1.evil.com
+<span class="r">✗ refused</span>  http://localhost.evil.com
+<span class="c">            both of these sail through a prefix check</span>
+<span class="r">✗ refused</span>  http://192.168.1.40:4173
+<span class="c">            a LAN address is not loopback, even though it is yours</span></code></pre>
+
+<h2>A separate window, not an iframe</h2>
+
+<p>The iframe was the obvious first choice and it does not work. The application's content
+security policy is <code>default-src 'self'</code>. Widening it would put a dev server's page in
+a context <em>adjacent to the surface that can invoke every command in this product</em> — a real
+privilege escalation traded for a layout convenience.</p>
+
+<p>A separate webview has its own, empty capability set. So Preview opens beside the app rather
+than inside it.</p>
+
+<h2>Reload</h2>
+
+<p>The <em>did that actually change anything?</em> button, for a dev server without hot reload.
+It exists because the alternative is leaving the app, and leaving the app is where the session
+context gets lost.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified end to end against a real dev server</span>
+  <p><code>npx serve</code> printed both a Local and a Network address. Preview offered
+  <code>localhost:4173</code> and <strong>silently excluded the LAN address</strong>. Open
+  rendered the real page in its own window; the file was then edited on disk and
+  <strong>Reload showed the change</strong> — the whole loop, closed. Both themes, both languages,
+  plus the empty state and the follow-the-active-session behaviour.</p>
+</div>

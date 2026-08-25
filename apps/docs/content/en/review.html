@@ -1,1 +1,84 @@
-<p>TODO</p>
+<p>You left an agent working and came back. Review answers the only question that matters:
+<em>what did it actually change?</em></p>
+
+<figure class="fig">
+  <img src="../img/review.png" alt="The Review area listing two changed files with their added and removed line counts, and a unified diff of the selected file.">
+  <figcaption><b>Compared against the current branch.</b> Added and removed counts per file, and
+  the hunks as Git produced them.</figcaption>
+</figure>
+
+<h2>Git decides what changed</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The rule</span>
+  <p><code>git status --porcelain=v1 -z</code> for the list. <code>git diff -M HEAD</code> for
+  the hunks. <strong>We parse; we never compute a diff ourselves and hope it agrees with your
+  own <code>git</code>.</strong></p>
+</div>
+
+<p><code>-M</code> is why a renamed file renders as one changed line rather than as a whole file
+deleted and a whole file added — verified by renaming a file and reading the result, not assumed
+from the flag's documentation.</p>
+
+<h2>Attribution is a join, not an invention</h2>
+
+<p>Review can tell you <em>which agent</em> changed a file. It does not need a separate ledger to
+do it: <a href="page:session-log">the session log</a> already records a
+<code>FileChange</code> frame for every file a session touched, so the answer is a query against
+data that was being written anyway.</p>
+
+<p>A file changed by a real Claude Code session shows up at the top of the list, attributed to
+<strong>Claude Code</strong>. A file you changed yourself is simply a file that no session
+claims.</p>
+
+<h2>Git write operations</h2>
+
+<p>Stage, unstage, discard, restore and commit — all from here, all running real Git.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Action</th><th>Guarded?</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Stage · Unstage</td><td>No</td><td>They move the index and are reversible.</td></tr>
+    <tr><td>Commit</td><td>No</td><td>Reversible, and Git keeps a copy of everything in it.</td></tr>
+    <tr><td>Restore a deleted file</td><td>No</td><td>It creates; it does not destroy.</td></tr>
+    <tr><td><strong>Discard changes</strong></td><td><strong>Yes</strong> — <code>git.discard-changes</code></td><td>The one thing Git keeps <em>no copy</em> of.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Guarding only the discard is a deliberate choice, and the reasoning generalises: asking about
+staging would teach you to switch the guardrail off, and then the discard is unguarded too.
+<a href="page:guardrails">Guarding everything is how you end up guarding nothing.</a></p>
+
+<h3>The gate names its operation</h3>
+
+<p>Review does not build a command string and then feed it to the classifier to find out what it
+just decided to do. It <em>names</em> the operation directly. It also writes no pending row —
+you are at the screen, so the question is asked and answered right there rather than becoming
+something to resolve later.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Every Git spelling was checked before it was written down</span>
+  <p>Plain <code>git restore</code> restores from the <strong>index</strong>, so a discard built
+  on it silently keeps staged content — you would press <em>discard</em>, see the working tree
+  change, and still have the staged version sitting there. The discard here goes to
+  <code>HEAD</code>, and that was confirmed <em>on disk</em> by discarding a file carrying both
+  staged and working-tree changes.</p>
+</div>
+
+<h2>Inside a worktree</h2>
+
+<p>Review inside a <a href="page:worktrees">worktree</a> compares against that worktree's own
+branch. There is no worktree-specific code here at all — a worktree is a project, so it works
+because everything else already does.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified in the installed app</span>
+  <p>A real Claude Code agent was run in a scratch repository, watched creating a file, and that
+  file appeared at the top of Review attributed to Claude Code. A file was staged and unstaged; a
+  file carrying both staged and working-tree changes was discarded and confirmed on disk to have
+  reached <code>HEAD</code>; a deleted file was restored; three staged files were committed. Then
+  <em>Never allow</em> was set for discard and the next discard was refused with the working tree
+  untouched. Both themes, both languages.</p>
+</div>

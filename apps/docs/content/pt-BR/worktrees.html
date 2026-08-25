@@ -1,1 +1,74 @@
-<p>TODO</p>
+<p>Uma worktree do Git é um segundo checkout do mesmo repositório, no próprio branch, na própria
+pasta. É o jeito mais limpo de deixar um agente trabalhar em alguma coisa sem encostar no que
+você tem aberto.</p>
+
+<figure class="fig">
+  <img src="../img/worktrees.png" alt="A área Worktrees de um projeto, listando worktrees com seus branches e caminhos.">
+  <figcaption>Worktrees deste repositório, cada uma com o branch em que está.</figcaption>
+</figure>
+
+<h2>Uma worktree é um projeto</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A decisão sobre a qual esta página é construída</span>
+  <p>Criar uma worktree cria um <a href="page:projects">projeto</a>. Abrir ela abre
+  <em>em todo lugar</em>: a <a href="page:review">Revisão</a> dentro dela compara contra o branch
+  daquela worktree, os <a href="page:files-editor">Arquivos</a> navegam aquele checkout, sessões
+  começam naquele diretório, e ela tem a própria <a href="page:brain">Memória</a>.</p>
+  <p>Não existe <strong>código específico de worktree</strong> nas superfícies de arquivo, editor,
+  Revisão ou Git. Essa ausência é a evidência de que a decisão tinha o formato certo.</p>
+</div>
+
+<h2>Nomes de branch viram nomes de pasta, com segurança</h2>
+
+<p>Um branch chamado <code>agent/login-form</code> viraria um diretório aninhado se o nome fosse
+usado literalmente. A barra vira um traço: <code>agent-login-form</code>. Verificado criando
+exatamente esse branch e confirmando uma pasta única e plana em vez de uma árvore de
+diretórios.</p>
+
+<h2>Remover uma pergunta duas vezes, por dois motivos diferentes</h2>
+
+<p>Vale entender porque parece uma confirmação duplicada e não é.</p>
+
+<ol class="steps">
+  <li>
+    <strong>O Git recusa, porque tem trabalho não commitado</strong>
+    <p>Isso é <em>informação</em>, e merece uma resposta simples: remover assim mesmo, ou não.
+    Nada de proteções está envolvido ainda.</p>
+  </li>
+  <li>
+    <strong>A remoção forçada é uma operação protegida</strong>
+    <p>Só agora o <code>fs.recursive-delete</code> entra em jogo, e só agora as
+    <a href="page:guardrails">escolhas da proteção</a> são oferecidas.</p>
+  </li>
+</ol>
+
+<p><strong>O <code>--force</code> nunca é passado especulativamente.</strong> A primeira tentativa
+é a honesta, e a tentativa forçada só acontece porque você disse.</p>
+
+<p>Remover uma worktree arquiva a linha de projeto dela em vez de apagar — as sessões que rodaram
+ali, e o histórico delas, continuam seus.</p>
+
+<h2>Por que isso importa para agentes</h2>
+
+<p>Um agente trabalhando numa worktree não consegue quebrar o checkout que você está lendo, não
+consegue deixar sua árvore de trabalho suja, e não consegue brigar com você por um arquivo.
+Combinado com <a href="page:autonomy">Sem supervisão</a>, é a montagem em que deixar uma execução
+rodando é genuinamente de baixo risco.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Uma armadilha, e ela é tratada</span>
+  <p>Uma worktree é sempre uma <strong>pasta nova em folha</strong>, e o Claude Code pergunta se
+  você confia numa pasta na primeira vez que abre uma. Uma execução sem supervisão iniciada numa
+  worktree nova ficaria travada para sempre numa pergunta que ninguém está presente para
+  responder. Iniciar é <em>recusado</em>, com o motivo — veja
+  <a href="page:autonomy">Autonomia</a>.</p>
+</div>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado no app instalado</span>
+  <p>Uma worktree foi criada para <code>agent/login-form</code>, a barra virou traço em vez de
+  diretório aninhado, ela foi aberta como projeto e o diff dela foi lido na Revisão. Aí ela foi
+  removida — primeiro recusada pelo Git por ter trabalho dentro, depois retida pela proteção,
+  depois feita, com a linha de projeto arquivada. Os dois temas, os dois idiomas.</p>
+</div>
