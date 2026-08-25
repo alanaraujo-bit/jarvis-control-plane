@@ -1,1 +1,157 @@
-<p>TODO</p>
+<p>The words this product uses, in the sense this product uses them. Several of these are ordinary
+words with a specific meaning here, and mistaking the general sense for the specific one is how
+the rest of the documentation stops making sense.</p>
+
+<div class="defs">
+  <div>
+    <dt>Account</dt>
+    <dd>A provider <strong>configuration directory</strong> — <code>CLAUDE_CONFIG_DIR</code> or
+    <code>CODEX_HOME</code> — and whatever credentials live in it. Not a J.A.R.V.I.S. account;
+    there is no such thing. <a href="page:accounts">More</a></dd>
+  </div>
+  <div>
+    <dt>Agent</dt>
+    <dd>A running session of a provider CLI. Not a persona, not a configuration — a process.</dd>
+  </div>
+  <div>
+    <dt>Area</dt>
+    <dd>One of the seven tabs inside a project: Sessions, Files, Review, Preview, Worktrees, Brain,
+    Settings. Distinct from a <em>destination</em>.</dd>
+  </div>
+  <div>
+    <dt>Autonomy</dt>
+    <dd>How much an agent decides on its own — Guided, Autonomous or Unattended. The broad
+    question. <a href="page:autonomy">More</a></dd>
+  </div>
+  <div>
+    <dt>Brain</dt>
+    <dd>A project's own memory. The <em>knowledge</em> in it is briefed to every agent that starts
+    there; the <em>notes</em> in it are not. <a href="page:brain">More</a></dd>
+  </div>
+  <div>
+    <dt>Brief</dt>
+    <dd>The composed text handed to an agent before it starts, out of band, containing only
+    knowledge. Never written into your repository.</dd>
+  </div>
+  <div>
+    <dt>Criterion</dt>
+    <dd>One acceptance condition on a mission, with a verification attached: a command to run, a
+    file to check, or a judgement only a person can make.</dd>
+  </div>
+  <div>
+    <dt>Destination</dt>
+    <dd>One of the six places on the rail, plus Settings. Distinct from an <em>area</em>, which
+    lives inside a project.</dd>
+  </div>
+  <div>
+    <dt>Driven</dt>
+    <dd>A session the autopilot is steering rather than a person. A driven session tells the
+    guardrail it is driven, which is why an <em>ask</em> rule refuses instead of prompting.</dd>
+  </div>
+  <div>
+    <dt>Evidence</dt>
+    <dd>What a verification actually produced — an exit code, a command's real output, a file's
+    presence, or a person's confirmation. Stored, not summarised into a tick.</dd>
+  </div>
+  <div>
+    <dt>Frame</dt>
+    <dd>One entry in a session's log: a length, a sequence number, a timestamp, a one-byte kind and
+    a payload. <a href="page:session-log">More</a></dd>
+  </div>
+  <div>
+    <dt>Guardrail</dt>
+    <dd>A rule about a class of sensitive operation, answered <em>Always ask</em>,
+    <em>Allow</em> or <em>Never allow</em>. Governs agents, never your own typing.
+    <a href="page:guardrails">More</a></dd>
+  </div>
+  <div>
+    <dt>Knowledge</dt>
+    <dd>A fact about a project that is briefed to agents. The opposite of a <em>note</em>, and the
+    single question that decides which one something is.</dd>
+  </div>
+  <div>
+    <dt>Mission</dt>
+    <dd>An intent plus the criteria that decide whether it is finished. Completed only on evidence,
+    and <em>un</em>completed when the evidence stops holding.
+    <a href="page:missions">More</a></dd>
+  </div>
+  <div>
+    <dt>Note</dt>
+    <dd>Two different things, and the page usually says which. A <strong>project note</strong> is
+    working memory in the Brain, never briefed. A <strong>notebook note</strong> is a prompt in the
+    global <a href="page:notebook">Notebook</a>, sent only when you press the button.</dd>
+  </div>
+  <div>
+    <dt>Observed</dt>
+    <dd>Measured by J.A.R.V.I.S. from something a provider emitted, but not stated by it. A
+    question read off a terminal is the clearest case.
+    <a href="page:confidence">More</a></dd>
+  </div>
+  <div>
+    <dt>Official</dt>
+    <dd>Stated by the provider itself. A token count from its usage object, a rate limit it
+    reported, an agent's own reply. <a href="page:confidence">More</a></dd>
+  </div>
+  <div>
+    <dt>Projection</dt>
+    <dd>A view computed from the session log rather than a store of its own. The Terminal, the
+    Conversation, Analytics, Review and Search are all projections.</dd>
+  </div>
+  <div>
+    <dt>Project</dt>
+    <dd>A real folder on your disk that you have opened. A <a href="page:worktrees">worktree</a> is
+    also a project, which is why it works everywhere a project works.</dd>
+  </div>
+  <div>
+    <dt>Provider</dt>
+    <dd>An agent CLI, behind an adapter — Claude Code or Codex today. What it can and cannot do is
+    <em>data</em> the interface reads. <a href="page:providers">More</a></dd>
+  </div>
+  <div>
+    <dt>Rail</dt>
+    <dd>The narrow strip of destinations down the left edge. Six, plus Settings, and it does not
+    grow.</dd>
+  </div>
+  <div>
+    <dt>Retire</dt>
+    <dd>What happens to knowledge that stops being true: it stops being briefed and the record
+    stays. Not deletion.</dd>
+  </div>
+  <div>
+    <dt>Revoke</dt>
+    <dd>What happens to a completed mission whose evidence stops holding. It is no longer
+    completed, because it is no longer true.</dd>
+  </div>
+  <div>
+    <dt>Session</dt>
+    <dd>One append-only, ordered event log. <strong>Not</strong> a terminal widget, and not a chat.
+    <a href="page:session-log">More</a></dd>
+  </div>
+  <div>
+    <dt>Twin</dt>
+    <dd>Two account cards that are the same subscription seen through two configuration
+    directories. Detected by email, told rather than prevented.
+    <a href="page:accounts">More</a></dd>
+  </div>
+  <div>
+    <dt>Unattended</dt>
+    <dd>The autonomy profile that assumes nobody is at the keyboard, and changes several behaviours
+    because of it. A statement about you, not about the agent.
+    <a href="page:guide-unattended">More</a></dd>
+  </div>
+  <div>
+    <dt>Verification</dt>
+    <dd>What a criterion runs to decide whether it holds: <code>Command</code>,
+    <code>FileExists</code>, <code>FileContains</code>, or <code>Manual</code>.</dd>
+  </div>
+  <div>
+    <dt>Withdraw</dt>
+    <dd>Removing a criterion from a mission, <em>with a reason</em>, keeping it in the record.
+    Deleting it would let a mission be made to pass by removing the tests it failed.</dd>
+  </div>
+  <div>
+    <dt>Worktree</dt>
+    <dd>A second Git checkout of the same repository, on its own branch, in its own folder — and
+    therefore a project. <a href="page:worktrees">More</a></dd>
+  </div>
+</div>

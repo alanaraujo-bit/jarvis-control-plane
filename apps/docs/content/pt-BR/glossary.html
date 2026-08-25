@@ -1,1 +1,159 @@
-<p>TODO</p>
+<p>As palavras que este produto usa, no sentido em que este produto as usa. Várias delas são
+palavras comuns com um significado específico aqui, e confundir o sentido geral com o específico é
+como o resto da documentação deixa de fazer sentido.</p>
+
+<div class="defs">
+  <div>
+    <dt>Agente</dt>
+    <dd>Uma sessão em execução de uma CLI de provedor. Não é uma persona, não é uma configuração —
+    é um processo.</dd>
+  </div>
+  <div>
+    <dt>Área</dt>
+    <dd>Uma das sete abas dentro de um projeto: Sessões, Arquivos, Revisão, Prévia, Worktrees,
+    Memória, Configurações. Diferente de um <em>destino</em>.</dd>
+  </div>
+  <div>
+    <dt>Aposentar</dt>
+    <dd>O que acontece com conhecimento que deixa de ser verdade: ele para de ser entregue no
+    briefing e o registro fica. Não é apagar.</dd>
+  </div>
+  <div>
+    <dt>Autonomia</dt>
+    <dd>Quanto um agente decide sozinho — Guiada, Autônoma ou Sem supervisão. A pergunta ampla.
+    <a href="page:autonomy">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Barra lateral</dt>
+    <dd>A faixa estreita de destinos na borda esquerda. Seis, mais Configurações, e ela não
+    cresce.</dd>
+  </div>
+  <div>
+    <dt>Briefing</dt>
+    <dd>O texto composto entregue a um agente antes de ele começar, fora de banda, contendo apenas
+    conhecimento. Nunca escrito no seu repositório.</dd>
+  </div>
+  <div>
+    <dt>Conhecimento</dt>
+    <dd>Um fato sobre um projeto que é entregue aos agentes. O oposto de uma <em>nota</em>, e a
+    única pergunta que decide qual dos dois algo é.</dd>
+  </div>
+  <div>
+    <dt>Conta</dt>
+    <dd>Um <strong>diretório de configuração</strong> de provedor — <code>CLAUDE_CONFIG_DIR</code>
+    ou <code>CODEX_HOME</code> — e as credenciais que moram nele. Não é uma conta do J.A.R.V.I.S.;
+    isso não existe. <a href="page:accounts">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Critério</dt>
+    <dd>Uma condição de aceitação de uma missão, com uma verificação anexada: um comando para rodar,
+    um arquivo para conferir, ou um julgamento que só uma pessoa consegue fazer.</dd>
+  </div>
+  <div>
+    <dt>Destino</dt>
+    <dd>Um dos seis lugares na barra lateral, mais Configurações. Diferente de uma <em>área</em>,
+    que mora dentro de um projeto.</dd>
+  </div>
+  <div>
+    <dt>Dirigida</dt>
+    <dd>Uma sessão que o piloto automático está conduzindo em vez de uma pessoa. Uma sessão dirigida
+    avisa à proteção que é dirigida, e é por isso que uma regra de <em>perguntar</em> recusa em vez
+    de perguntar.</dd>
+  </div>
+  <div>
+    <dt>Evidência</dt>
+    <dd>O que uma verificação de fato produziu — um código de saída, a saída real de um comando, a
+    presença de um arquivo, ou a confirmação de uma pessoa. Guardada, não resumida em um tique.</dd>
+  </div>
+  <div>
+    <dt>Gêmea</dt>
+    <dd>Dois cartões de conta que são a mesma assinatura vista por dois diretórios de configuração.
+    Detectada por e-mail, avisada em vez de impedida. <a href="page:accounts">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Memória</dt>
+    <dd>A memória do próprio projeto. O <em>conhecimento</em> nela é entregue a todo agente que
+    começa ali; as <em>notas</em> nela não. <a href="page:brain">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Missão</dt>
+    <dd>Uma intenção mais os critérios que decidem se ela está terminada. Concluída só com
+    evidência, e <em>des</em>concluída quando a evidência para de se sustentar.
+    <a href="page:missions">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Nota</dt>
+    <dd>Duas coisas diferentes, e a página normalmente diz qual. Uma <strong>nota de projeto</strong>
+    é memória de trabalho na Memória, nunca entregue no briefing. Uma <strong>nota do bloco</strong>
+    é um prompt no <a href="page:notebook">bloco de notas</a> global, enviada só quando você aperta o
+    botão.</dd>
+  </div>
+  <div>
+    <dt>Observado</dt>
+    <dd>Medido pelo J.A.R.V.I.S. a partir de algo que um provedor emitiu, mas não declarado por ele.
+    Uma pergunta lida de um terminal é o caso mais claro.
+    <a href="page:confidence">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Oficial</dt>
+    <dd>Declarado pelo próprio provedor. Uma contagem de token do objeto de uso dele, um limite que
+    ele informou, a resposta do próprio agente. <a href="page:confidence">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Projeção</dt>
+    <dd>Uma visão calculada a partir do log da sessão em vez de um depósito próprio. O Terminal, a
+    Conversa, as Métricas, a Revisão e a Busca são todos projeções.</dd>
+  </div>
+  <div>
+    <dt>Projeto</dt>
+    <dd>Uma pasta real no seu disco que você abriu. Uma <a href="page:worktrees">worktree</a> também
+    é um projeto, e é por isso que ela funciona em todo lugar onde um projeto funciona.</dd>
+  </div>
+  <div>
+    <dt>Proteção</dt>
+    <dd>Uma regra sobre uma classe de operação sensível, respondida com <em>Sempre perguntar</em>,
+    <em>Permitir</em> ou <em>Nunca permitir</em>. Governa agentes, nunca o que você digita.
+    <a href="page:guardrails">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Provedor</dt>
+    <dd>Uma CLI de agente, atrás de um adaptador — Claude Code ou Codex hoje. O que ela consegue e
+    não consegue fazer são <em>dados</em> que a interface lê. <a href="page:providers">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Quadro</dt>
+    <dd>Uma entrada no log de uma sessão: um tamanho, um número de sequência, um carimbo de tempo,
+    um byte de tipo e uma carga. <a href="page:session-log">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Retirar</dt>
+    <dd>Tirar um critério de uma missão, <em>com um motivo</em>, mantendo ele no registro. Apagar
+    deixaria uma missão passar pela remoção dos testes que ela falhou.</dd>
+  </div>
+  <div>
+    <dt>Revogar</dt>
+    <dd>O que acontece com uma missão concluída cuja evidência para de se sustentar. Ela deixa de
+    estar concluída, porque deixou de ser verdade.</dd>
+  </div>
+  <div>
+    <dt>Sem supervisão</dt>
+    <dd>O perfil de autonomia que assume que ninguém está no teclado, e muda vários comportamentos
+    por causa disso. Uma afirmação sobre você, não sobre o agente.
+    <a href="page:guide-unattended">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Sessão</dt>
+    <dd>Um único log de eventos, ordenado e append-only. <strong>Não</strong> é um widget de
+    terminal, e não é um chat. <a href="page:session-log">Mais</a></dd>
+  </div>
+  <div>
+    <dt>Verificação</dt>
+    <dd>O que um critério roda para decidir se ele se sustenta: <code>Command</code>,
+    <code>FileExists</code>, <code>FileContains</code>, ou <code>Manual</code>.</dd>
+  </div>
+  <div>
+    <dt>Worktree</dt>
+    <dd>Um segundo checkout Git do mesmo repositório, no próprio branch, na própria pasta — e
+    portanto um projeto. <a href="page:worktrees">Mais</a></dd>
+  </div>
+</div>

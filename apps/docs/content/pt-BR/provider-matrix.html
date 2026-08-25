@@ -1,1 +1,187 @@
-<p>TODO</p>
+<p>Toda capacidade que os adaptadores declaram, o que cada valor significa para você, e como foi
+estabelecido. Os valores são lidos de <code>providers/claude.rs</code> e
+<code>providers/codex.rs</code>.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Isto são dados, não documentação</span>
+  <p>Cada adaptador devolve isto como uma struct, e a interface renderiza a partir dela. Nada aqui
+  é um booleano escrito dentro de um componente, e é por isso que adicionar um terceiro provedor não
+  exige encostar em um único arquivo React. Um teste falha se os dois adaptadores algum dia se
+  descreverem de forma idêntica.</p>
+</div>
+
+<h2>A matriz</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Capacidade</th><th>Claude Code</th><th>Codex</th></tr></thead>
+  <tbody>
+    <tr><td>Executável</td><td><code>claude</code></td><td><code>codex</code></td></tr>
+    <tr><td>Correlação de sessão</td><td><code>Deterministic</code></td><td><code>FileWatch</code></td></tr>
+    <tr><td>Origem da conversa</td><td><code>Transcript</code></td><td><code>Transcript</code></td></tr>
+    <tr><td>Relato de uso</td><td><code>Official</code></td><td><code>Official</code></td></tr>
+    <tr><td>Aplicação de proteções</td><td><code>PreExecution</code></td><td><code>PreExecutionWhenTrusted</code></td></tr>
+    <tr><td>Rota do briefing</td><td><code>SystemPrompt</code></td><td><code>OpeningMessage</code></td></tr>
+    <tr><td>Títulos de sessão</td><td><code>Provider</code></td><td><code>Derived</code></td></tr>
+    <tr><td>Mecanismo de retomada</td><td><code>Fork</code></td><td><code>AppendInPlace</code></td></tr>
+    <tr><td>Imagens</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Aprovações</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Worktrees</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Troca de conta</td><td>Sim</td><td>Sim</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>O que cada valor significa</h2>
+
+<h3>Correlação de sessão</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>Deterministic</code></dt>
+    <dd>O provedor aceita um id de sessão que nós escolhemos e escreve a transcrição com esse nome.
+    O vínculo é um fato que nós afirmamos. <strong>Claude Code:</strong>
+    <code>--session-id &lt;uuid&gt;</code>.</dd>
+  </div>
+  <div>
+    <dt><code>FileWatch</code></dt>
+    <dd>O provedor nomeia os próprios arquivos, então o adaptador observa o diretório e casa com o
+    que apareceu depois que este processo começou. Uma heurística muito boa, e ainda assim uma
+    heurística — duas sessões iniciadas no mesmo segundo na mesma pasta é onde ela poderia errar.
+    Informado honestamente em vez de enfeitado.</dd>
+  </div>
+</div>
+
+<h3>Aplicação de proteções</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>PreExecution</code></dt>
+    <dd><strong>Aplicação real.</strong> Uma recusa realmente para o comando antes de ele rodar.
+    Verificado contra o Claude Code 2.1.240 recusando um push forçado real e confirmando que o
+    remoto ficou intocado.</dd>
+  </div>
+  <div>
+    <dt><code>PreExecutionWhenTrusted</code></dt>
+    <dd>O mesmo mecanismo de hook, mas o provedor não executa um hook até você ter revisado e
+    confiado nele na interface dele. O J.A.R.V.I.S. escreve a configuração no início da sessão para
+    que ela esteja lá para ser confiada. Até você fazer isso, aquela sessão é <strong>observada, não
+    protegida</strong>, e a interface diz isso.</dd>
+  </div>
+</div>
+
+<h3>Rota do briefing</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>SystemPrompt</code></dt>
+    <dd>O <a href="page:brain">briefing</a> é passado <strong>fora de banda</strong>, como um prompt
+    de sistema anexado, lido de um arquivo que é nosso. Nada é escrito no seu repositório, nenhum
+    turno é gasto, e nada aparece no terminal. <strong>Claude Code:</strong>
+    <code>--append-system-prompt-file</code>.</dd>
+  </div>
+  <div>
+    <dt><code>OpeningMessage</code></dt>
+    <dd>Não existe rota fora de banda, então um briefing só poderia chegar como a mensagem de
+    abertura da sessão — visível no terminal e custando um turno. <strong>Codex 0.147.0:</strong> o
+    <code>--help</code> dele não lista equivalente, e instruções chegam como argumento de prompt ou
+    pela entrada padrão. Informado em vez de maquiado, porque uma pessoa escolhendo provedor para uma
+    execução sem supervisão deveria saber qual das duas está levando.</dd>
+  </div>
+</div>
+
+<h3>Títulos de sessão</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>Provider</code></dt>
+    <dd>Ele nomeia as próprias sessões. O Claude Code escreve uma linha <code>ai-title</code> —
+    presente em <strong>89 das 124</strong> transcrições da máquina em que isso foi verificado.</dd>
+  </div>
+  <div>
+    <dt><code>Derived</code></dt>
+    <dd>Ele não declara título, então um é calculado a partir do que foi dito. O Codex 0.147.0 está
+    aqui; <code>set_thread_title</code> existe nos rollouts dele, mas como <em>definição</em> de
+    ferramenta dentro das instruções, e não como evento que ele emite — conferido em todos os
+    rollouts daquela máquina.</dd>
+  </div>
+</div>
+
+<h3>Mecanismo de retomada</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>Fork</code></dt>
+    <dd><code>--resume &lt;id&gt; --fork-session</code> honra o nosso próprio id de sessão e escreve
+    uma transcrição nova com esse nome — então a continuação é uma sessão que conseguimos acompanhar
+    desde o começo. Verificado no Claude Code 2.1.241.</dd>
+  </div>
+  <div>
+    <dt><code>AppendInPlace</code></dt>
+    <dd><code>codex resume &lt;id&gt;</code> anexa ao rollout que ele recebeu em vez de criar um. Um
+    formato diferente, medido na 0.147.0, e a interface diz isso em vez de fingir que os dois são
+    iguais.</dd>
+  </div>
+</div>
+
+<h2>Onde as transcrições ficam</h2>
+
+<pre><code><span class="c">Claude Code</span>
+~/.claude/projects/&lt;cwd-codificado&gt;/&lt;session-uuid&gt;.jsonl
+  <span class="c">tipos</span>       user · assistant · system · attachment · ai-title
+              file-history-snapshot · file-history-delta · frame-link · queue-operation
+  <span class="c">uso</span>         assistant.message.usage — input_tokens, output_tokens,
+              cache_creation_input_tokens, cache_read_input_tokens
+  <span class="c">estrutura</span>   as mensagens formam um DAG via parentUuid
+  <span class="c">fim de turno</span> stop_reason: "end_turn"   <span class="c">("tool_use" = ainda trabalhando)</span>
+  <span class="c">sem TUI</span>     -p --output-format stream-json --include-partial-messages
+
+<span class="c">Codex</span>
+~/.codex/sessions/YYYY/MM/DD/rollout-&lt;ts&gt;-&lt;uuid&gt;.jsonl
+  <span class="c">envelope</span>    {timestamp, ordinal, type, payload} — ordenado estritamente por ordinal
+  <span class="c">tipos</span>       session_meta · event_msg/* · response_item/* · turn_context · world_state
+  <span class="c">uso</span>         event_msg/token_count — carrega rate_limits oficiais
+  <span class="c">fim de turno</span> event_msg/task_complete
+  <span class="c">sem TUI</span>     codex exec --json</code></pre>
+
+<h2>Sondagens de cota ao vivo</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Provedor</th><th>Protocolo</th><th>Custa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Claude Code</td>
+      <td><code>get_usage</code> no canal de controle stream-json</td>
+      <td rowspan="2">Nenhum endpoint HTTP nosso, nenhuma leitura de credencial, <strong>nenhum
+      token gasto</strong>, nenhuma transcrição escrita.</td>
+    </tr>
+    <tr>
+      <td>Codex</td>
+      <td><code>account/rateLimits/read</code> no <code>codex app-server</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>As duas também foram rodadas contra um diretório de configuração <strong>vazio</strong> antes de
+o recurso ser construído: as duas leem a conta do diretório para o qual são apontadas, e as duas
+falham dizendo isso em vez de devolver os números da conta ambiente com o nome errado. Isso é
+mantido como teste de segurança permanente — se algum dia ele passar como <code>Ok</code>, o recurso
+está atribuindo cotas erradas e precisa ser desligado.</p>
+
+<h2>Versões contra as quais isso foi medido</h2>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td>Claude Code</td><td>2.1.240, 2.1.241, 2.1.245</td></tr>
+    <tr><td>Codex CLI</td><td>0.147.0, 0.149.0, 0.149.1</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Quando uma página diz que uma capacidade se comporta de certa forma, é nessas versões. Uma
+capacidade afirmada a partir de uma listagem de <code>--help</code> seria uma afirmação sobre
+documentação e não sobre comportamento, e é por isso que as que sustentam o produto são fixadas por
+testes que iniciam um agente real através de um terminal real.</p>

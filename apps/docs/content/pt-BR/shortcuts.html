@@ -1,1 +1,138 @@
-<p>TODO</p>
+<p>A lista inteira é curta. Leia a última seção antes de ser surpreendido por ela.</p>
+
+<h2>Globais — resolvidos antes de qualquer widget ver</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Teclas</th><th>Faz</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></td>
+      <td><a href="page:search">Paleta de comandos</a> — todo destino, toda seção de configurações
+      pelo nome, toda ação. Ranqueada por subsequência.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></td>
+      <td><a href="page:search">Busca global</a> — conhecimento, notas, missões, atividade, e o que
+      foi dito em qualquer conversa, em todos os projetos.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></span></td>
+      <td><a href="page:notebook">O bloco de notas</a> — sua biblioteca de prompts, sobre o que
+      quer que você esteja fazendo.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Por que os três são tratados na fase de captura</span>
+  <p>O terminal e o Monaco reivindicam teclas antes de qualquer listener normal ver. Um atalho que
+  a interface anuncia tem que ser resolvido <em>antes</em> de qualquer widget ter opinião sobre
+  ele, ou a barra de título continua prometendo algo que parou de funcionar em silêncio.</p>
+  <p>Cada um deles também minúsculiza a tecla, porque <code>event.key</code> é <code>"K"</code>
+  sempre que o Shift ou o CapsLock estão ativos — uma comparação simples para de funcionar em
+  silêncio para quem estiver com o CapsLock ligado.</p>
+</div>
+
+<h2>Em um terminal</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Teclas</th><th>Faz</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span></td>
+      <td>Busca no histórico. Um painel sobre o terminal, com diferenciação de maiúsculas, um
+      contador ao vivo, e uma régua panorâmica que aparece só durante a busca.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>C</kbd></span></td>
+      <td>Copia quando há seleção. Envia <code>^C</code> quando não há.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>V</kbd></span></td>
+      <td>Cola texto normalmente. Com uma <strong>imagem</strong> na área de transferência, escreve
+      ela no diretório da própria sessão e digita o caminho entre aspas, sem enviar.</td>
+    </tr>
+    <tr>
+      <td><kbd>Esc</kbd></td>
+      <td>Fecha o painel de busca no histórico.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>No editor</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Teclas</th><th>Faz</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span></td>
+      <td>Salvar. Recusado se o arquivo no disco não é mais o que foi aberto — nada é escrito e o
+      seu buffer fica intocado. Salvar de novo sobrescreve deliberadamente.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Em uma área de texto</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Teclas</th><th>Faz</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>Enter</kbd></span></td>
+      <td>Envia, na <a href="page:brain">Memória</a> e na caixa de commit da
+      <a href="page:review">Revisão</a>. O Enter sozinho insere uma quebra de linha, porque estes
+      são lugares em que um parágrafo é uma coisa normal de escrever.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Em uma sobreposição</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Teclas</th><th>Faz</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move entre os resultados.</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Abre o selecionado.</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Fecha.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>A que o produto tira de você</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">O <span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> não chega mais ao seu shell</span>
+  <p>Em um shell, <kbd>Ctrl</kbd>+<kbd>K</kbd> é o matar-até-o-fim-da-linha do readline. Aqui ele é
+  a paleta de comandos, resolvida globalmente, então <strong>o seu shell nunca vê</strong>.</p>
+  <p>É a mesma troca que o VS Code e o Cursor fazem. Ela existe porque o Monaco trata o
+  <kbd>Ctrl</kbd>+<kbd>K</kbd> como prefixo de acorde e chamava <code>stopPropagation</code> nele —
+  então a paleta parava de abrir em silêncio sempre que o editor tinha o foco, enquanto a barra de
+  título seguia anunciando o atalho.</p>
+  <p><strong>É reversível.</strong> Um arquivo decide isso. Deixar o terminal ficar com a tecla
+  significa ou cair para a fase de bolha — e perder a paleta enquanto o editor tem o foco — ou
+  isentar a subárvore do terminal do handler de captura. O segundo é o que vale construir se você
+  quiser a tecla de volta.</p>
+</div>
+
+<h2>Neste site de documentação</h2>
+
+<p>Como a busca daqui é uma portagem do algoritmo do próprio produto, as teclas batem:</p>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></td><td>Busca nestas páginas.</td></tr>
+    <tr><td><kbd>/</kbd></td><td>A mesma coisa, quando você não está digitando em um campo.</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> <kbd>Esc</kbd></td><td>Como acima.</td></tr>
+  </tbody>
+</table>
+</div>

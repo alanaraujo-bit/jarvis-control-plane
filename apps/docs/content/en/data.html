@@ -1,1 +1,136 @@
-<p>TODO</p>
+<p>Every path this product writes to, what each one holds, and what an update or an uninstall
+does to it. Nothing here is hidden and nothing is a proprietary format you cannot inspect.</p>
+
+<h2>The one directory that matters</h2>
+
+<pre><code>%APPDATA%\dev.jarvis.desktop\</code></pre>
+
+<p>Which on a normal Windows install is
+<code>C:\Users\&lt;you&gt;\AppData\Roaming\dev.jarvis.desktop\</code>. Everything below is inside
+it.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">It is outside the installation directory, on purpose</span>
+  <p>An update replaces program files and <strong>cannot touch this</strong>. An uninstall removes
+  the program and preserves it. Reinstalling picks up exactly where you left off. If you want it
+  gone, deleting this folder is the way — nothing else is holding your data.</p>
+</div>
+
+<h2>What is in it</h2>
+
+<pre><code>dev.jarvis.desktop\
+  <b>jarvis.db</b>              <span class="c">SQLite, WAL mode — the database</span>
+  jarvis.db-wal          <span class="c">write-ahead log</span>
+  jarvis.db-shm          <span class="c">shared memory index</span>
+
+  <b>sessions\</b>              <span class="c">one directory per session, ever</span>
+    &lt;session-uuid&gt;\
+      <b>stream.log</b>         <span class="c">the append-only frame log</span>
+      <b>index.bin</b>          <span class="c">sparse offset index, every 256 frames</span>
+      guardrail-policy.json   <span class="c">the resolved rules this session started with</span>
+      guardrail-settings.json <span class="c">the hook configuration handed to the provider</span>
+
+  <b>accounts\</b>              <span class="c">one provider configuration directory per account</span>
+    claude-code\
+      &lt;account-uuid&gt;\   <span class="c">this is CLAUDE_CONFIG_DIR for that account</span>
+
+  <b>models\</b>                <span class="c">the local speech model, if you downloaded it</span></code></pre>
+
+<h2>The database</h2>
+
+<p>SQLite in WAL mode. It holds metadata, the structured events worth querying, and the
+full-text search index — but <strong>not</strong> raw terminal bytes, which is the split
+<a href="page:session-log">the session log</a> exists to make.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Holds</th><th>Read by</th></tr></thead>
+  <tbody>
+    <tr><td>Projects, and whether each is archived</td><td>Projects, everywhere</td></tr>
+    <tr><td>Sessions, their titles, provider, project and account</td><td><a href="page:history">History</a></td></tr>
+    <tr><td>Missions, criteria and evidence</td><td><a href="page:missions">Missions</a></td></tr>
+    <tr><td>Knowledge, notes and notebook notes</td><td><a href="page:memory">Memory</a></td></tr>
+    <tr><td>Usage samples, with their confidence</td><td><a href="page:analytics">Analytics</a></td></tr>
+    <tr><td>File changes, per session</td><td><a href="page:review">Review</a></td></tr>
+    <tr><td>Activity, guardrail decisions, notifications</td><td><a href="page:activity">Activity</a></td></tr>
+    <tr><td>Settings — <em>unset is no row</em></td><td><a href="page:settings">Settings</a></td></tr>
+    <tr><td>An FTS5 index over what was said in sessions</td><td><a href="page:search">Global Search</a></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Schema changes are forward-only</h3>
+
+<p>Migrations are additive and never destructive, and <strong>a database written by a newer build
+is refused rather than opened</strong>. Rolling back a version cannot quietly corrupt history that
+the older build does not understand.</p>
+
+<h2>Session logs, and what they cost</h2>
+
+<p>One directory per session, forever, unless you delete it. <code>stream.log</code> is the
+append-only frame log — raw terminal bytes and structured events, in one order.
+<code>index.bin</code> is a sparse offset index with one checkpoint every 256 frames.</p>
+
+<p>These are the bulk of the storage. <a href="page:history">History</a> states the total in its
+header, and per-session sizes on each row, so that deleting is a decision you can make with a
+number in front of you. <strong>No retention policy exists</strong> — deleting somebody's history
+on a schedule is not a decision to make on their behalf.</p>
+
+<h2>Account directories</h2>
+
+<p>An account <em>is</em> a provider configuration directory. Registering one creates a directory
+here and points the provider at it with <code>CLAUDE_CONFIG_DIR</code> or
+<code>CODEX_HOME</code>.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Your existing sign-in is never copied or rewritten</span>
+  <p>The account already signed in on this machine is <strong>adopted</strong> and continues to
+  live wherever it already lives — <code>~/.claude</code> or <code>~/.codex</code>. Only accounts
+  you add here get a directory here. J.A.R.V.I.S. never opens a credential file; it asks the
+  provider who a directory is signed in as.</p>
+</div>
+
+<h2>Two files written per session, elsewhere from your repository</h2>
+
+<p><code>guardrail-policy.json</code> is the resolved rule set the session started with, plus
+whether anybody is attended. The <a href="page:internals-guardrail">guard process</a> reads it,
+and it is a snapshot on purpose: changing a rule mid-session should not change what a running
+agent was told.</p>
+
+<p>The <a href="page:brain">Brain brief</a> is written beside these, and passed by path. This is
+why nothing this product generates ever appears in your <code>git status</code>.</p>
+
+<h2>What is <em>not</em> here</h2>
+
+<div class="defs">
+  <div>
+    <dt>Your code</dt>
+    <dd>Projects are folders on your disk, opened in place. Nothing is copied.</dd>
+  </div>
+  <div>
+    <dt>Your Git history</dt>
+    <dd>Read by running the <code>git</code> binary you already have.</dd>
+  </div>
+  <div>
+    <dt>Your credentials</dt>
+    <dd>Read by the providers, from their own configuration directories.</dd>
+  </div>
+  <div>
+    <dt>Anything in the cloud</dt>
+    <dd>Unless you paired a phone, and then only a summary of what needs a person. See
+    <a href="page:local-first">Local-first</a>.</dd>
+  </div>
+</div>
+
+<h2>Backing it up</h2>
+
+<p>Copy the whole <code>dev.jarvis.desktop</code> folder while the app is closed. It is a SQLite
+database and a tree of ordinary files; there is nothing else to capture and no export format to
+learn.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">One file outside all of this, for people building from source</span>
+  <p>The updater's private minisign key lives in <code>.keys/</code> in the repository and is
+  gitignored. It must never be committed, and <strong>losing it means no existing installation
+  can ever be updated again</strong>. Back it up somewhere that is not this machine.</p>
+</div>

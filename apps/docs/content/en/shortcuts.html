@@ -1,1 +1,138 @@
-<p>TODO</p>
+<p>The whole list is short. Read the last section before you get surprised by it.</p>
+
+<h2>Global — resolved before any widget sees them</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Keys</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></td>
+      <td><a href="page:search">Command palette</a> — every destination, every settings section by
+      name, every action. Subsequence-ranked.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></td>
+      <td><a href="page:search">Global Search</a> — knowledge, notes, missions, activity, and what
+      was said in any conversation, across every project.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></span></td>
+      <td><a href="page:notebook">The Notebook</a> — your prompt library, over whatever you are
+      doing.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Why all three are handled in the capture phase</span>
+  <p>The terminal and Monaco both claim keys before a normal listener ever sees them. A shortcut
+  the interface advertises has to be resolved <em>before</em> any widget gets an opinion about it,
+  or the titlebar goes on promising something that silently stopped working.</p>
+  <p>Each of them also lowercases the key, because <code>event.key</code> is <code>"K"</code>
+  whenever Shift or CapsLock is down — a plain comparison silently stops working for anyone with
+  CapsLock on.</p>
+</div>
+
+<h2>In a terminal</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Keys</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span></td>
+      <td>Search the scrollback. A panel over the terminal, with match-case, a live counter, and
+      an overview ruler that appears only while searching.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>C</kbd></span></td>
+      <td>Copies when there is a selection. Sends <code>^C</code> when there is not.</td>
+    </tr>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>V</kbd></span></td>
+      <td>Pastes text normally. With an <strong>image</strong> on the clipboard, writes it into the
+      session's own directory and types the quoted path, unsubmitted.</td>
+    </tr>
+    <tr>
+      <td><kbd>Esc</kbd></td>
+      <td>Closes the scrollback search panel.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>In the editor</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Keys</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span></td>
+      <td>Save. Refused if the file on disk is no longer the one that was opened — nothing is
+      written and your buffer is untouched. Saving again overwrites deliberately.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>In a text area</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Keys</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="keys"><kbd>Ctrl</kbd><kbd>Enter</kbd></span></td>
+      <td>Submits, in the <a href="page:brain">Brain</a> and in
+      <a href="page:review">Review</a>'s commit box. Enter alone inserts a newline, because these
+      are places where a paragraph is a normal thing to write.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>In an overlay</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Keys</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move through results.</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Open the selected one.</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Close.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>The one the product takes away from you</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title"><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> no longer reaches your shell</span>
+  <p>In a shell, <kbd>Ctrl</kbd>+<kbd>K</kbd> is readline's kill-to-end-of-line. Here it is the
+  command palette, resolved globally, so <strong>your shell never sees it</strong>.</p>
+  <p>This is the same trade VS Code and Cursor make. It exists because Monaco treats
+  <kbd>Ctrl</kbd>+<kbd>K</kbd> as a chord prefix and called <code>stopPropagation</code> on it —
+  so the palette silently stopped opening whenever the editor had focus, while the titlebar went
+  on advertising the shortcut.</p>
+  <p><strong>It is reversible.</strong> One file decides it. Letting the terminal keep the key
+  means either dropping to the bubble phase — and losing the palette while the editor has focus —
+  or exempting the terminal's own subtree from the capture handler. The second is the one worth
+  building if you want the key back.</p>
+</div>
+
+<h2>On this documentation site</h2>
+
+<p>Because the search here is a port of the product's own scorer, the keys match:</p>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></td><td>Search these pages.</td></tr>
+    <tr><td><kbd>/</kbd></td><td>The same thing, when you are not typing in a field.</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> <kbd>Esc</kbd></td><td>As above.</td></tr>
+  </tbody>
+</table>
+</div>

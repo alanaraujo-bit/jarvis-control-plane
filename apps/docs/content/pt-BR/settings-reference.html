@@ -1,1 +1,141 @@
-<p>TODO</p>
+<p>Toda configuração, seu padrão, seus limites, e o que de fato acontece no momento em que você a
+muda. Os valores são lidos do código, não de uma captura de tela.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Duas regras que valem para todas</span>
+  <p><strong>Sem valor é ausência de linha.</strong> Uma configuração em que você nunca encostou
+  não tem linha nenhuma no banco, que é o que faz uma mudança de padrão chegar até você.</p>
+  <p><strong>Os limites são aplicados no núcleo, nas duas direções.</strong> Fora da faixa na
+  <em>entrada</em> é recusado, para que um valor guardado seja sempre um que alguém poderia ter
+  escolhido. Fora da faixa na <em>saída</em> é limitado, para que a linha de uma versão antiga não
+  consiga produzir um terminal inutilizável ou um orçamento zero que falha toda execução antes de
+  começar. Um valor que não consegue ser interpretado é lido como sem valor em vez de derrubar a
+  tela.</p>
+</div>
+
+<h2>Aparência</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Configuração</th><th>Valores</th><th>Padrão</th><th>Aplica</th></tr></thead>
+  <tbody>
+    <tr><td>Tema</td><td>Escuro · Claro · Sistema</td><td>Sistema</td><td>Imediatamente. O claro é criado independentemente, não invertido do escuro.</td></tr>
+    <tr><td>Idioma</td><td>English · Português (Brasil)</td><td>O idioma do seu sistema, se for um destes</td><td>Imediatamente, em todo lugar. Palavras de agente e saída de ferramenta nunca são traduzidas.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Terminal</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Configuração</th><th>Faixa</th><th>Padrão</th><th>Aplica</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Tamanho do texto</td>
+      <td>10 – 20 px</td>
+      <td><strong>13</strong></td>
+      <td><strong>No lugar, em terminais em execução.</strong> Nunca reconstrói — uma reconstrução
+      mata o processo e joga fora o histórico. Ele também reajusta e avisa ao PTY o tamanho novo, ou
+      o shell continua quebrando linha na largura antiga.</td>
+    </tr>
+    <tr>
+      <td>Histórico guardado</td>
+      <td>1.000 – 100.000 linhas</td>
+      <td><strong>20.000</strong></td>
+      <td>No lugar. <em>Por terminal</em> — uma divisão pode ter quatro ao mesmo tempo, então este é
+      o custo multiplicado por quatro.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Autonomia</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Configuração</th><th>Valores</th><th>Padrão</th><th>Notas</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Perfil padrão</td>
+      <td>Guiada · Autônoma · Sem supervisão</td>
+      <td>Autônoma</td>
+      <td>O fundo da cadeia. Resolvida <a href="page:autonomy">missão → projeto → global</a>.</td>
+    </tr>
+    <tr>
+      <td>Limite de turnos</td>
+      <td>4 – 100 turnos</td>
+      <td><strong>24</strong></td>
+      <td><strong>Uma execução mantém o orçamento com que começou.</strong> Relê-lo a cada turno
+      deixaria uma mudança aqui mover a linha de chegada debaixo de uma execução em andamento.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout">
+  <span class="callout__title">Por que 4 e 100 especificamente</span>
+  <p>Abaixo de <strong>4</strong>, uma execução sem supervisão não consegue terminar nada real e
+  toda missão acabaria em Falhou. Acima de <strong>100</strong>, <em>rodar até acabar</em> deixa de
+  ser um orçamento — que é exatamente o que a regra contra consumir recursos indefinidamente existe
+  para impedir. Estas são decisões de produto, não números arbitrários.</p>
+</div>
+
+<h2>Proteções</h2>
+
+<p>Nove linhas, uma por operação que o núcleo informa, cada uma com <strong>Sempre
+perguntar</strong> · <strong>Permitir</strong> · <strong>Nunca permitir</strong>, com padrão em
+<em>Sempre perguntar</em>.</p>
+
+<p>A lista é gerada a partir do que o núcleo informa, então ela consegue crescer sem que esta tela
+seja tocada. Veja <a href="page:guardrails">Proteções</a> para as nove e o que cada uma casa.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Em Sem supervisão, <em>Sempre perguntar</em> vira recusa</span>
+  <p>Ninguém está lá para responder. Em vez de estacionar o agente num prompt que nunca será
+  respondido, a proteção recusa e a missão vai para Esperando com um motivo.</p>
+</div>
+
+<h2>Notificações</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Configuração</th><th>Padrão</th><th>Notas</th></tr></thead>
+  <tbody>
+    <tr><td>Me avise quando um agente parar</td><td>Ligado</td><td>Só quando você não está olhando aquela sessão — janela com foco <em>e</em> sessão na tela significa que nada é levantado.</td></tr>
+    <tr><td>Mostrar também uma notificação do sistema</td><td>Ligado</td><td>Para te alcançar enquanto a janela está atrás de outra coisa. Não dispara em build de desenvolvimento, porque um binário não empacotado não tem atalho pelo qual ser identificado.</td></tr>
+    <tr><td>Tocar um som</td><td>Ligado</td><td>Dois tons senoidais sintetizados. <a href="page:not-built">Ninguém escutou ele ainda.</a></td></tr>
+    <tr><td>Enviar uma notificação de teste</td><td>—</td><td>Dispara o caminho <em>real</em>, não uma simulação dele.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Celular</h2>
+
+<p>Estado do pareamento, um código de seis caracteres (uso único, cinco minutos, tentativas
+contadas), e uma declaração do que é enviado — <em>antes</em> de você conectar. Desconectar
+<strong>revoga o token</strong>, não só o pareamento local.
+Veja <a href="page:guide-phone">Parear o celular</a>.</p>
+
+<h2>Ambiente</h2>
+
+<p>Somente leitura. O que foi encontrado nesta máquina — Git, Node, pnpm, Claude Code, Codex,
+GitHub CLI — com versões, e um botão de <em>Reexaminar</em>. Um provedor que não está no seu
+<code>PATH</code> não é oferecido quando você inicia uma sessão, e é aqui que você descobre por
+quê.</p>
+
+<h2>Atualizações</h2>
+
+<p>Sua versão atual, e uma checagem contra o endpoint de atualização. O download é verificado
+contra uma chave pública minisign compilada dentro do binário <strong>antes de qualquer coisa ser
+instalada</strong>; uma atualização que falha na verificação é recusada em vez de aplicada.</p>
+
+<p>As checagens de atualização hoje informam uma falha honestamente, porque o local de release
+ainda não foi publicado. Veja <a href="page:blockers">Bloqueios conhecidos</a>.</p>
+
+<h2>Configurações de projeto</h2>
+
+<p>A área <strong>Configurações</strong> do próprio projeto hospeda os controles de
+<a href="page:autonomy">autonomia</a> e <a href="page:guardrails">proteções</a> com escopo de
+projeto. Eles são <em>literalmente os mesmos componentes</em> dos globais, recebendo um id de
+projeto — e é por isso que os dois nunca conseguem divergir.</p>

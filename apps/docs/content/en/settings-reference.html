@@ -1,1 +1,139 @@
-<p>TODO</p>
+<p>Every setting, its default, its bounds, and what actually happens the moment you change it.
+Values are read from the source rather than from a screenshot.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Two rules that apply to all of them</span>
+  <p><strong>Unset is no row.</strong> A setting you have never touched has no database row at
+  all, which is what lets a default change reach you.</p>
+  <p><strong>Bounds are enforced in the core, in both directions.</strong> Out of range on the way
+  <em>in</em> is refused, so a stored value is always one somebody could have chosen. Out of range
+  on the way <em>out</em> is clamped, so an older build's row cannot produce an unusable terminal
+  or a zero budget that fails every run before it starts. A value that will not parse reads as
+  unset rather than failing the screen.</p>
+</div>
+
+<h2>Appearance</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Setting</th><th>Values</th><th>Default</th><th>Applies</th></tr></thead>
+  <tbody>
+    <tr><td>Theme</td><td>Dark · Light · System</td><td>System</td><td>Immediately. Light is authored independently, not inverted from dark.</td></tr>
+    <tr><td>Language</td><td>English · Português (Brasil)</td><td>Your OS language, if it is one of these</td><td>Immediately, everywhere. Agent words and tool output are never translated.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Terminal</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Setting</th><th>Range</th><th>Default</th><th>Applies</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Type size</td>
+      <td>10 – 20 px</td>
+      <td><strong>13</strong></td>
+      <td><strong>In place, to running terminals.</strong> Never rebuilds — a rebuild kills the
+      process and throws away the scrollback. It also refits and tells the PTY the new size, or
+      the shell keeps wrapping at the old width.</td>
+    </tr>
+    <tr>
+      <td>Scrollback</td>
+      <td>1,000 – 100,000 lines</td>
+      <td><strong>20,000</strong></td>
+      <td>In place. <em>Per terminal</em> — a split can have four at once, so this is the cost
+      multiplied by four.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Autonomy</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Setting</th><th>Values</th><th>Default</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Default profile</td>
+      <td>Guided · Autonomous · Unattended</td>
+      <td>Autonomous</td>
+      <td>The bottom of the chain. Resolved <a href="page:autonomy">mission → project →
+      global</a>.</td>
+    </tr>
+    <tr>
+      <td>Turn budget</td>
+      <td>4 – 100 turns</td>
+      <td><strong>24</strong></td>
+      <td><strong>A run keeps the budget it started with.</strong> Re-reading it each turn would
+      let a change here move the finish line under a run already going.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout">
+  <span class="callout__title">Why 4 and 100 specifically</span>
+  <p>Below <strong>4</strong>, an unattended run cannot finish anything real and every mission
+  would end in Failed. Above <strong>100</strong>, <em>run until done</em> stops being a budget at
+  all — which is exactly what the rule against consuming resources indefinitely exists to prevent.
+  These are product decisions, not arbitrary numbers.</p>
+</div>
+
+<h2>Guardrails</h2>
+
+<p>Nine rows, one per operation the core reports, each <strong>Always ask</strong> ·
+<strong>Allow</strong> · <strong>Never allow</strong>, defaulting to <em>Always ask</em>.</p>
+
+<p>The list is generated from what the core reports, so it can grow without this screen being
+touched. See <a href="page:guardrails">Guardrails</a> for the nine and what each matches.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Under Unattended, <em>Always ask</em> becomes a refusal</span>
+  <p>Nobody is there to answer. Rather than park the agent on a prompt that will never be
+  answered, the guard refuses and the mission goes to Waiting with a reason.</p>
+</div>
+
+<h2>Notifications</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Setting</th><th>Default</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Tell me when an agent stops</td><td>On</td><td>Only when you are not looking at that session — window focused <em>and</em> session on screen means nothing is raised.</td></tr>
+    <tr><td>Also show a system notification</td><td>On</td><td>For reaching you while the window is behind something else. Does not fire from a development build, because an unpackaged binary has no shortcut to be identified by.</td></tr>
+    <tr><td>Play a sound</td><td>On</td><td>Two synthesised sine tones. <a href="page:not-built">Nobody has listened to it yet.</a></td></tr>
+    <tr><td>Send a test notification</td><td>—</td><td>Fires the <em>real</em> path, not a simulation of it.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Phone</h2>
+
+<p>Pairing state, a six-character code (single use, five minutes, attempts counted), and a
+statement of what is sent — <em>before</em> you connect. Disconnecting
+<strong>revokes the token</strong>, not just the local pairing.
+See <a href="page:guide-phone">Pair your phone</a>.</p>
+
+<h2>Environment</h2>
+
+<p>Read-only. What was found on this machine — Git, Node, pnpm, Claude Code, Codex, GitHub CLI —
+with versions, and a <em>Rescan</em> button. A provider that is not on your <code>PATH</code> is
+not offered when you start a session, and this is where you find out why.</p>
+
+<h2>Updates</h2>
+
+<p>Your current version, and a check against the update endpoint. The download is verified
+against a minisign public key compiled into the binary <strong>before anything is
+installed</strong>; an update that fails verification is refused rather than applied.</p>
+
+<p>Update checks currently report a failure honestly, because the release location is not yet
+published. See <a href="page:blockers">Known blockers</a>.</p>
+
+<h2>Project settings</h2>
+
+<p>A project's own <strong>Settings</strong> area hosts the project-scoped
+<a href="page:autonomy">autonomy</a> and <a href="page:guardrails">guardrail</a> controls. They
+are <em>literally the same components</em> as the global ones, given a project id — which is why
+the two can never drift apart.</p>

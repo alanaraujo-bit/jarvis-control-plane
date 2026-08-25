@@ -1,1 +1,186 @@
-<p>TODO</p>
+<p>Every capability the adapters declare, what each value means for you, and how it was
+established. Values are read from <code>providers/claude.rs</code> and
+<code>providers/codex.rs</code>.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">These are data, not documentation</span>
+  <p>Each adapter returns this as a struct, and the interface renders from it. Nothing here is a
+  boolean written into a component, which is why adding a third provider does not require touching
+  a single React file. A test fails if the two adapters ever describe themselves identically.</p>
+</div>
+
+<h2>The matrix</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Capability</th><th>Claude Code</th><th>Codex</th></tr></thead>
+  <tbody>
+    <tr><td>Executable</td><td><code>claude</code></td><td><code>codex</code></td></tr>
+    <tr><td>Session correlation</td><td><code>Deterministic</code></td><td><code>FileWatch</code></td></tr>
+    <tr><td>Conversation source</td><td><code>Transcript</code></td><td><code>Transcript</code></td></tr>
+    <tr><td>Usage reporting</td><td><code>Official</code></td><td><code>Official</code></td></tr>
+    <tr><td>Guardrail enforcement</td><td><code>PreExecution</code></td><td><code>PreExecutionWhenTrusted</code></td></tr>
+    <tr><td>Briefing route</td><td><code>SystemPrompt</code></td><td><code>OpeningMessage</code></td></tr>
+    <tr><td>Session titles</td><td><code>Provider</code></td><td><code>Derived</code></td></tr>
+    <tr><td>Resume mechanism</td><td><code>Fork</code></td><td><code>AppendInPlace</code></td></tr>
+    <tr><td>Images</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Approvals</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Worktrees</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Account switching</td><td>Yes</td><td>Yes</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>What each value means</h2>
+
+<h3>Session correlation</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>Deterministic</code></dt>
+    <dd>The provider accepts a session id we choose and writes its transcript under that name. The
+    link is a fact we asserted. <strong>Claude Code:</strong>
+    <code>--session-id &lt;uuid&gt;</code>.</dd>
+  </div>
+  <div>
+    <dt><code>FileWatch</code></dt>
+    <dd>The provider names its own files, so the adapter watches the directory and matches the one
+    that appeared after this process started. A very good heuristic, and still a heuristic — two
+    sessions started in the same second in the same folder is where it could be wrong. Reported
+    honestly rather than dressed up.</dd>
+  </div>
+</div>
+
+<h3>Guardrail enforcement</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>PreExecution</code></dt>
+    <dd><strong>Real enforcement.</strong> A refusal genuinely stops the command before it runs.
+    Verified against Claude Code 2.1.240 by refusing a real force push and confirming the remote
+    was untouched.</dd>
+  </div>
+  <div>
+    <dt><code>PreExecutionWhenTrusted</code></dt>
+    <dd>The same hook mechanism, but the provider will not run a hook until you have reviewed and
+    trusted it in its own interface. J.A.R.V.I.S. writes the configuration at session start so it
+    is there to be trusted. Until you do, that session is <strong>observed, not guarded</strong>,
+    and the interface says so.</dd>
+  </div>
+</div>
+
+<h3>Briefing route</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>SystemPrompt</code></dt>
+    <dd>The <a href="page:brain">brief</a> is passed <strong>out of band</strong>, as an appended
+    system prompt read from a file we own. Nothing is written into your repository, no turn is
+    spent, and nothing appears in the terminal. <strong>Claude Code:</strong>
+    <code>--append-system-prompt-file</code>.</dd>
+  </div>
+  <div>
+    <dt><code>OpeningMessage</code></dt>
+    <dd>No out-of-band route exists, so a brief could only arrive as the session's opening
+    message — visible in the terminal and costing a turn. <strong>Codex 0.147.0:</strong> its
+    <code>--help</code> lists no equivalent, and instructions arrive as the prompt argument or on
+    stdin. Reported rather than papered over, because a person choosing a provider for an
+    unattended run should know which of the two they are getting.</dd>
+  </div>
+</div>
+
+<h3>Session titles</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>Provider</code></dt>
+    <dd>It names its own sessions. Claude Code writes an <code>ai-title</code> line — present in
+    <strong>89 of the 124</strong> transcripts on the machine this was verified against.</dd>
+  </div>
+  <div>
+    <dt><code>Derived</code></dt>
+    <dd>It states no title, so one is computed from what was said. Codex 0.147.0 is here;
+    <code>set_thread_title</code> exists in its rollouts but as a tool <em>definition</em> inside
+    the instructions rather than an event it emits — checked across every rollout on that
+    machine.</dd>
+  </div>
+</div>
+
+<h3>Resume mechanism</h3>
+
+<div class="defs">
+  <div>
+    <dt><code>Fork</code></dt>
+    <dd><code>--resume &lt;id&gt; --fork-session</code> honours our own session id and writes a new
+    transcript named for it — so the continuation is a session we can follow from the start.
+    Verified on Claude Code 2.1.241.</dd>
+  </div>
+  <div>
+    <dt><code>AppendInPlace</code></dt>
+    <dd><code>codex resume &lt;id&gt;</code> appends to the rollout it was given rather than
+    creating one. A different shape, measured on 0.147.0, and the interface says so rather than
+    pretending the two are the same.</dd>
+  </div>
+</div>
+
+<h2>Where the transcripts live</h2>
+
+<pre><code><span class="c">Claude Code</span>
+~/.claude/projects/&lt;encoded-cwd&gt;/&lt;session-uuid&gt;.jsonl
+  <span class="c">event types</span>  user · assistant · system · attachment · ai-title
+                file-history-snapshot · file-history-delta · frame-link · queue-operation
+  <span class="c">usage</span>        assistant.message.usage — input_tokens, output_tokens,
+                cache_creation_input_tokens, cache_read_input_tokens
+  <span class="c">structure</span>    messages form a DAG via parentUuid
+  <span class="c">turn end</span>     stop_reason: "end_turn"   <span class="c">("tool_use" = still working)</span>
+  <span class="c">headless</span>     -p --output-format stream-json --include-partial-messages
+
+<span class="c">Codex</span>
+~/.codex/sessions/YYYY/MM/DD/rollout-&lt;ts&gt;-&lt;uuid&gt;.jsonl
+  <span class="c">envelope</span>     {timestamp, ordinal, type, payload} — strictly ordered by ordinal
+  <span class="c">types</span>        session_meta · event_msg/* · response_item/* · turn_context · world_state
+  <span class="c">usage</span>        event_msg/token_count — carries official rate_limits
+  <span class="c">turn end</span>     event_msg/task_complete
+  <span class="c">headless</span>     codex exec --json</code></pre>
+
+<h2>Live quota probes</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Provider</th><th>Protocol</th><th>Costs</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Claude Code</td>
+      <td><code>get_usage</code> on the stream-json control channel</td>
+      <td rowspan="2">No HTTP endpoint of ours, no credential read, <strong>no token spent</strong>,
+      no transcript written.</td>
+    </tr>
+    <tr>
+      <td>Codex</td>
+      <td><code>account/rateLimits/read</code> on <code>codex app-server</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Both were also run against an <strong>empty</strong> configuration directory before the feature
+was built: both read the account in the directory they are pointed at, and both fail by saying so
+rather than returning the ambient account's numbers under the wrong name. That is kept as a
+permanent safety test — if it ever passes as <code>Ok</code>, the feature is misattributing
+allowances and must be turned off.</p>
+
+<h2>Versions this was measured against</h2>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td>Claude Code</td><td>2.1.240, 2.1.241, 2.1.245</td></tr>
+    <tr><td>Codex CLI</td><td>0.147.0, 0.149.0, 0.149.1</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Where a page says a capability behaves a certain way, it means on those versions. A capability
+claimed from a <code>--help</code> listing would be a claim about documentation rather than about
+behaviour, which is why the load-bearing ones are pinned by tests that start a real agent through
+a real terminal.</p>

@@ -1,1 +1,139 @@
-<p>TODO</p>
+<p>Todo caminho em que este produto escreve, o que cada um guarda, e o que uma atualização ou uma
+desinstalação faz com ele. Nada aqui é escondido e nada é um formato proprietário que você não
+consegue inspecionar.</p>
+
+<h2>O único diretório que importa</h2>
+
+<pre><code>%APPDATA%\dev.jarvis.desktop\</code></pre>
+
+<p>Que numa instalação normal do Windows é
+<code>C:\Users\&lt;você&gt;\AppData\Roaming\dev.jarvis.desktop\</code>. Tudo abaixo está dentro
+dele.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Ele fica fora do diretório de instalação, de propósito</span>
+  <p>Uma atualização substitui arquivos de programa e <strong>não consegue tocar nisto</strong>.
+  Uma desinstalação remove o programa e preserva isto. Reinstalar retoma exatamente de onde você
+  parou. Se você quiser tudo fora, apagar esta pasta é o caminho — nada mais está segurando os
+  seus dados.</p>
+</div>
+
+<h2>O que tem dentro</h2>
+
+<pre><code>dev.jarvis.desktop\
+  <b>jarvis.db</b>              <span class="c">SQLite, modo WAL — o banco de dados</span>
+  jarvis.db-wal          <span class="c">log de escrita antecipada</span>
+  jarvis.db-shm          <span class="c">índice de memória compartilhada</span>
+
+  <b>sessions\</b>              <span class="c">um diretório por sessão, sempre</span>
+    &lt;session-uuid&gt;\
+      <b>stream.log</b>         <span class="c">o log de quadros append-only</span>
+      <b>index.bin</b>          <span class="c">índice esparso de deslocamentos, a cada 256 quadros</span>
+      guardrail-policy.json   <span class="c">as regras resolvidas com que esta sessão começou</span>
+      guardrail-settings.json <span class="c">a configuração de hook entregue ao provedor</span>
+
+  <b>accounts\</b>              <span class="c">um diretório de configuração de provedor por conta</span>
+    claude-code\
+      &lt;account-uuid&gt;\   <span class="c">este é o CLAUDE_CONFIG_DIR daquela conta</span>
+
+  <b>models\</b>                <span class="c">o modelo local de fala, se você baixou</span></code></pre>
+
+<h2>O banco de dados</h2>
+
+<p>SQLite em modo WAL. Ele guarda metadados, os eventos estruturados que vale consultar, e o
+índice de busca de texto completo — mas <strong>não</strong> os bytes crus do terminal, que é a
+separação que <a href="page:session-log">o log da sessão</a> existe para fazer.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Guarda</th><th>Lido por</th></tr></thead>
+  <tbody>
+    <tr><td>Projetos, e se cada um está arquivado</td><td>Projetos, em todo lugar</td></tr>
+    <tr><td>Sessões, seus títulos, provedor, projeto e conta</td><td><a href="page:history">Histórico</a></td></tr>
+    <tr><td>Missões, critérios e evidência</td><td><a href="page:missions">Missões</a></td></tr>
+    <tr><td>Conhecimento, notas e notas do bloco</td><td><a href="page:memory">Memória</a></td></tr>
+    <tr><td>Amostras de uso, com a confiança delas</td><td><a href="page:analytics">Métricas</a></td></tr>
+    <tr><td>Mudanças de arquivo, por sessão</td><td><a href="page:review">Revisão</a></td></tr>
+    <tr><td>Atividade, decisões de proteção, notificações</td><td><a href="page:activity">Atividade</a></td></tr>
+    <tr><td>Configurações — <em>sem valor é ausência de linha</em></td><td><a href="page:settings">Configurações</a></td></tr>
+    <tr><td>Um índice FTS5 sobre o que foi dito nas sessões</td><td><a href="page:search">Busca global</a></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Mudanças de esquema são só para frente</h3>
+
+<p>As migrações são aditivas e nunca destrutivas, e <strong>um banco escrito por uma versão mais
+nova é recusado em vez de aberto</strong>. Voltar uma versão não consegue corromper em silêncio um
+histórico que a versão antiga não entende.</p>
+
+<h2>Logs de sessão, e quanto eles custam</h2>
+
+<p>Um diretório por sessão, para sempre, a menos que você apague. O <code>stream.log</code> é o
+log de quadros append-only — bytes crus do terminal e eventos estruturados, em uma ordem só. O
+<code>index.bin</code> é um índice esparso de deslocamentos com um ponto de controle a cada 256
+quadros.</p>
+
+<p>Eles são o grosso do armazenamento. O <a href="page:history">Histórico</a> declara o total no
+cabeçalho, e o tamanho por sessão em cada linha, para que apagar seja uma decisão que você toma
+com um número na frente. <strong>Não existe política de retenção</strong> — apagar o histórico de
+alguém por cronograma não é uma decisão para tomar no lugar dela.</p>
+
+<h2>Diretórios de conta</h2>
+
+<p>Uma conta <em>é</em> um diretório de configuração de provedor. Registrar uma cria um diretório
+aqui e aponta o provedor para ele com <code>CLAUDE_CONFIG_DIR</code> ou <code>CODEX_HOME</code>.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">O seu login existente nunca é copiado nem reescrito</span>
+  <p>A conta já logada nesta máquina é <strong>adotada</strong> e continua morando onde já mora —
+  <code>~/.claude</code> ou <code>~/.codex</code>. Só as contas que você adiciona aqui ganham um
+  diretório aqui. O J.A.R.V.I.S. nunca abre um arquivo de credencial; ele pergunta ao provedor como
+  um diretório está logado.</p>
+</div>
+
+<h2>Dois arquivos escritos por sessão, longe do seu repositório</h2>
+
+<p>O <code>guardrail-policy.json</code> é o conjunto de regras resolvidas com que a sessão começou,
+mais se alguém está presente. O <a href="page:internals-guardrail">processo da proteção</a> lê ele,
+e ele é um snapshot de propósito: mudar uma regra no meio da sessão não deveria mudar o que um
+agente em execução recebeu.</p>
+
+<p>O <a href="page:brain">briefing da Memória</a> é escrito ao lado destes, e passado por caminho. É
+por isso que nada que este produto gera aparece no seu <code>git status</code>.</p>
+
+<h2>O que <em>não</em> está aqui</h2>
+
+<div class="defs">
+  <div>
+    <dt>Seu código</dt>
+    <dd>Projetos são pastas no seu disco, abertas no lugar. Nada é copiado.</dd>
+  </div>
+  <div>
+    <dt>Seu histórico de Git</dt>
+    <dd>Lido rodando o binário <code>git</code> que você já tem.</dd>
+  </div>
+  <div>
+    <dt>Suas credenciais</dt>
+    <dd>Lidas pelos provedores, dos diretórios de configuração deles.</dd>
+  </div>
+  <div>
+    <dt>Qualquer coisa na nuvem</dt>
+    <dd>A menos que você tenha pareado um celular, e aí só um resumo do que precisa de uma pessoa.
+    Veja <a href="page:local-first">Local em primeiro lugar</a>.</dd>
+  </div>
+</div>
+
+<h2>Fazendo backup</h2>
+
+<p>Copie a pasta <code>dev.jarvis.desktop</code> inteira com o app fechado. É um banco SQLite e uma
+árvore de arquivos comuns; não há mais nada para capturar e nenhum formato de exportação para
+aprender.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Um arquivo fora de tudo isso, para quem compila do código</span>
+  <p>A chave privada minisign do atualizador fica em <code>.keys/</code> no repositório e é
+  ignorada pelo Git. Ela nunca pode ser commitada, e <strong>perdê-la significa que nenhuma
+  instalação existente poderá jamais ser atualizada</strong>. Guarde uma cópia em algum lugar que
+  não seja esta máquina.</p>
+</div>
