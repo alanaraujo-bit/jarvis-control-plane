@@ -253,3 +253,37 @@ way, or the release process needs the CI action that does it.
    separate public repository holding only release artifacts, with the endpoint
    pointed at it.
 2. Whoever cuts a release has to attach `latest.json` beside the installer.
+
+### B2 — RESOLVED, 2026-08-25. The premise was wrong.
+
+**The repository is public.** It has been the whole time. Every version of this
+entry has opened by stating it is private and reasoning from there, and nobody
+ever ran the one command that checks:
+
+```
+gh repo view alanaraujo-bit/jarvis-control-plane --json isPrivate
+{"isPrivate": false, "visibility": "PUBLIC"}
+```
+
+This is the second time in this file — B3 was the first — that a blocker was
+written from what was assumed rather than probed, and it is the same shape:
+*one command would have settled it*, and the wrong premise then survived every
+re-reading because each one built on the last.
+
+**What actually blocked updates was the missing manifest**, which is the half
+recorded in the entry above and which nobody could see, because the check failed
+for a reason that turned out not to exist.
+
+**Proved end to end, unauthenticated, after the 0.5.0 release:**
+
+```
+GET releases/latest/download/latest.json                 → 200, correct manifest
+GET releases/latest/download/J.A.R.V.I.S_0.5.0_x64-setup.exe → 200, 6,888,429 bytes
+```
+
+Which is exactly what `Verificar atualizações` fetches. **The updater works.**
+
+**What a future release must not forget:** `tauri build` produces the installer
+and its `.sig` and *nothing else*. `latest.json` is written by hand or by a CI
+action, and a release without it puts every installation back where this entry
+started — an update check that fails against a URL that looks right.
