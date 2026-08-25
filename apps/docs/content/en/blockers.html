@@ -1,1 +1,105 @@
-<p>TODO</p>
+<p>Four things are stopped, and none of them is stopped on engineering. Each is waiting on a
+purchase, a decision or an interactive sign-in that no amount of code can supply.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Why this page is public</span>
+  <p>Every one of these is visible from outside the product — the SmartScreen warning, the failing
+  update check. Documenting them is cheaper than letting each person discover them and wonder
+  whether the product is broken.</p>
+</div>
+
+<h2>B1 — No code-signing certificate</h2>
+
+<p><span class="badge" data-t="danger">Blocked on a purchase</span></p>
+
+<p><strong>What you see:</strong> Windows SmartScreen shows an <em>unknown publisher</em> warning
+the first time you install.</p>
+
+<p><strong>What is actually missing:</strong> an OV or EV Authenticode code-signing certificate. EV
+generally requires a hardware token or a cloud HSM. <strong>Nothing technical is missing</strong> —
+the build pipeline already has the shape for it, and applying one is configuration rather than
+code.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">This is not the updater's key, and the two get confused constantly</span>
+  <p>The <strong>minisign keypair</strong> that proves an update came from us exists, works today,
+  and verifies every download against a public key compiled into the binary before anything is
+  installed. Update integrity is <em>not</em> affected by this blocker.
+  See <a href="page:distribution">Distribution and updates</a>.</p>
+</div>
+
+<h2>B2 — Nowhere to publish updates yet</h2>
+
+<p><span class="badge" data-t="danger">Blocked on a decision</span></p>
+
+<p><strong>What you see:</strong> <em>Check for updates</em> reports a failure.</p>
+
+<p><strong>Why:</strong> the updater is configured against a release location that is not reachable
+as things stand. Two routes exist and both are straightforward — a separate public repository just
+for release artifacts, with the source staying private; or serving the update manifest and the
+installers from the cloud project that already exists.</p>
+
+<p>It is open because pointing release artifacts at a function that exists to pass small JSON
+around deserves its own thought rather than being bolted on because an account happened to be
+available.</p>
+
+<p>Until then the check <strong>reports the failure honestly</strong> rather than pretending to be
+up to date — which would leave you believing you had the latest build forever.</p>
+
+<h2>B6 — Signing in to additional accounts</h2>
+
+<p><span class="badge" data-t="observed">Blocked on an interactive browser sign-in</span></p>
+
+<p><strong>What it blocks:</strong> one verification, not the feature.</p>
+
+<p>Registering an <a href="page:accounts">account</a> means creating a configuration directory and
+then <em>signing in to it</em> — and signing in means the provider's CLI opening a browser and a
+person completing an OAuth flow. No agent can do that on somebody's behalf, and the token-setup
+command is not a way around it: its first use needs the same interactive login.</p>
+
+<p><strong>What is built anyway:</strong> the registry, the configuration-directory plumbing, the
+quota model, the panel, the manual and automatic switch, and the Brain relay across a switch — all
+exercised against a live account plus alternate configuration directories, and validated in the
+release build in both languages and both themes under an isolated identifier.</p>
+
+<p><strong>What cannot run until it is done:</strong> one external-state verification — an account
+genuinely exhausting, work moving to a separately authenticated account, and the agent carrying on.
+See <a href="page:not-built">What is not built</a>.</p>
+
+<h2>B-DOC1 — An unanswered remote-access request</h2>
+
+<p><span class="badge" data-t="danger">Not a product blocker. Left for a person.</span></p>
+
+<p>While this documentation was being built, an <strong>incoming AnyDesk remote session
+request</strong> appeared on the machine, from an ID nothing in this session recognised. It was
+<strong>left unanswered on purpose</strong>: accepting or rejecting a request for remote control of
+somebody's machine is not a decision to make on their behalf.</p>
+
+<p>The window was minimised so it stopped covering the application being photographed. Minimising
+answers nothing, and the request is still exactly where it was.</p>
+
+<p>It is recorded here and in the repository's own blockers file because a security prompt that
+nobody sees is worse than one that is merely unanswered.</p>
+
+<h2>Two blockers that resolved</h2>
+
+<div class="defs">
+  <div>
+    <dt>Cloud provisioning</dt>
+    <dd>Resolved — and not by a change of plan. The command-line tools turned out to have been
+    authenticated all along; the earlier status had been written from what was assumed rather than
+    probed. One command would have settled it. The
+    <a href="page:guide-phone">phone relay</a> was built on it.</dd>
+  </div>
+  <div>
+    <dt>The installer build hanging</dt>
+    <dd>Resolved. The failure did not reproduce against a later pass.</dd>
+  </div>
+</div>
+
+<div class="callout">
+  <span class="callout__title">One thing that is not a blocker but is worth knowing</span>
+  <p>The updater's private minisign key lives outside version control. <strong>Losing it means no
+  existing installation can ever be updated again.</strong> It is a backup, not a blocker — but it
+  is the failure with the least recoverable consequence in the whole project.</p>
+</div>

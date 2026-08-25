@@ -1,1 +1,179 @@
-<p>TODO</p>
+<p>Tudo abaixo está construído e foi dirigido numa build real contra agentes reais numa máquina
+real — não só compilado e não só testado unitariamente. Onde uma afirmação se apoia em algo mais
+fraco do que isso, ela diz.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A regra que esta lista segue</span>
+  <p>Um marco é entregue <strong>terminado, não fingido</strong>. Algo deliberadamente ausente é
+  <a href="page:not-built">listado como ausente</a> em vez de ser um esboço atrás de um botão
+  desabilitado. Um esboço é uma promessa que a interface faz e o produto não consegue cumprir.</p>
+</div>
+
+<h2>Fundação e núcleo</h2>
+
+<div class="defs">
+  <div>
+    <dt>Casca do aplicativo e sistema de design</dt>
+    <dd>Barra de título própria, barra lateral, barra de status, paleta de comandos com ranqueamento
+    por subsequência. Escuro e claro criados independentemente, os dois de primeira classe. Redução
+    de movimento respeitada. i18n ligado desde a primeira string, inglês e português.</dd>
+  </div>
+  <div>
+    <dt>O log de eventos da sessão</dt>
+    <dd>Codec de quadros append-only, índice esparso, recuperação de travamento a partir de um quadro
+    final rasgado, reprodução limitada em duas passadas que nunca carrega uma sessão inteira na
+    memória. SQLite com migrações só para frente.
+    <strong>28 testes, incluindo um contra um repositório Git real.</strong>
+    <a href="page:session-log">Leia mais</a></dd>
+  </div>
+</div>
+
+<h2>O terminal, terminado</h2>
+
+<p>Host de PTY, redimensionamento, ciclo de vida, job objects do Windows para que nenhum processo de
+agente sobreviva ao app, runtime de sessão com escritor único, IPC de bytes crus agrupado a 16ms,
+xterm.js com paletas por tema e abas. Mais três coisas, cada uma verificada numa build real:</p>
+
+<ul>
+  <li><strong>Divisão em painéis e presets de layout</strong> — até quatro terminais, três layouts.
+  Verificado com dois painéis mantendo os históricos, um comando digitado em cada um chegando ao
+  próprio shell, os três layouts, um terceiro terminal aberto no meio da divisão, e o fechamento de
+  painéis e sessões.</li>
+  <li><strong>Busca no histórico</strong> — e ela exigiu quatro correções que a suíte de testes não
+  conseguia ver, a pior sendo o <kbd>Ctrl</kbd>+<kbd>F</kbd> vazando para a busca-na-página do
+  próprio WebView2.</li>
+  <li><strong>Colagem de imagem</strong> — verificada de ponta a ponta com uma imagem real na área de
+  transferência real: um PNG genuíno em disco, o caminho entre aspas digitado e deixado sem enviar, a
+  prévia mostrando a figura de verdade, e o <code>git status</code> do projeto ainda limpo.</li>
+</ul>
+
+<h2>Provedores e conversa</h2>
+
+<p>Trait de adaptador e modelo de capacidades, adaptadores do Claude Code e do Codex, um leitor de
+JSONL que lida com linhas parciais, UTF-8 partido, truncamento e CRLF, e a varredura de ambiente.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Validado contra dados reais, não fixtures</span>
+  <p>O leitor foi rodado sobre <strong>todas as 79 transcrições reais</strong> da máquina de
+  desenvolvimento — 49.905 itens de conversa, 19.582 deles carregando uso oficial.</p>
+</div>
+
+<p>A Conversa projeta turnos, chamadas de ferramenta com resultados, pensamento e erros, com uso
+oficial de tokens por turno. Verificada contra uma sessão real do Claude Code num repositório real,
+mostrada nas duas visões. <a href="page:conversation">Leia mais</a></p>
+
+<h2>Missões, proteções e execuções sem supervisão</h2>
+
+<p>O modelo de missão e seus sete estados, evidência e verificação rodando checagens reais, conclusão
+recusada sem evidência e <strong>revogada</strong> quando a evidência para de se sustentar, retirada
+registrada com motivo, perfis de autonomia herdados por uma cadeia, a Central de Missões com seções
+que somem quando vazias, missões ligadas aos agentes que trabalham nelas, e o piloto automático.</p>
+
+<p>Proteções: nove classes de operação, um classificador que tokeniza e respeita aspas, política
+resolvida projeto → global → padrão, e aplicação diferente por provedor com o modelo de capacidades
+dizendo isso.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado no app instalado, e contra um agente real</span>
+  <p>Uma missão foi criada, teve a conclusão recusada, foi verificada, concluiu — e aí o artefato foi
+  apagado e a conclusão foi <strong>revogada</strong>.</p>
+  <p>Uma política foi definida nas Configurações, uma missão cujo critério era <code>npm publish</code>
+  teve a checagem <strong>retida</strong> em vez de executada, a aprovação foi respondida, e a missão
+  saiu de Esperando. Separadamente, contra o Claude Code 2.1.240 real: um push forçado foi recusado
+  antes de executar, e em Sem supervisão um <code>rm -rf</code> foi parado com o diretório ainda lá
+  depois.</p>
+</div>
+
+<h2>Superfícies de código</h2>
+
+<p>Explorador de arquivos, editor Monaco, Diff/Revisão, operações de escrita do Git, worktrees.</p>
+
+<p>Verificado no app instalado: a árvore navegada com <code>node_modules</code> e
+<code>build.log</code> esmaecidos como ignorados pelo Git e <code>.git</code> ausente; um arquivo
+aberto, editado, salvo, e confirmado <em>em disco</em> com o conteúdo alterado e os fins de linha LF
+inalterados; um agente Claude Code real observado criando um arquivo e esse arquivo aparecendo no topo
+da Revisão atribuído ao Claude Code; um arquivo renomeado e o diff renderizando como uma linha
+alterada em vez de um arquivo novo. Uma worktree criada para <code>agent/login-form</code>, aberta
+como projeto, com o próprio diff lido na Revisão, e depois removida — primeiro recusada pelo Git,
+depois retida pela proteção, depois feita.</p>
+
+<h2>Conhecimento</h2>
+
+<p>Atividade, Métricas com alavancagem humana medida a partir de interação real, Memória do projeto,
+histórico do projeto, notas, e Busca global sobre conhecimento, notas, missões, atividade e conteúdo
+de conversa.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">A Memória, verificada de ponta a ponta</span>
+  <p>Quatro fatos foram escritos na Memória de um projeto de rascunho, o Claude Code foi iniciado pelo
+  app e perguntado o que ele sabia <em>sem ler arquivos</em>. Ele respondeu com os quatro, agrupados
+  sob os próprios títulos do briefing, numa pasta que ele nunca tinha visto — e disse com todas as
+  letras que não tinha outro contexto. O arquivo do briefing tinha 484 bytes no nosso próprio
+  diretório de dados, batendo com o tamanho que o painel informava, e o <code>git status</code> do
+  projeto estava vazio.</p>
+</div>
+
+<p>Um agente também escreve na própria Memória, uma vez, no fim de uma execução sem supervisão. A de
+verdade que ele produziu está citada em <a href="page:brain">Memória do projeto</a>.</p>
+
+<h2>Prévia, onboarding e configurações</h2>
+
+<p>A Prévia lê a URL do servidor de desenvolvimento da saída da própria sessão, aplica a restrição de
+loopback no comando e não só no scanner, e abre numa janela separada em vez de um iframe. Verificada
+contra um servidor real, com o endereço de LAN excluído em silêncio e o Recarregar mostrando uma
+mudança feita em disco.</p>
+
+<p>O onboarding aparece uma vez por instalação e assume <em>já visto</em> se a checagem dele falhar,
+para que uma checagem quebrada não deixe a janela escondida. As Configurações são oito seções como
+destinos, verificadas na build real em quatro larguras, nos dois temas e nos dois idiomas — com o
+alinhamento dos controles conferido <strong>amostrando pixels em vez de a olho</strong>.</p>
+
+<h2>Contas, cota e histórico</h2>
+
+<p>Contas como diretórios de configuração, o modelo de cota, leituras oficiais ao vivo das duas CLIs
+nos protocolos suportados delas, troca automática, detecção de gêmeas chaveada por e-mail, e chips na
+barra de status.</p>
+
+<p>Histórico de Sessões: toda sessão com título, agrupada, paginada por chave, pesquisável pelo que foi
+dito dentro, renomeável, apagável — e continuável, verificado plantando um fato, fechando a sessão,
+continuando e perguntando. A resposta voltou: <strong>"Âmbar."</strong></p>
+
+<h2>Notificações e o bloco de notas</h2>
+
+<p>Cinco fontes de notificação com duas confianças, um detector construído a partir de quatro
+gravações de CLIs reais e apoiado num formato em vez de em palavras, um sino, uma central,
+notificações no app, notificações do Windows, e três interruptores com um botão de teste que dispara
+o caminho real.</p>
+
+<p>Verificado contra um agente Claude Code 2.1.241 real: a pergunta de confiança de pasta dele lida do
+próprio terminal e mostrada como <em>Observado</em>; a resposta dele mostrada como <em>Oficial</em>;
+nada levantado enquanto aquela sessão estava na tela; e com a janela minimizada, o Windows mostrou a
+própria resposta do agente, vinda da build instalada.</p>
+
+<p>O bloco de notas: pastas, notas, salvamento automático, e <strong>enviar para o agente</strong> —
+verificado com um prompt digitado, salvo, fechado, reaberto, e enviado para um Claude Code vivo, que
+mostrou <code>[Pasted text #1 +5 lines]</code> e deixou ele no prompt.</p>
+
+<h2>Voz</h2>
+
+<p>Ditado local com whisper.cpp, preparado com o vocabulário do próprio projeto, com legendas ao vivo.
+Testado com um microfone real uma vez — o que trouxe à tona dois bugs reais, os dois corrigidos e
+provados. <a href="page:voice">Uma passada de teste de ouvido ainda está devendo</a>.</p>
+
+<h2>Distribuição</h2>
+
+<p>Instalador NSIS com identidade de produto, instalação por usuário, atualizador com verificação
+minisign, garantia de instância única, caminho de atualização silenciosa, e uma desinstalação que
+preserva os dados do usuário. Verificado na máquina de desenvolvimento: instalado, aberto, atualizado,
+desinstalado e reinstalado. Pegada de instalação de 7,3 MB.</p>
+
+<div class="cards">
+  <a class="card" href="page:not-built">
+    <strong>O que não está pronto</strong>
+    <span>As coisas deliberadamente ausentes, e por que cada uma ainda está.</span>
+  </a>
+  <a class="card" href="page:blockers">
+    <strong>Bloqueios conhecidos</strong>
+    <span>O que está parado e do que está esperando.</span>
+  </a>
+</div>

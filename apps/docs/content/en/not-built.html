@@ -1,1 +1,137 @@
-<p>TODO</p>
+<p>Most products document what they do. This page documents what they do not, because a feature
+that is absent and a feature that is broken look identical from the outside — and only one of them
+is worth waiting for.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Absent rather than stubbed</span>
+  <p>Nothing here exists as a disabled button, a greyed-out menu item or a <em>coming soon</em>
+  panel. A stub is a promise the interface makes that the product cannot keep, and it costs you the
+  time it takes to find out.</p>
+</div>
+
+<h2>Things that will not be built</h2>
+
+<div class="defs">
+  <div>
+    <dt>A <em>Web</em> tab in History</dt>
+    <dd>The reference this surface was modelled on has one — it lists Claude's cloud sessions. This
+    product is <a href="page:local-first">local-first</a> and does not have them. The tab is absent
+    rather than empty, because an empty tab implies the sessions exist and we failed to fetch
+    them.</dd>
+  </div>
+  <div>
+    <dt>Language intelligence in the editor</dt>
+    <dd>Monaco's own TypeScript, CSS, HTML and JSON workers are excluded on purpose: without
+    project context they are <em>confidently wrong</em>, and diagnostics you learn to ignore are
+    worse than no diagnostics. Real ones arrive with a language server, and the architecture
+    already leaves room for the client.</dd>
+  </div>
+  <div>
+    <dt>Guardrails over your own typing</dt>
+    <dd>They govern agents. A command you type in a terminal runs. A tool that second-guesses its
+    owner gets switched off within a week, and then it protects nothing.</dd>
+  </div>
+  <div>
+    <dt>A retention policy for session logs</dt>
+    <dd>Deleting somebody's history on a schedule is not a decision to make on their behalf.
+    <a href="page:history">History</a> states what the logs cost instead, which turns it into a
+    decision they <em>can</em> make.</dd>
+  </div>
+</div>
+
+<h2>Things that are genuinely not there yet</h2>
+
+<h3>Starting a mission from your phone</h3>
+
+<p>Declined rather than overlooked. Starting one needs the same checks
+<a href="page:guide-unattended">the desktop makes</a> — including the untrusted-folder refusal —
+and doing those correctly from a phone is its own piece of work rather than a button.</p>
+
+<h3>Push notifications to a phone</h3>
+
+<p>Its own scope, and it needs a developer account. The
+<a href="page:guide-phone">relay snapshot</a> already carries what needs a person; delivering it as
+a push is the same question answered on a different screen.</p>
+
+<h3>Global Search does not find notebook notes</h3>
+
+<p>It already finds project notes, so a prompt library the global search cannot see reads as a
+<em>broken search</em> rather than as a boundary. Deferred deliberately, not missed: it needs a new
+search kind threaded through the shared protocol, the group ordering, the subtitles and both
+language catalogues — <strong>and</strong> a navigation special case, because opening a result
+opens a project workspace and a notebook note has no project to open. A protocol change deserves
+its own pass.</p>
+
+<h3>The Preview surface's cross-platform half</h3>
+
+<p>Windows only, like everything else. Nothing in the architecture is Windows-specific, but the PTY
+host, the job-object containment, the toast integration and the installer all are — and none has
+been built or verified elsewhere. See <a href="page:distribution">Distribution</a>.</p>
+
+<h2>Things built but not fully verified</h2>
+
+<p>These are the honest ones. They exist, their logic is tested, and something about them has not
+been looked at or listened to.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The phone web app has never been seen on a phone</span>
+  <p>Its logic is tested and its transport is proven end to end against real infrastructure —
+  after pairing, the desktop published on its own and the mailbox came back carrying the real
+  machine's hostname with nobody driving it.</p>
+  <p>But it has <strong>never been looked at on a phone-sized viewport.</strong> How it behaves is
+  verified; how it <em>looks</em> is not. That is why that milestone is marked in progress rather
+  than complete.</p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Nobody has heard the notification sound</span>
+  <p>It synthesises two sine tones through the Web Audio API — quiet by construction, with an
+  exponential envelope so it cannot click — and it is <strong>on by default</strong>. Every other
+  notification channel was verified by looking. This one cannot be, and it has not been listened
+  to.</p>
+  <p>Two questions decide it: is it audible from another room, and is it annoying at the desk? If
+  it is either wrong, the switch is already in Settings.</p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Voice is owed one live pass by ear</span>
+  <p><a href="page:voice">Dictation</a> has been driven end to end for real once with a real
+  headset, and the streaming path has been driven live through the installed app using a
+  synthetic-audio bypass — the development machine has no microphone attached.</p>
+  <p>What has not happened is a single pass confirming, by ear, all of: the start and finish sound
+  cues, the two bug fixes that pass produced, <em>and</em> the live captions, together, on a real
+  microphone. It shares this debt with the notification sound and should be judged in the same
+  sitting.</p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The account-rotation end-to-end run is set up and unrun</span>
+  <p>Every part of it is built and exercised: the registry, the configuration-directory plumbing,
+  the quota model, the panel, the manual and automatic switch, and the Brain relay across a switch.
+  What has not been executed is the external one — an account genuinely exhausting, work moving to
+  a separately authenticated account, and the agent carrying on.</p>
+  <p>It costs real tokens on real accounts and writes real sessions, so it is scheduled rather than
+  slipped in.</p>
+</div>
+
+<h2>One thing that is <em>probably</em>, not <em>certainly</em>, covered</h2>
+
+<p>The <a href="page:notifications">notification detector</a> reads a question off the terminal for
+Claude Code and Codex, and its evidence is four real captures from those two CLIs. The invariant it
+keys on is a <em>shape</em> — a numbered choice list with exactly one cursor glyph — rather than
+any wording, so a third agent CLI would very likely work.</p>
+
+<p>But it has not been recorded, and <em>probably</em> is the honest word. The capture harness that
+produced those four recordings is part of the codebase precisely so that a third one can be added
+properly rather than assumed.</p>
+
+<div class="cards">
+  <a class="card" href="page:status">
+    <strong>What is built</strong>
+    <span>Everything that exists, and how each part was verified.</span>
+  </a>
+  <a class="card" href="page:blockers">
+    <strong>Known blockers</strong>
+    <span>What is stopped on a purchase or a credential rather than on work.</span>
+  </a>
+</div>

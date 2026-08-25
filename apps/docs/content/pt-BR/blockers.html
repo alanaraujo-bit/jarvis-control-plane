@@ -1,1 +1,105 @@
-<p>TODO</p>
+<p>Quatro coisas estão paradas, e nenhuma delas está parada por engenharia. Cada uma espera uma
+compra, uma decisão ou um login interativo que nenhuma quantidade de código consegue fornecer.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Por que esta página é pública</span>
+  <p>Cada uma destas é visível de fora do produto — o aviso do SmartScreen, a checagem de atualização
+  que falha. Documentar sai mais barato do que deixar cada pessoa descobrir e ficar se perguntando se
+  o produto está quebrado.</p>
+</div>
+
+<h2>B1 — Sem certificado de assinatura de código</h2>
+
+<p><span class="badge" data-t="danger">Bloqueado por uma compra</span></p>
+
+<p><strong>O que você vê:</strong> o SmartScreen do Windows mostra um aviso de <em>publicador
+desconhecido</em> na primeira vez que você instala.</p>
+
+<p><strong>O que de fato está faltando:</strong> um certificado Authenticode OV ou EV. O EV
+normalmente exige um token de hardware ou um HSM na nuvem. <strong>Nada técnico está
+faltando</strong> — o pipeline de build já tem o formato para isso, e aplicar um é configuração e não
+código.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Esta não é a chave do atualizador, e as duas são confundidas o tempo todo</span>
+  <p>O <strong>par de chaves minisign</strong> que prova que uma atualização veio de nós existe,
+  funciona hoje, e verifica todo download contra uma chave pública compilada dentro do binário antes de
+  qualquer coisa ser instalada. A integridade das atualizações <em>não</em> é afetada por este bloqueio.
+  Veja <a href="page:distribution">Distribuição e atualizações</a>.</p>
+</div>
+
+<h2>B2 — Ainda sem lugar para publicar atualizações</h2>
+
+<p><span class="badge" data-t="danger">Bloqueado por uma decisão</span></p>
+
+<p><strong>O que você vê:</strong> <em>Verificar atualizações</em> informa uma falha.</p>
+
+<p><strong>Por quê:</strong> o atualizador está configurado contra um local de release que não é
+alcançável do jeito que as coisas estão. Existem duas rotas e as duas são simples — um repositório
+público separado só para os artefatos de release, com o código-fonte continuando privado; ou servir o
+manifesto de atualização e os instaladores a partir do projeto na nuvem que já existe.</p>
+
+<p>Está em aberto porque apontar artefatos de release para uma função que existe para passar JSON
+pequeno de um lado para o outro merece uma reflexão própria em vez de ser aparafusada porque a conta
+por acaso estava disponível.</p>
+
+<p>Até lá a checagem <strong>informa a falha honestamente</strong> em vez de fingir estar em dia — o
+que te deixaria acreditando ter a versão mais nova para sempre.</p>
+
+<h2>B6 — Login em contas adicionais</h2>
+
+<p><span class="badge" data-t="observed">Bloqueado por um login interativo no navegador</span></p>
+
+<p><strong>O que isso bloqueia:</strong> uma verificação, não o recurso.</p>
+
+<p>Registrar uma <a href="page:accounts">conta</a> significa criar um diretório de configuração e
+depois <em>fazer login nele</em> — e fazer login significa a CLI do provedor abrir um navegador e uma
+pessoa completar um fluxo OAuth. Nenhum agente consegue fazer isso no lugar de alguém, e o comando de
+configuração de token não é um atalho: o primeiro uso dele precisa do mesmo login interativo.</p>
+
+<p><strong>O que está construído mesmo assim:</strong> o registro, a plumbing do diretório de
+configuração, o modelo de cota, o painel, a troca manual e automática, e o repasse da Memória através
+de uma troca — tudo exercitado contra uma conta ao vivo mais diretórios de configuração alternativos, e
+validado na build de release nos dois idiomas e nos dois temas sob um identificador isolado.</p>
+
+<p><strong>O que não pode rodar até isso ser feito:</strong> uma verificação de estado externo — uma
+conta genuinamente esgotando, o trabalho se movendo para uma conta autenticada separadamente, e o
+agente seguindo em frente. Veja <a href="page:not-built">O que não está pronto</a>.</p>
+
+<h2>B-DOC1 — Um pedido de acesso remoto sem resposta</h2>
+
+<p><span class="badge" data-t="danger">Não é um bloqueio de produto. Deixado para uma pessoa.</span></p>
+
+<p>Enquanto esta documentação estava sendo construída, um <strong>pedido de sessão remota do
+AnyDesk</strong> apareceu na máquina, vindo de um ID que nada nesta sessão reconheceu. Ele foi
+<strong>deixado sem resposta de propósito</strong>: aceitar ou rejeitar um pedido de controle remoto da
+máquina de alguém não é uma decisão para tomar no lugar dessa pessoa.</p>
+
+<p>A janela foi minimizada para parar de cobrir o aplicativo que estava sendo fotografado. Minimizar
+não responde nada, e o pedido continua exatamente onde estava.</p>
+
+<p>Está registrado aqui e no arquivo de bloqueios do próprio repositório porque um alerta de segurança
+que ninguém vê é pior do que um que está apenas sem resposta.</p>
+
+<h2>Dois bloqueios que se resolveram</h2>
+
+<div class="defs">
+  <div>
+    <dt>Provisionamento na nuvem</dt>
+    <dd>Resolvido — e não por mudança de plano. As ferramentas de linha de comando estavam autenticadas
+    o tempo todo; o status anterior tinha sido escrito a partir do que foi presumido em vez do que foi
+    sondado. Um comando teria resolvido. O <a href="page:guide-phone">relay do celular</a> foi
+    construído em cima disso.</dd>
+  </div>
+  <div>
+    <dt>O build do instalador travando</dt>
+    <dd>Resolvido. A falha não se reproduziu numa passada posterior.</dd>
+  </div>
+</div>
+
+<div class="callout">
+  <span class="callout__title">Uma coisa que não é bloqueio mas vale saber</span>
+  <p>A chave privada minisign do atualizador mora fora do controle de versão. <strong>Perdê-la significa
+  que nenhuma instalação existente poderá jamais ser atualizada.</strong> É um backup, não um bloqueio —
+  mas é a falha com a consequência menos recuperável do projeto inteiro.</p>
+</div>

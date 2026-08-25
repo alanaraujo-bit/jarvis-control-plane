@@ -1,1 +1,136 @@
-<p>TODO</p>
+<p>A maioria dos produtos documenta o que faz. Esta página documenta o que não faz, porque um
+recurso ausente e um recurso quebrado parecem idênticos de fora — e só um dos dois vale a pena
+esperar.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Ausente em vez de fingido</span>
+  <p>Nada aqui existe como um botão desabilitado, um item de menu acinzentado ou um painel de
+  <em>em breve</em>. Um esboço é uma promessa que a interface faz e o produto não consegue cumprir,
+  e ele te custa o tempo de descobrir isso.</p>
+</div>
+
+<h2>Coisas que não vão ser construídas</h2>
+
+<div class="defs">
+  <div>
+    <dt>Uma aba <em>Web</em> no Histórico</dt>
+    <dd>A referência na qual esta superfície foi modelada tem uma — ela lista as sessões na nuvem do
+    Claude. Este produto é <a href="page:local-first">local em primeiro lugar</a> e não tem essas
+    sessões. A aba está ausente em vez de vazia, porque uma aba vazia sugere que as sessões existem e
+    que a gente falhou em buscá-las.</dd>
+  </div>
+  <div>
+    <dt>Inteligência de linguagem no editor</dt>
+    <dd>Os workers de TypeScript, CSS, HTML e JSON do Monaco estão excluídos de propósito: sem
+    contexto de projeto eles são <em>confiantemente errados</em>, e diagnósticos que você aprende a
+    ignorar são piores do que diagnóstico nenhum. Os de verdade chegam com um language server, e a
+    arquitetura já deixou espaço para o cliente.</dd>
+  </div>
+  <div>
+    <dt>Proteções sobre o que você mesmo digita</dt>
+    <dd>Elas governam agentes. Um comando que você digita num terminal roda. Uma ferramenta que duvida
+    do próprio dono é desligada em uma semana, e aí ela não protege nada.</dd>
+  </div>
+  <div>
+    <dt>Uma política de retenção para logs de sessão</dt>
+    <dd>Apagar o histórico de alguém por cronograma não é uma decisão para tomar no lugar dela. O
+    <a href="page:history">Histórico</a> declara quanto os logs custam, o que transforma isso numa
+    decisão que a pessoa <em>consegue</em> tomar.</dd>
+  </div>
+</div>
+
+<h2>Coisas que genuinamente ainda não estão lá</h2>
+
+<h3>Iniciar uma missão do celular</h3>
+
+<p>Recusado, e não esquecido. Iniciar uma precisa das mesmas checagens que
+<a href="page:guide-unattended">o desktop faz</a> — incluindo a recusa de pasta não confiada — e
+fazer isso direito a partir de um celular é um trabalho próprio, não um botão.</p>
+
+<h3>Notificações push para o celular</h3>
+
+<p>Um escopo próprio, e precisa de uma conta de desenvolvedor. O
+<a href="page:guide-phone">snapshot do relay</a> já carrega o que precisa de uma pessoa; entregar isso
+como push é a mesma pergunta respondida em outra tela.</p>
+
+<h3>A Busca global não encontra notas do bloco</h3>
+
+<p>Ela já encontra notas de projeto, então uma biblioteca de prompts que a busca global não enxerga
+parece uma <em>busca quebrada</em>, e não uma fronteira. Adiada deliberadamente, não esquecida: ela
+precisa de um novo tipo de busca atravessando o protocolo compartilhado, a ordenação dos grupos, os
+subtítulos e os dois catálogos de idioma — <strong>e</strong> um caso especial de navegação, porque
+abrir um resultado abre uma área de trabalho de projeto e uma nota de bloco não tem projeto para abrir.
+Uma mudança de protocolo merece uma passada própria.</p>
+
+<h3>A metade multiplataforma</h3>
+
+<p>Só Windows, como todo o resto. Nada na arquitetura é específico do Windows, mas o host de PTY, a
+contenção por job object, a integração com as notificações e o instalador todos são — e nenhum foi
+construído ou verificado em outro lugar. Veja <a href="page:distribution">Distribuição</a>.</p>
+
+<h2>Coisas construídas mas não totalmente verificadas</h2>
+
+<p>Estas são as honestas. Elas existem, a lógica delas é testada, e alguma coisa nelas não foi olhada
+ou escutada.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">O app web do celular nunca foi visto num celular</span>
+  <p>A lógica dele é testada e o transporte é provado de ponta a ponta contra infraestrutura real —
+  depois do pareamento, o desktop publicou por conta própria e a caixa de correio voltou carregando o
+  hostname real da máquina, sem ninguém dirigindo.</p>
+  <p>Mas ele <strong>nunca foi olhado num viewport de tamanho de celular.</strong> Como ele se comporta
+  está verificado; como ele <em>parece</em> não está. É por isso que aquele marco está marcado como em
+  andamento e não como completo.</p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Ninguém ouviu o som da notificação</span>
+  <p>Ele sintetiza dois tons senoidais pela Web Audio API — silencioso por construção, com um envelope
+  exponencial para não estalar — e vem <strong>ligado por padrão</strong>. Todo outro canal de
+  notificação foi verificado olhando. Este não pode ser, e ele não foi escutado.</p>
+  <p>Duas perguntas decidem: ele é audível de outro cômodo, e ele é irritante na mesa? Se qualquer uma
+  das duas estiver errada, o interruptor já está nas Configurações.</p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A voz deve uma passada ao vivo, de ouvido</span>
+  <p>O <a href="page:voice">ditado</a> foi dirigido de ponta a ponta de verdade uma vez com um headset
+  real, e o caminho de transmissão foi dirigido ao vivo pelo app instalado usando um desvio de áudio
+  sintético — a máquina de desenvolvimento não tem microfone conectado.</p>
+  <p>O que não aconteceu foi uma única passada confirmando, de ouvido, tudo junto: os sinais sonoros de
+  início e fim, as duas correções de bug que aquela passada produziu, <em>e</em> as legendas ao vivo,
+  num microfone real. Ela divide essa dívida com o som da notificação e deveria ser julgada na mesma
+  sentada.</p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A execução ponta a ponta de rotação de contas está montada e não rodada</span>
+  <p>Cada parte dela está construída e exercitada: o registro, a plumbing do diretório de configuração,
+  o modelo de cota, o painel, a troca manual e automática, e o repasse da Memória através de uma troca.
+  O que não foi executado é a parte externa — uma conta genuinamente esgotando, o trabalho se movendo
+  para uma conta autenticada separadamente, e o agente seguindo em frente.</p>
+  <p>Ela custa tokens reais em contas reais e escreve sessões reais, então está agendada e não
+  encaixada de qualquer jeito.</p>
+</div>
+
+<h2>Uma coisa que está <em>provavelmente</em>, não <em>certamente</em>, coberta</h2>
+
+<p>O <a href="page:notifications">detector de notificações</a> lê uma pergunta do terminal para o
+Claude Code e o Codex, e a evidência dele são quatro gravações reais dessas duas CLIs. A invariante em
+que ele se apoia é um <em>formato</em> — uma lista numerada de escolhas com exatamente um glifo de
+cursor — e não qualquer texto, então uma terceira CLI de agente muito provavelmente funcionaria.</p>
+
+<p>Mas ela não foi gravada, e <em>provavelmente</em> é a palavra honesta. O arcabouço de captura que
+produziu aquelas quatro gravações faz parte do código justamente para que uma terceira possa ser
+adicionada direito em vez de presumida.</p>
+
+<div class="cards">
+  <a class="card" href="page:status">
+    <strong>O que está pronto</strong>
+    <span>Tudo que existe, e como cada parte foi verificada.</span>
+  </a>
+  <a class="card" href="page:blockers">
+    <strong>Bloqueios conhecidos</strong>
+    <span>O que está parado por uma compra ou uma credencial, e não por trabalho.</span>
+  </a>
+</div>

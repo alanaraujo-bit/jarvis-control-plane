@@ -1,1 +1,174 @@
-<p>TODO</p>
+<p>Everything below is built and has been driven in a real build against real agents on a real
+machine — not merely compiled and not merely unit-tested. Where a claim rests on something weaker
+than that, it says so.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The rule this list is kept to</span>
+  <p>A milestone ships <strong>finished, not scaffolded</strong>. Something deliberately absent is
+  <a href="page:not-built">listed as absent</a> rather than stubbed out behind a disabled button.
+  A stub is a promise the interface makes and the product cannot keep.</p>
+</div>
+
+<h2>Foundation and the core</h2>
+
+<div class="defs">
+  <div>
+    <dt>Application shell and design system</dt>
+    <dd>Custom titlebar, rail, status bar, command palette with subsequence ranking. Dark and
+    light authored independently, both first-class. Reduce-motion respected. i18n wired from the
+    first string, English and Portuguese.</dd>
+  </div>
+  <div>
+    <dt>The session event log</dt>
+    <dd>Append-only frame codec, sparse index, crash recovery from a torn trailing frame, bounded
+    two-pass replay that never buffers a whole session. SQLite with forward-only migrations.
+    <strong>28 tests, including one against a real Git repository.</strong>
+    <a href="page:session-log">Read more</a></dd>
+  </div>
+</div>
+
+<h2>The terminal, finished</h2>
+
+<p>PTY host, resize, lifecycle, Windows job objects so no agent process outlives the app,
+single-writer session runtime, raw-byte IPC coalesced at 16ms, xterm.js with per-theme palettes
+and tabs. Plus three things each verified in a real build:</p>
+
+<ul>
+  <li><strong>Split panes and layout presets</strong> — up to four terminals, three layouts.
+  Verified with two panes both keeping their scrollbacks, a command typed into each reaching its
+  own shell, all three layouts, a third terminal opened mid-split, and closing panes and
+  sessions.</li>
+  <li><strong>Scrollback search</strong> — and it took four fixes the test suite could not see,
+  the worst being <kbd>Ctrl</kbd>+<kbd>F</kbd> falling through to WebView2's own find-in-page.</li>
+  <li><strong>Image paste</strong> — verified end to end with a real image on the real clipboard: a
+  genuine PNG on disk, the quoted path typed and left unsubmitted, the preview showing the actual
+  picture, and <code>git status</code> in the project still clean.</li>
+</ul>
+
+<h2>Providers and conversation</h2>
+
+<p>Adapter trait and capability model, Claude Code and Codex adapters, a JSONL tailer that handles
+partial lines, split UTF-8, truncation and CRLF, and the environment scan.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Validated against real data, not fixtures</span>
+  <p>The parser was run over <strong>all 79 real transcripts</strong> on the development
+  machine — 49,905 conversation items, 19,582 of them carrying official usage.</p>
+</div>
+
+<p>Conversation View projects turns, tool calls with results, thinking and errors, with official
+token usage per turn. Verified against a real Claude Code session in a real repository, shown in
+both views. <a href="page:conversation">Read more</a></p>
+
+<h2>Missions, guardrails and unattended runs</h2>
+
+<p>The mission model and its seven states, evidence and verification by running real checks,
+completion refused without evidence and <strong>revoked</strong> when evidence stops holding,
+withdrawal recorded with a reason, autonomy profiles inherited down a chain, Mission Control with
+sections that vanish when empty, missions linked to the agents working on them, and the autopilot.</p>
+
+<p>Guardrails: nine operation classes, a tokenising classifier that respects quoting, policy
+resolved project → global → default, and enforcement differing by provider with the capability
+model saying so.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified in the installed app, and against a real agent</span>
+  <p>A mission was created, refused completion, verified, completed — then the artifact was deleted
+  and the completion was <strong>revoked</strong>.</p>
+  <p>A policy was set in Settings, a mission whose criterion was <code>npm publish</code> had the
+  check <strong>held</strong> rather than run, the approval was answered, and the mission left
+  Waiting. Separately, against real Claude Code 2.1.240: a force push was refused before it
+  executed, and under Unattended an <code>rm -rf</code> was stopped with the directory still there
+  afterwards.</p>
+</div>
+
+<h2>Code surfaces</h2>
+
+<p>Files explorer, Monaco editor, Diff/Review, Git write operations, worktrees.</p>
+
+<p>Verified in the installed app: the tree browsed with <code>node_modules</code> and
+<code>build.log</code> dimmed as Git-ignored and <code>.git</code> absent; a file opened, edited,
+saved, and confirmed <em>on disk</em> to have changed content and unchanged LF line endings; a real
+Claude Code agent watched creating a file and that file appearing at the top of Review attributed
+to Claude Code; a file renamed and the diff rendering as one changed line rather than a new file. A
+worktree created for <code>agent/login-form</code>, opened as a project, its own diff read in
+Review, then removed — first refused by Git, then held by the guardrail, then done.</p>
+
+<h2>Knowledge</h2>
+
+<p>Activity, Analytics with human leverage measured from real interaction, Project Brain, project
+history, notes, and Global Search across knowledge, notes, missions, activity and conversation
+content.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">The Brain, verified end to end</span>
+  <p>Four facts were written into a scratch project's Brain, Claude Code was started from the app
+  and asked what it knew <em>without reading files</em>. It answered with all four, grouped under
+  the brief's own headings, in a folder it had never seen — and said plainly it had no other
+  context. The brief file was 484 bytes in our own data directory, matching the size the panel
+  reported, and <code>git status</code> in the project was empty.</p>
+</div>
+
+<p>An agent also writes to its own Brain, once, at the end of an unattended run. The real one it
+produced is quoted on <a href="page:brain">Project memory</a>.</p>
+
+<h2>Preview, onboarding and settings</h2>
+
+<p>Preview reads the dev server's URL from the session's own output, enforces loopback in the
+command and not just the scanner, and opens in a separate window rather than an iframe. Verified
+against a real dev server, with the LAN address silently excluded and Reload showing a change made
+on disk.</p>
+
+<p>Onboarding shows once per install and defaults to <em>already seen</em> if its check fails, so a
+broken check cannot leave the window hidden. Settings is eight sections as destinations, verified
+in the real build at four widths in both themes and both languages — with control alignment checked
+by <strong>sampling pixels rather than by eye</strong>.</p>
+
+<h2>Accounts, quota and history</h2>
+
+<p>Accounts as configuration directories, the quota model, live official readings from both CLIs on
+their own supported protocols, automatic switching, twin detection keyed on email, and status-bar
+chips.</p>
+
+<p>Session History: every session titled, grouped, keyset-paginated, searchable by what was said
+inside, renameable, deletable — and continuable, verified by planting a fact, closing the session,
+continuing it and asking. The answer came back: <strong>"Amber."</strong></p>
+
+<h2>Notifications and the Notebook</h2>
+
+<p>Five notification sources with two confidences, a detector built from four recordings of real
+CLIs and keyed on a shape rather than on wording, a bell, a centre, in-app toasts, Windows toasts,
+and three switches with a test button that fires the real path.</p>
+
+<p>Verified against a real Claude Code 2.1.241 agent: its folder-trust question read off its own
+terminal and shown as <em>Observed</em>; its reply shown as <em>Official</em>; nothing raised at all
+while that session was on screen; and with the window minimised, Windows showed the agent's own
+reply from the installed build.</p>
+
+<p>The Notebook: folders, notes, autosave, and <strong>send to agent</strong> — verified with a
+prompt typed, autosaved, closed, reopened, and sent into a live Claude Code, which showed
+<code>[Pasted text #1 +5 lines]</code> and left it in the prompt.</p>
+
+<h2>Voice</h2>
+
+<p>Local dictation with whisper.cpp, primed with the project's own vocabulary, with real-time
+streaming captions. Tested with a real microphone once — which surfaced two real bugs, both fixed
+and proven. <a href="page:voice">One ear-test pass is still owed</a>.</p>
+
+<h2>Distribution</h2>
+
+<p>NSIS installer with product identity, per-user install, updater with minisign verification,
+single-instance enforcement, silent upgrade path, and an uninstall that preserves user data.
+Verified on the development machine: installed, launched, upgraded, uninstalled and reinstalled.
+Install footprint 7.3 MB.</p>
+
+<div class="cards">
+  <a class="card" href="page:not-built">
+    <strong>What is not built</strong>
+    <span>The things deliberately absent, and why each one still is.</span>
+  </a>
+  <a class="card" href="page:blockers">
+    <strong>Known blockers</strong>
+    <span>What is stopped and what it is waiting on.</span>
+  </a>
+</div>
