@@ -13,6 +13,37 @@ muda. Os valores são lidos do código, não de uma captura de tela.</p>
   tela.</p>
 </div>
 
+<h2>Conta</h2>
+
+<p>Uma conta guarda as <em>suas</em> preferências, para que elas te acompanhem em vez de pertencer
+a uma máquina. É inteiramente opcional: o J.A.R.V.I.S. é local-first, nada no núcleo pergunta quem
+está logado antes de decidir se o trabalho pode acontecer, e uma execução não assistida às 3 da
+manhã se comporta exatamente igual com ou sem alguém logado.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Configuração</th><th>Valores</th><th>Padrão</th><th>Aplica</th></tr></thead>
+  <tbody>
+    <tr><td>Conta em uso</td><td>Um e-mail e um nome</td><td>Nenhuma</td><td>Entrar aplica tudo o que a conta carrega; sair não devolve nada, para que a interface nunca mude de cara na sua frente.</td></tr>
+    <tr><td>Senha</td><td>Pelo menos 8 caracteres, sem regras de composição</td><td>—</td><td>Argon2id, guardada como string PHC. Cinco erros seguidos descansam a conta por um minuto; a senha certa zera a contagem.</td></tr>
+    <tr><td>Continuar com o Google</td><td>—</td><td>Indisponível</td><td>Está na tela e honestamente desligado até o J.A.R.V.I.S. estar registrado no Google. Uma conta local funciona hoje.</td></tr>
+    <tr><td>Apagar esta conta</td><td>—</td><td>—</td><td>Leva a conta e as preferências dela. Projetos, sessões e histórico ficam intactos — são da máquina, não da conta.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">O que uma conta carrega, e o que não carrega</span>
+  <p><strong>Carrega:</strong> tema, idioma, tamanho da fonte e histórico do terminal, até onde um
+  agente pode ir sozinho, e as três chaves de notificação.</p>
+  <p><strong>Não carrega:</strong> se esta máquina já viu a tela de boas-vindas, o modelo de voz no
+  disco, a varredura do ambiente, a política de proteções por projeto e o pareamento do celular.
+  Cada um desses é um fato sobre uma máquina ou uma pasta, e levá-lo para outra máquina seria
+  errado, não apenas inútil.</p>
+  <p>Criar uma conta <strong>herda</strong> o que a máquina já está usando, para que se cadastrar
+  nunca zere um app que você já estava usando.</p>
+</div>
+
 <h2>Aparência</h2>
 
 <div class="tablewrap">

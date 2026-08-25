@@ -2,6 +2,7 @@ import { LOCALES, LOCALE_NAMES } from "@jarvis/i18n";
 import { useI18n, useT } from "../../app/i18n";
 import { useTheme, type ThemePreference } from "../../app/theme";
 import { EnvironmentPanel } from "../environment/EnvironmentPanel";
+import { AccountPanel } from "../identity/AccountPanel";
 import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { AutonomyPanel } from "./AutonomyPanel";
 import { CATEGORIES, CATEGORY, type CategoryId } from "./categories";
@@ -140,6 +141,14 @@ function Section({ id }: { id: CategoryId }) {
   const { prefs, set } = usePreferences();
 
   switch (id) {
+    case "account":
+      return (
+        <>
+          <Head id="account" />
+          <AccountPanel />
+        </>
+      );
+
     case "appearance":
       return (
         <>

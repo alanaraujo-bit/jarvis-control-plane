@@ -1,5 +1,6 @@
 import {
   Bell,
+  CircleUser,
   Download,
   Gauge,
   Palette,
@@ -29,6 +30,10 @@ import type { MessageKey } from "@jarvis/i18n";
  * section is an entry here, not a component that has to be restructured.
  */
 export const CATEGORIES = [
+  // Account first: it is the only section that says who the product thinks you
+  // are, and the one somebody looks for when they have just been offered an
+  // account and want to know what happened to that choice (M20).
+  "account",
   "appearance",
   "terminal",
   "autonomy",
@@ -63,6 +68,14 @@ export interface Category {
 }
 
 export const CATEGORY: Record<CategoryId, Category> = {
+  account: {
+    id: "account",
+    icon: CircleUser,
+    label: "identity.settings.title",
+    blurb: "identity.settings.blurb",
+    keywords:
+      "account sign in out profile password login conta entrar sair perfil senha cadastro login",
+  },
   // Ordered by how often somebody actually comes here. Appearance is the first
   // thing anyone changes in a new app; Updates is the thing you visit twice a
   // year. Frequency of use decides the order, as it did before (§64).

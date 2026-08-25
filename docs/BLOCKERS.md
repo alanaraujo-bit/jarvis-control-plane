@@ -290,6 +290,38 @@ started — an update check that fails against a URL that looks right.
 
 ---
 
+## B7 — A Google OAuth client, for "Continue with Google" (M20)
+**Status:** Blocked. Needs a credential only you can create; the button is
+already on the screen and already says why it does not work yet.
+
+Signing in with Google was asked for explicitly, and the button ships **visible
+and honestly unavailable** — the same treatment push notifications get, and the
+opposite of a control that looks finished and does nothing (§81). It carries an
+"Em breve / Soon" badge, and clicking it opens one sentence explaining that it
+arrives once J.A.R.V.I.S. is registered with Google.
+
+**What I need from you:** a Google Cloud project with an OAuth 2.0 client, and
+the client id from it. The consent screen needs a product name, a support
+e-mail and the `openid email profile` scopes — nothing that costs money, but all
+of it is a sign-in to an account that is yours.
+
+**What was deliberately not built:** the loopback/PKCE flow itself. Which
+redirect shape is permitted, and whether a loopback address is allowed at all,
+depend on the **client type** the credential is issued as — so writing the flow
+now would mean shipping an untested subsystem built on a guess, which is worse
+than one clearly marked gap. `identity::report` returns `google_available:
+false` from a single place; when a client id exists that becomes a real check
+for it and the surface stops explaining itself with no other change. The schema
+is already shaped for it: `identity_accounts.auth_provider` exists and
+`password_hash` is nullable, which is what an account with no local password
+needs.
+
+**What works today without it:** everything else. A local account is created,
+signed into, and carries its preferences between machines, with no network
+involved at all.
+
+---
+
 ## B-DOC1 — An unanswered AnyDesk remote-session request (2026-08-25, 14:3x)
 
 **Not a project blocker. Read this one first anyway.**

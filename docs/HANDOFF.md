@@ -8,7 +8,18 @@ This file tells you where things stand, how the work is done here, and what
 will bite you. **Read `docs/DECISIONS.md` before changing anything in the core** —
 several decisions there were paid for with real debugging.
 
-> **Most recently finished: M16 — live, official quota per account (§66).**
+> **Most recently finished: M20 — a person's account, and the screen that
+> opens it.** Read [`docs/M20-IDENTITY.md`](M20-IDENTITY.md) and D48 before
+> touching anything under `identity/` or `surfaces/identity/`. The one rule
+> that matters more than the rest: **signing in is not a gate, and this must
+> not become one.** Nothing in the core asks who is signed in before deciding
+> whether work may happen — the product is local-first (§3) and half of it runs
+> with nobody present, so an unattended run at 3am behaves identically signed
+> in or out. Note also that `accounts` (M13/M16) means a *provider
+> subscription* and `identity` (M20) means a *person*; they are different
+> things and the names are load-bearing.
+>
+> **Before that: M16 — live, official quota per account (§66).**
 > Read [`docs/M16-QUOTA.md`](M16-QUOTA.md) before touching anything under
 > `accounts/`, and [`docs/M13-ACCOUNTS.md`](M13-ACCOUNTS.md) after it. M13
 > still owns the architecture — an account **is** a configuration directory —
@@ -90,7 +101,7 @@ the looking.
 ## 4. Current state
 
 Repo: `alanaraujo-bit/jarvis-control-plane` (private) · branch `master` ·
-**572 tests** (541 Rust — 524 run, 17 intentionally `#[ignore]`d — 9 i18n,
+**609 tests** (578 Rust — 561 run, 17 intentionally `#[ignore]`d — 9 i18n,
 22 relay) · all green.
 
 The seventeen ignored ones are ignored for three different reasons, and it is
@@ -160,6 +171,7 @@ version **0.4.0** (0.3.0 until the next release is installed).
 | **Continuing a session (§88, D41)** | A history row opens a **preview** -- the conversation, read-only -- and the preview offers the way back to the terminal: a live session is rejoined, a finished one is **continued** by a new agent handed the old conversation. Both CLIs resume by opposite mechanisms and only one can be followed: Claude Code forks into a transcript we own, Codex appends to the original, which `correlate` cannot find. `ResumeSupport` says which, and the button is absent with a reason where it cannot work. The fork copies the whole prior conversation, so a per-line **timestamp boundary** drops replayed lines before anything reads them -- without it every token is counted twice and a notification fires per already-read turn. |
 | **Session History (§88)** | Every session this machine has ever run, in one place: titled, searchable, grouped by when it happened, openable read-only, renameable and deletable. The two facts that made this the gap it was: `sessions.title` had existed since migration 1 with **no writer at all**, and `session_list` filters `ended_at IS NULL`, so a finished session was unreachable. Claude Code names its own sessions and nobody was reading it (`ai-title`, in 89 of the 124 transcripts here); Codex names none, which is a real capability difference and now says so. A name a person types outranks both, forever (D36). The search runs over **what was actually said**, on §51's own FTS5 index. Delete takes the index rows and the log directory with it and says what it freed (D39) -- and that is the only pruning there is, on purpose. See D36--D40 and `docs/M15-HISTORY.md`. |
 | **Accounts and live quota (§66)** | Four subscriptions, each an isolated configuration directory (M13), each showing **what a provider said a minute ago**: headroom as a dial, a countdown *and* the wall-clock moment it comes back, and the window that is actually rationing you drawn larger than the ones that are not. Both CLIs answer a live usage question on their own supported protocol — `get_usage` on Claude Code's control channel, `account/rateLimits/read` on `codex app-server` — and both read the account in the directory they are pointed at, verified against an empty one. Paid overage is shown in the currency the provider bills in. The Observed/Estimated ladder is still there, now as the fallback for when a probe cannot run, and `implied_allowance` sharpens it from any official percentage instead of only from a refusal. The binding window's headroom also lives in the status bar, so the answer is where the question gets asked. Two configuration directories can be signed into the **same** provider account, and when they are, both cards draw one allowance — so the pair says so on the card, and rotation refuses to treat a twin as a destination (D46). See D43/D44/D46 and `docs/M16-QUOTA.md`. |
+| **Identity (M20)** | An account that belongs to a *person*: a name, an e-mail, an Argon2id password, and the preferences that should follow somebody rather than belong to a machine — theme, language, terminal type size and scrollback, turn budget, the notification switches. **Additive, never a gate**: "Continue without an account" is a real destination and nothing in the core consults it. `settings` deliberately did not grow a scope column (its "unset is no row" contract is read unscoped by three modules); `identity_settings` is the person's copy and `identity::prefs` mirrors between them on sign-in. Signing up inherits what the machine is already set to; signing out puts nothing back. The Google button is on screen, badged, and says why it does not work yet (B7) — the loopback/PKCE flow is deliberately absent because its shape depends on a credential that does not exist. See D48 and `docs/M20-IDENTITY.md`. |
 | **Notifications (§49)** | An agent that stops — finished, or waiting on a decision — reaches the person who walked away. A bell and a centre in the titlebar, an in-app toast when the window is in front, a Windows toast and a taskbar flash when it is not. The rule the whole thing turns on: **nothing is raised about a session the person is already watching**, and a suppressed notification is dropped rather than stored-and-marked-read, so the centre is a list of what you *missed*. The preview is the agent's own words — the question it drew, or the reply it just gave — and carries where it came from: Official when a provider stated it, **Observed** when it was read off the terminal (§28). `notify::detect` is that reading, and it exists because Claude Code asking whether it may write a file is stated nowhere else. See D35. |
 
 **The full loop has been executed end to end**, twice over:
@@ -380,6 +392,22 @@ from `2d 14h`, and the same figures in the status bar without the panel being
 open. Both themes, both languages, with pixels sampled rather than judged from
 the capture (item 42): gauge track `#1F1F20` on `#09090A` dark, `#D7D7D4` on
 `#F0F0ED` light.
+
+*Identity (M20), in the real build.* Created an account, signed out, signed in
+with a wrong password and read "Essa senha não confere. Restam 4 tentativas."
+with the count and the plural right, signed in properly, and watched the auth
+screen close back onto the exact screen it had covered. Then the feature's whole
+point, end to end: signed in on a machine set to **dark + pt-BR** and watched the
+app become **light + English**, because that is what the account carried. Deleted
+the account with the wrong password (refused, account intact) and then with the
+right one (gone, and the app carried on unchanged — projects, sessions and
+history are the machine's, not the account's). Both themes, both languages, with
+pixels sampled rather than judged: page `#0C0C0D` dark and `#F7F7F5` light,
+exactly `--bg-base`, with the ambient washes shifting it by at most two units —
+which is the check that the login screen is lit rather than coloured, since
+amber has to keep meaning agent work.
+
+Three of the four things that pass found were invisible in the code; see D48.
 
 The looking found four things the suite did not, and one of them is the reason
 item 42 has a sibling now: **a card said "read NaNmin ago"** because
@@ -1020,6 +1048,44 @@ Every one of these is real and already cost time.
     the right hue" — both of which the shift preserves — and do not use a sample
     to conclude a token is wrong.
 
+65. **A grid-track disclosure only collapses to zero if the clipped element has
+    no padding, no border and no margin.** `grid-template-rows: 0fr → 1fr` is
+    the right way to animate a height nobody can measure in advance, and
+    `min-height: 0` on the inner is the half of the recipe everybody knows. The
+    other half: a grid track's automatic minimum is the item's **margin box**,
+    and `min-height` only zeroes the *content* box — so padding or margin on
+    the clipped element survives the collapse and reserves space for something
+    that is not on screen. The auth card had three closed disclosures holding
+    32px between the password field and the button, plus a fourth attempt that
+    fixed only one of them. Nothing in the CSS reads as wrong. It was settled by
+    rendering the exact markup in headless Edge and reading
+    `getBoundingClientRect` back — 8px, 8px, 16px, precisely their padding —
+    then moving every space onto a **child** of the clipped box. That probe is
+    worth reaching for generally: `msedge --headless=new --dump-dom` on a page
+    that writes its own measurements into the DOM answers a layout question in
+    ten seconds, against a two-minute rebuild.
+
+66. **A control the shell owns must disappear, not merely stop working, when a
+    full-screen surface takes over.** Gating the *handlers* for Ctrl+K,
+    Ctrl+Shift+N and Ctrl+Shift+F on the auth screen was not enough: the
+    titlebar still drew its palette trigger, which reads as a search field and
+    answered nothing. `onOpenPalette` is optional now and the strip keeps its
+    shape with a spacer, because dropping the element outright slides the
+    caption buttons across as the screen changes.
+
+67. **`tauri build` renames the binary as its very last step, and Windows
+    refuses while the old one is running.** `jarvis.exe` → `jarvis-desktop.exe`
+    (D9) fails with `os error 5` **two minutes in**, after a completely
+    successful compile — so the failure looks like a build problem and is a
+    file-lock problem. `tools/rebuild.sh` kills the running copy first; use it
+    rather than calling `pnpm tauri build --no-bundle` by hand.
+
+    Related, and it cost this session two wasted verification passes:
+    backgrounding a build as `(cmd > log) & echo started` makes the harness
+    report the **wrapper's** exit, not the build's. Twice a screenshot was taken
+    of the previous binary and read as evidence that a fix had not worked. Run
+    the build as the tracked background command itself, or wait on the log.
+
 ---
 
 ## 6. Commands
@@ -1162,6 +1228,15 @@ covering everything voice-related that has shipped since the last one:
    Extending it to an attended completion needs an answer to whose seat it
    is — typing a question into a terminal a person is watching mid-conversation
    is a different UX problem than this pass solved.
+
+5. **Identity has no cloud half, on purpose (M20).** An account is a local
+   record with local preferences. It is *shaped* to be the seat a sync attaches
+   to — `identity_accounts` has `auth_provider` and a nullable
+   `password_hash`, and `identity_settings` is already the per-person store —
+   but nothing talks to a server, and B3 blocks the Vercel side regardless. The
+   next real step is B7: a Google OAuth client, after which
+   `identity::report`'s single `google_available: false` becomes a real check
+   and the button stops explaining itself.
 
 ### Things left on the table, deliberately
 

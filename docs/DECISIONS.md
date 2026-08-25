@@ -1926,3 +1926,123 @@ created_at` has no defined result when two notes land in the same millisecond,
 which duplicating a note does every time. A list of unchanged notes that
 reorders between two reads is a bug even though every row is correct. `id` —
 a UUIDv7, so time-ordered — is now the final tiebreak: stable *and* meaningful.
+
+---
+
+## D48 — A person's account is additive, and never a gate
+
+**M20. See `docs/M20-IDENTITY.md`, `identity/`, `surfaces/identity/`.**
+
+Accounts arrived as one request: somewhere to keep a person's settings, a login
+and signup screen worth looking at, and the Google button that is coming.
+
+### The decision that shaped everything else
+
+The obvious shape for a login screen is a gate — nothing happens until somebody
+signs in. It is wrong here, for three reasons that are specific to this product
+rather than matters of taste:
+
+1. **Local-first is a stated non-negotiable (§3).** The projects, the sessions
+   and the credentials are already on this machine. A gate turns a local tool
+   into one that will not open without an identity service.
+2. **Half of this product runs with nobody present.** Unattended runs (§32)
+   drive an agent turn by turn, `search::backfill` walks the logs five seconds
+   after launch, the notification feed raises things while the window is behind
+   something else, and the relay pushes snapshots to a phone. The concrete
+   question is what `autopilot_start` does at 3am when nobody is signed in, and
+   the only acceptable answer is "exactly what it does today".
+3. **Installations already have real work in them.** An update that demands a
+   signup before somebody can reach their own projects is the least reversible
+   thing this feature could have done.
+
+So: nothing in the core asks who is signed in before deciding whether work may
+happen. `identity::current` exists for the surface and for nothing else, the
+welcome screen offers **Continue without an account** with enough weight to be
+found, and choosing it changes nothing anywhere. The module note says so in as
+many words, because this is the kind of decision a later session quietly
+reverses while adding "just one check".
+
+### It is called `identity`, and that is not a naming preference
+
+`accounts` (M13/M16) already means a **provider subscription** — four Claude Pro
+plans, each of which *is* a configuration directory. The rail item, the surface,
+the Rust module and the `accounts.*` message namespace are all spoken for. Two
+things called "Accounts" in one interface is a real confusion, so the person's
+account is `identity` everywhere: module, surface, i18n namespace, document.
+
+### Mirror, not scope
+
+`settings` did **not** grow an `account_id` column. Its contract is "unset has
+one spelling: no row", and `mission::store`, `onboarding` and `settings::get`
+all read it unscoped — a scope column silently changes what every existing
+reader sees, including on a machine where nobody is signed in.
+
+Instead `identity_settings` holds the person's copy and `identity::prefs`
+mirrors between the two at the only two moments that matter: signing in applies
+the account's values, and changing one while signed in writes to both. Which
+preference is whose is decided **per key** rather than by a rule, because there
+is no rule: theme, language, terminal type size, turn budget and the
+notification switches belong to a person; `onboarding.seen`, the whisper model
+on disk, the environment scan and guardrail policy belong to a machine or a
+folder, and carrying one of those to a second machine would be wrong rather
+than merely unhelpful.
+
+Two consequences worth stating outright, because both look like bugs:
+
+* **Signing up inherits whatever the machine is already set to.** The
+  alternative — defaults — would make the first thing an account ever does be
+  undoing the person's own choices.
+* **Signing out puts nothing back.** It is not a reason for the interface to
+  change appearance while somebody is looking at it, and the account's values
+  are still stored, waiting for the next sign-in. There is a test named after
+  this so nobody "fixes" it.
+
+### Google is on the screen and honestly unavailable
+
+The button ships visible, with the real mark, carrying a "Soon" badge, and
+clicking it opens one sentence saying it arrives once J.A.R.V.I.S. is registered
+with Google (B7). What was deliberately **not** built is the loopback/PKCE flow:
+the redirect shape and whether loopback is permitted at all depend on the client
+type that credential is issued as, so writing it now would ship an untested
+subsystem resting on a guess. `google_available` is false from one place, and the
+schema is already shaped for the result — `auth_provider` exists and
+`password_hash` is nullable.
+
+### Passwords, said plainly
+
+Argon2id with the PHC string stored whole, so raising the cost later verifies old
+passwords instead of locking everyone out. The lockout — five wrong guesses, one
+minute, cleared by a correct password — protects against a person at this
+keyboard and **nothing else**: somebody holding `jarvis.db` does not have to
+guess. The module says that rather than implying the hash is a safe.
+
+### Three bugs the looking found, and one the code could not show
+
+*The auth screen would not go away.* `mark_prompted` ran in the command, after
+`sign_up` had already built the report it returns — so a call that had just
+signed somebody in handed the surface `prompted: false`, and the screen that
+decides what to draw from exactly that pair went on drawing itself over a
+perfectly created account. Nothing errored. Found by pressing Enter, seeing
+nothing happen, and being told on the second attempt that the address was taken.
+It is marked in `seat` now, where being signed in *is* the offer being answered.
+
+*Two eyes in the password field.* WebView2 draws its own reveal control inside a
+password input, so the card had the product's toggle and Chromium's side by side
+in two different icons. It only appears once a password has actually been typed,
+which is why reading the markup would never have shown it.
+
+*Seventy-two pixels of empty card.* A `grid-template-rows: 0fr → 1fr` disclosure
+is the right way to animate a height nobody can measure in advance, and the
+famous half of the recipe — `min-height: 0` on the inner — is not the whole
+recipe. A grid track's automatic minimum is the item's **margin box**, and
+`min-height` only zeroes the content box, so every pixel of padding or margin on
+the clipped element survives the collapse. Three closed disclosures were
+reserving 32px between them for messages that were not on screen. Settled by
+rendering the exact markup headlessly and reading `getBoundingClientRect` back —
+meter 8, caps 8, error 16, exactly their padding — then moving every space onto a
+**child** of the clipped box, where `overflow: hidden` contains it. Re-measured
+at 0/0/0 closed and 20/31.5/63.3 open.
+
+The fourth is the one worth keeping: **none of these were visible in the code.**
+Each file reads correctly on its own, and the whole thing compiled and passed
+every test through all four.

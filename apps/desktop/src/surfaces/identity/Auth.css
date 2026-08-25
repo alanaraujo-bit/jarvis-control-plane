@@ -1,0 +1,888 @@
+/* ==========================================================================
+   Auth (M20) — sign in, or make an account.
+
+   Three rules this file is written under, all of them from §6/§10:
+
+   1. **Amber reports state; it never decorates.** The ambient light is
+      neutral, and the only amber on screen is the brand mark and the single
+      primary action. A login gradient in the colour that means "an agent is
+      working" would make the accent stop meaning anything.
+   2. **Decelerate-only, no overshoot.** Motion states position and causality.
+      Nothing here bounces, and nothing loops fast enough to be noticed while
+      somebody is reading.
+   3. **Every animation is opt-in.** All of it is authored inside
+      `prefers-reduced-motion: no-preference`, so the reduced-motion pass is
+      this screen with nothing moving — not a second layout that has to be
+      maintained.
+   ========================================================================== */
+
+.auth {
+  position: relative;
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-base);
+  /* Isolated so the washes below composite against this screen's own
+     background rather than whatever the shell paints behind it. */
+  isolation: isolate;
+}
+
+/* ---- Ambient light ------------------------------------------------------- */
+
+.auth__ambient {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.auth__wash {
+  position: absolute;
+  border-radius: 50%;
+  /* Neutral, and faint. Sampling the background anywhere across this screen
+     has to come back as the base colour (HANDOFF item 42 — the pixel is the
+     oracle, not the eye). */
+  filter: blur(90px);
+  opacity: 0.5;
+  will-change: transform;
+}
+
+.auth__wash--a {
+  width: 46vw;
+  height: 46vw;
+  top: -14vw;
+  left: -10vw;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.055), transparent 68%);
+}
+
+.auth__wash--b {
+  width: 38vw;
+  height: 38vw;
+  bottom: -12vw;
+  left: 22vw;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.04), transparent 70%);
+}
+
+/* The one wash that carries the brand hue, kept under 4% alpha and behind a
+   90px blur so it reads as warmth in the corner rather than as colour. */
+.auth__wash--c {
+  width: 34vw;
+  height: 34vw;
+  top: 18vh;
+  right: -8vw;
+  background: radial-gradient(circle, rgba(217, 165, 92, 0.05), transparent 70%);
+}
+
+:root[data-theme="light"] .auth__wash--a,
+:root[data-theme="light"] .auth__wash--b {
+  background: radial-gradient(circle, rgba(16, 16, 12, 0.05), transparent 68%);
+}
+
+:root[data-theme="light"] .auth__wash--c {
+  background: radial-gradient(circle, rgba(154, 106, 30, 0.06), transparent 70%);
+}
+
+/* The grid is what makes the drift legible. Without something static to move
+   against, a blurred wash at 5% alpha is indistinguishable from a flat
+   background — which is how "subtle" motion usually ends up being no motion. */
+.auth__grid {
+  position: absolute;
+  inset: -1px;
+  background-image:
+    linear-gradient(to right, var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+  background-size: 56px 56px;
+  /* Faded out at the edges so the grid never meets a window border, which
+     would read as a table rather than as texture. */
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 20%, transparent 78%);
+  opacity: 0.5;
+}
+
+/* ---- Layout -------------------------------------------------------------- */
+
+.auth__layout {
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-11) var(--space-12);
+  /* Narrow enough that the two columns read as one composition. At 1180px on
+     a 1440px window the stage floated in the middle of an empty half with
+     250px of nothing between it and the card — two things on a screen rather
+     than a screen. Both columns are pulled toward the centre line instead. */
+  max-width: 1020px;
+  margin: 0 auto;
+}
+
+/* One column, form first. The stage explains the offer; somebody who has
+   already accepted it should not have to scroll past the pitch to sign in. */
+@media (max-width: 900px) {
+  .auth__layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-10);
+    padding: var(--space-10) var(--space-8);
+    max-width: 460px;
+  }
+
+  .auth__stage {
+    order: 2;
+  }
+}
+
+/* ---- The stage ----------------------------------------------------------- */
+
+.auth__stage {
+  max-width: 430px;
+  justify-self: end;
+}
+
+@media (max-width: 900px) {
+  .auth__stage {
+    justify-self: stretch;
+  }
+}
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.auth__wordmark {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--text-primary);
+}
+
+.auth__tagline {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: var(--leading-normal);
+}
+
+.auth__carries-title {
+  margin-top: var(--space-11);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.auth__carries {
+  margin-top: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.auth__carry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  /* A hairline that only shows where the row sits over the grid, which is what
+     makes the list feel laid *on* the surface rather than printed into it. */
+  border: 1px solid transparent;
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    background-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out);
+}
+
+.auth__carry:hover {
+  border-color: var(--border-subtle);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.auth__carry-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+}
+
+.auth__local {
+  margin-top: var(--space-9);
+  /* `margin-left`, not padding: `max-width` measures the border box, so
+     padding would eat the measure and wrap this after thirty characters
+     (HANDOFF item 41). */
+  max-width: 46ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+  border-left: 1px solid var(--border-subtle);
+  padding-left: var(--space-5);
+}
+
+/* ---- The card ------------------------------------------------------------ */
+
+.auth__card {
+  width: 100%;
+  max-width: 400px;
+  /* Both columns hug the centre line: the stage is right-aligned in its own and
+     the card left-aligned in its. Aligning both outward left a corridor of
+     nothing down the middle of the screen. */
+  justify-self: start;
+  padding: var(--space-9);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 900px) {
+  .auth__card {
+    justify-self: stretch;
+    max-width: none;
+    order: 1;
+  }
+}
+
+.auth__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--text-primary);
+}
+
+.auth__subtitle {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-tertiary);
+}
+
+/* ---- Google -------------------------------------------------------------- */
+
+.auth__google-slot {
+  margin-top: var(--space-8);
+}
+
+.auth__google {
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-raised);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.auth__google:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-overlay);
+}
+
+/* Unavailable, and saying so. Not `disabled`: the button still answers a
+   click, because "why is this greyed out" is the question it exists to
+   answer (§81). It carries the muting on its own contents instead. */
+.auth__google[aria-disabled="true"] {
+  color: var(--text-secondary);
+}
+
+.auth__google[aria-disabled="true"] svg {
+  opacity: 0.65;
+}
+
+.auth__soon {
+  margin-left: auto;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ---- A row of things that open: the explanation, the name field, the meter,
+   the Caps Lock warning, the error. All the same trick.
+
+   `grid-template-rows: 0fr → 1fr` animates to a height nobody had to measure.
+   The alternative — animating `height` — needs JavaScript to read a layout
+   that does not exist yet, and `max-height` guesses a number that is either
+   too small (clipping) or too large (a visibly slow start). --------------- */
+
+.auth__why,
+.auth__collapse,
+.auth__meter,
+.auth__caps,
+.auth__error {
+  display: grid;
+  grid-template-rows: 0fr;
+  /* Both halves are needed and only one of them is the famous one.
+   *
+   * `min-height: 0` on the *inner* is what lets a `0fr` track actually reach
+   * zero — an `fr` track is `minmax(auto, …)`, and the auto minimum keeps it
+   * open otherwise. That is on the inner, below.
+   *
+   * This one is here because these containers are **flex items** of
+   * `.auth__form`, and a flex item's `min-height` defaults to `auto`: its own
+   * content-based minimum. So the track collapsed to zero and the flex item
+   * kept the height of the text inside it anyway. The screen showed 72px of
+   * empty space between the password field and the button, from an error
+   * message that was not being displayed — found by looking at a screenshot
+   * and measuring it, not by reading the CSS, which is correct in isolation
+   * either way. */
+  min-height: 0;
+  transition: grid-template-rows var(--duration-base) var(--ease-out);
+}
+
+/* The clipped box.
+ *
+ * **It must carry no padding, no border and no margin.** That is the whole
+ * rule, and getting it wrong is invisible in the code: a grid track's automatic
+ * minimum is the item's *margin box*, and `min-height: 0` only zeroes the
+ * content box — so every pixel of padding or margin on one of these survives
+ * the collapse and reserves space for something that is not on screen.
+ *
+ * Measured, not reasoned about, after the second attempt at this was still
+ * wrong: rendering this exact markup headlessly and reading
+ * `getBoundingClientRect` back gave meter 8px, caps 8px and error 16px while
+ * closed — 32px of empty card, which is precisely their padding. Spacing
+ * therefore lives on a **child** of the clipped box, where `overflow: hidden`
+ * makes a block formatting context that contains it. */
+.auth__why-inner,
+.auth__collapse-inner,
+.auth__meter-inner,
+.auth__caps-inner,
+.auth__error-inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.auth__why[data-open],
+.auth__collapse[data-open],
+.auth__meter[data-open],
+.auth__caps[data-open],
+.auth__error[data-open] {
+  grid-template-rows: 1fr;
+}
+
+.auth__why[data-open] .auth__why-inner,
+.auth__collapse[data-open] .auth__collapse-inner,
+.auth__meter[data-open] .auth__meter-inner,
+.auth__caps[data-open] .auth__caps-inner,
+.auth__error[data-open] .auth__error-inner {
+  opacity: 1;
+  /* Delayed so the text fades in as the space finishes opening, rather than
+     appearing squashed inside a box that is still growing. */
+  transition-delay: var(--duration-fast);
+}
+
+.auth__why-body {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-tertiary);
+}
+
+/* ---- Divider ------------------------------------------------------------- */
+
+.auth__or {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin: var(--space-7) 0;
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+}
+
+.auth__or::before,
+.auth__or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+/* ---- Known accounts ------------------------------------------------------ */
+
+.auth__known {
+  margin-bottom: var(--space-7);
+}
+
+.auth__known-title {
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.auth__known-list {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.auth__known-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  text-align: left;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.auth__known-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+}
+
+.auth__known-item[data-active] {
+  background: var(--bg-selected);
+  border-color: var(--accent-border);
+}
+
+.auth__avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-secondary);
+}
+
+.auth__known-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.auth__known-name {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth__known-email {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* ---- Form ---------------------------------------------------------------- */
+
+/* No `gap`, deliberately.
+ *
+ * Four of this form's children are disclosures that are usually closed — the
+ * name field, the strength meter, the Caps Lock warning, the error. A grid or
+ * flex `gap` applies between children whether or not they have any height, so
+ * the closed ones were paying rent: 48px of empty rhythm between the password
+ * field and the button, which read as an unfinished screen.
+ *
+ * Every space here is therefore *inside* something, where the disclosure's own
+ * `overflow: hidden` collapses it along with the content. */
+.auth__form {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth__field + .auth__field {
+  margin-top: var(--space-6);
+}
+
+.auth__collapse-inner > .auth__field {
+  margin-bottom: var(--space-6);
+}
+
+.auth__submit {
+  margin-top: var(--space-7);
+}
+
+.auth__field {
+  display: block;
+}
+
+.auth__label {
+  display: block;
+  margin-bottom: var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.auth__input {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-family: var(--font-ui);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.auth__input::placeholder {
+  color: var(--text-disabled);
+}
+
+.auth__input:hover:not(:focus) {
+  border-color: var(--border-strong);
+}
+
+.auth__input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  background: var(--bg-surface);
+  /* A ring rather than a glow: one pixel of accent, so focus is unmistakable
+     without the field looking like it is reporting a state. */
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+/* The name field is disabled rather than unmounted while signing in, so the
+   collapse has something to animate. It must not look like a field somebody
+   is being refused. */
+.auth__collapse:not([data-open]) .auth__input {
+  visibility: hidden;
+}
+
+.auth__password {
+  position: relative;
+}
+
+/* WebView2 draws its own reveal control inside a password field, so the card
+   shipped two eyes side by side doing the same thing in two different icons.
+   It only appears once a password has actually been typed, which is why this
+   was found by driving the real app rather than by reading the markup.
+   `::-ms-clear` is the same thing on an ordinary text input. */
+.auth__input::-ms-reveal,
+.auth__input::-ms-clear {
+  display: none;
+}
+
+.auth__password .auth__input {
+  padding-right: 38px;
+}
+
+.auth__reveal {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  bottom: 1px;
+  width: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.auth__reveal:hover {
+  color: var(--text-primary);
+}
+
+.auth__suggest {
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  text-align: left;
+}
+
+.auth__suggest:hover {
+  text-decoration: underline;
+}
+
+/* ---- Strength ------------------------------------------------------------ */
+
+.auth__meter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+
+.auth__bars {
+  display: flex;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.auth__bars > span {
+  height: 3px;
+  flex: 1;
+  border-radius: var(--radius-full);
+  background: var(--border-subtle);
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+  transform-origin: left;
+}
+
+/* Neutral until it is good, and only then a state colour — the same ladder the
+   rest of the product uses for confidence. Weak is not an error: it is a
+   password somebody is still typing. */
+.auth__bars[data-score="1"] > span[data-lit] { background: var(--state-danger); }
+.auth__bars[data-score="2"] > span[data-lit] { background: var(--state-warning); }
+.auth__bars[data-score="3"] > span[data-lit] { background: var(--state-success); }
+.auth__bars[data-score="4"] > span[data-lit] { background: var(--state-success); }
+
+.auth__meter-label {
+  min-width: 7ch;
+  text-align: right;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* ---- Caps Lock and errors ------------------------------------------------ */
+
+.auth__caps-body {
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--state-warning);
+}
+
+/* The spacing is padding on the clipped box, and the colour is on a child.
+ *
+ * It was a `margin-top` on this element, which is the obvious way to write it
+ * and is wrong here: `overflow: hidden` clips an element's *content*, never its
+ * own margin, and a grid track's automatic minimum counts the item's margin
+ * box. So a closed error still reserved its space — 50px of empty card between
+ * the password field and the button, with nothing rendered in it. Measured on a
+ * screenshot with GetPixel (input ended at y=547, the button began at y=617,
+ * and 20px of that was the button's own margin); nothing in the CSS reads as
+ * wrong, which is why it had to be measured. */
+.auth__error-body {
+  margin-top: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--state-danger-bg);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--state-danger);
+}
+
+/* ---- Submit -------------------------------------------------------------- */
+
+.auth__submit {
+  position: relative;
+  overflow: hidden;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.auth__submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.auth__submit:active:not(:disabled) {
+  background: var(--accent-active);
+}
+
+.auth__submit:disabled {
+  opacity: 0.55;
+}
+
+/* The arrow leans forward on hover. One property, 4px, and it is the only
+   thing on the screen that moves in response to a pointer — which is what
+   makes it read as "this is the way on" rather than as decoration. */
+.auth__submit svg {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.auth__submit:hover:not(:disabled) svg {
+  transform: translateX(3px);
+}
+
+/* ---- Footer -------------------------------------------------------------- */
+
+.auth__switch {
+  margin-top: var(--space-7);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.auth__link {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+}
+
+.auth__link:hover {
+  color: var(--accent);
+}
+
+.auth__skip {
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+/* Deliberately legible rather than hidden away. This is a real destination —
+   see the note at the top of `Auth.tsx`. */
+.auth__skip-action {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.auth__skip-action:hover {
+  color: var(--text-primary);
+}
+
+.auth__skip-hint {
+  margin: var(--space-3) auto 0;
+  max-width: 40ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  color: var(--text-disabled);
+}
+
+.auth__back {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-6);
+  left: var(--space-7);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.auth__back:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* ==========================================================================
+   Motion. All of it lives here, and nowhere else in this file — so the
+   reduced-motion pass is this screen with everything still, at exactly the
+   same layout.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Slow enough that nothing appears to move while somebody is reading, and
+     large enough that the light is somewhere else by the time they look up.
+     Different periods so the three never re-synchronise into a pulse. */
+  @keyframes auth-drift-a {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    50%  { transform: translate3d(6vw, 5vh, 0) scale(1.12); }
+    100% { transform: translate3d(0, 0, 0) scale(1); }
+  }
+
+  @keyframes auth-drift-b {
+    0%   { transform: translate3d(0, 0, 0) scale(1.06); }
+    50%  { transform: translate3d(-5vw, -6vh, 0) scale(1); }
+    100% { transform: translate3d(0, 0, 0) scale(1.06); }
+  }
+
+  @keyframes auth-drift-c {
+    0%   { transform: translate3d(0, 0, 0) scale(1); }
+    50%  { transform: translate3d(-4vw, 7vh, 0) scale(1.1); }
+    100% { transform: translate3d(0, 0, 0) scale(1); }
+  }
+
+  .auth__wash--a { animation: auth-drift-a 38s ease-in-out infinite; }
+  .auth__wash--b { animation: auth-drift-b 47s ease-in-out infinite; }
+  .auth__wash--c { animation: auth-drift-c 43s ease-in-out infinite; }
+
+  /* Entrance. Decelerate-only, no overshoot: the card arrives and stops. */
+  @keyframes auth-rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @keyframes auth-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  .auth__card {
+    animation: auth-rise var(--duration-slow) var(--ease-out) both;
+  }
+
+  .auth__brand,
+  .auth__carries-title,
+  .auth__local {
+    animation: auth-rise var(--duration-slow) var(--ease-out) both;
+  }
+
+  .auth__carries-title { animation-delay: 60ms; }
+  .auth__local { animation-delay: 220ms; }
+
+  /* One rule for four rows: the stagger is a variable, not a keyframe each. */
+  .auth__carry {
+    animation: auth-rise var(--duration-slow) var(--ease-out) both;
+    animation-delay: calc(90ms + var(--index) * 45ms);
+  }
+
+  /* The heading is keyed on the mode in the JSX, so switching genuinely
+     remounts it and this replays — a crossfade, rather than text changing
+     underneath a static element. */
+  .auth__head {
+    animation: auth-fade var(--duration-base) var(--ease-out) both;
+  }
+
+  /* The strength bars grow from the left as they light, which reads as
+     "further along" rather than as four independent lamps. */
+  .auth__bars > span:not([data-lit]) {
+    transform: scaleX(1);
+  }
+}

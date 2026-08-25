@@ -35,6 +35,13 @@
 /* ---- Command palette trigger --------------------------------------------
    Reads as a search field, behaves as a button. Centred in the titlebar the
    way a desktop app puts its universal input — not floated like a web navbar. */
+/* Holds the palette trigger's place while it is absent (over the auth
+   screen), so the caption buttons do not slide across as the screen changes. */
+.titlebar__palette-spacer {
+  flex: 1;
+  max-width: 460px;
+}
+
 .titlebar__palette {
   display: flex;
   align-items: center;

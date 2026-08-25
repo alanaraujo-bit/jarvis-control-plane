@@ -15,6 +15,7 @@ mod files;
 mod git;
 mod guardrail;
 mod history;
+mod identity;
 mod mission;
 mod notebook;
 mod notify;
@@ -273,6 +274,15 @@ pub fn run() {
             brain::brain_set_note_pinned,
             brain::brain_delete_note,
             brain::brain_promote_note,
+            identity::commands::identity_report,
+            identity::commands::identity_sign_up,
+            identity::commands::identity_sign_in,
+            identity::commands::identity_sign_out,
+            identity::commands::identity_skip,
+            identity::commands::identity_remember,
+            identity::commands::identity_update_profile,
+            identity::commands::identity_change_password,
+            identity::commands::identity_delete,
             notebook::commands::notebook_report,
             notebook::commands::notebook_create,
             notebook::commands::notebook_rename,

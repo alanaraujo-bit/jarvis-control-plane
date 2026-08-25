@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { remember } from "./identityMemory";
 import {
   resolveLocale,
   translate,
@@ -21,7 +22,11 @@ function initialLocale(): Locale {
 
 interface I18nContextValue {
   locale: Locale;
-  setLocale: (locale: Locale) => void;
+  /**
+   * `remembered` is false when the change is the product applying what an
+   * account already carries rather than the person choosing (M20 §5).
+   */
+  setLocale: (locale: Locale, remembered?: boolean) => void;
   t: (key: MessageKey, values?: MessageValues) => string;
 }
 
@@ -30,7 +35,7 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
 
-  const setLocale = useCallback((next: Locale) => {
+  const setLocale = useCallback((next: Locale, remembered = true) => {
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
@@ -38,6 +43,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
     document.documentElement.lang = next;
     setLocaleState(next);
+    if (remembered) remember("appearance.locale", next);
   }, []);
 
   const value = useMemo<I18nContextValue>(

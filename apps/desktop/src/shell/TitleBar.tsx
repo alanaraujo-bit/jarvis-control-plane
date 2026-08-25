@@ -18,7 +18,10 @@ export function TitleBar({
   onOpenNotebook,
   notifications,
 }: {
-  onOpenPalette: () => void;
+  /** Absent while the auth screen is up: the palette is gated there, and a
+      control that reads as a search field and answers nothing is exactly the
+      "stubbed to look finished" this product does not do (§81). */
+  onOpenPalette?: () => void;
   /** The Notebook (M19) — a callback rather than the component, for the same
       reason the bell is passed in: the titlebar draws window chrome and should
       not have to know what a notebook is. */
@@ -65,11 +68,17 @@ export function TitleBar({
       {/* The palette trigger reads as a search field but is a button: it opens
           the palette rather than accepting inline text, so focus never gets
           trapped in the chrome. */}
-      <button type="button" className="titlebar__palette" onClick={onOpenPalette}>
-        <Search size={13} strokeWidth={2} />
-        <span className="titlebar__palette-label">{t("window.search")}</span>
-        <kbd className="titlebar__kbd">Ctrl K</kbd>
-      </button>
+      {onOpenPalette ? (
+        <button type="button" className="titlebar__palette" onClick={onOpenPalette}>
+          <Search size={13} strokeWidth={2} />
+          <span className="titlebar__palette-label">{t("window.search")}</span>
+          <kbd className="titlebar__kbd">Ctrl K</kbd>
+        </button>
+      ) : (
+        // The strip still has to hold its shape, or the caption buttons slide
+        // left and the window chrome visibly reflows on the way in and out.
+        <span className="titlebar__palette-spacer" data-tauri-drag-region />
+      )}
 
       <div className="titlebar__controls">
         {/* Beside the bell, because both are the same kind of thing: a place

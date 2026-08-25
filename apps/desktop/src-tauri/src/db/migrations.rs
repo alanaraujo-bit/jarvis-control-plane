@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 16;
+pub const SCHEMA_VERSION: u32 = 17;
 
 struct Migration {
     version: u32,
@@ -774,6 +774,66 @@ const MIGRATIONS: &[Migration] = &[Migration {
     CREATE INDEX idx_notebook_notes
         ON notebook_notes (notebook_id, pinned DESC, updated_at DESC);
 "#,
+    },
+    Migration {
+        version: 17,
+        sql: r#"
+    -- ---- Identity (M20) ------------------------------------------------------
+    --
+    -- A *person's* account. Not to be confused with `accounts` (M13/M16), which
+    -- is a provider subscription and whose whole identity is a configuration
+    -- directory on disk. Two different things, two different names -- see
+    -- docs/M20-IDENTITY.md section 3.
+    --
+    -- Nothing in the core reads this to decide whether work may happen. The
+    -- product is local-first, and half of it runs with nobody present:
+    -- unattended runs, the search backfill, the notification feed. An account is
+    -- additive -- it names the person, holds their preferences, and is the seat
+    -- a future cloud sync would attach to.
+    CREATE TABLE identity_accounts (
+        id            TEXT PRIMARY KEY,
+        -- Stored trimmed and lower-cased, so UNIQUE is the case-insensitive
+        -- uniqueness people actually expect from an e-mail address. Normalising
+        -- at the write beats a COLLATE NOCASE index, because then every reader
+        -- sees the same string rather than whichever casing was typed first.
+        email         TEXT NOT NULL UNIQUE,
+        display_name  TEXT NOT NULL,
+        -- An Argon2id PHC string: algorithm, parameters and salt travel with the
+        -- hash, so changing the cost later verifies old passwords instead of
+        -- locking everyone out. NULL means no local password -- reserved for an
+        -- account linked to an external provider. Deliberately not naming a
+        -- blocker number here: renumbering one would mean editing this
+        -- migration, and a migration is the one file that must never change.
+        password_hash TEXT,
+        -- 'local' today; 'google' when Google sign-in is available.
+        auth_provider TEXT NOT NULL DEFAULT 'local',
+        -- Guessing at the keyboard is the realistic threat to a local account:
+        -- somebody holding the database file does not need to guess at all. So
+        -- these two are about the person standing there, and the lockout is
+        -- deliberately short rather than punitive.
+        failed_attempts INTEGER NOT NULL DEFAULT 0,
+        locked_until  INTEGER,
+        created_at    INTEGER NOT NULL,
+        updated_at    INTEGER NOT NULL,
+        last_signed_in_at INTEGER
+    );
+
+    -- Preferences that belong to a person rather than to this machine.
+    --
+    -- `settings` deliberately did **not** grow an account column. Its contract is
+    -- "unset has one spelling: no row", and mission::store, onboarding and
+    -- settings::get/set all read it unscoped -- a scope column would have
+    -- silently changed what every existing reader sees. `settings` stays
+    -- machine-scoped; this is the person's copy, and identity::prefs mirrors
+    -- between them on sign-in. Which preference is which is decided per key, in
+    -- identity::prefs::CARRIED.
+    CREATE TABLE identity_settings (
+        account_id TEXT NOT NULL REFERENCES identity_accounts (id) ON DELETE CASCADE,
+        key        TEXT NOT NULL,
+        value      TEXT NOT NULL,
+        PRIMARY KEY (account_id, key)
+    ) WITHOUT ROWID;
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -888,6 +948,14 @@ mod tests {
             (14, 0x1dd0_9220_2d82_afda),
             (15, 0x2668_ef6f_85b5_38f8),
             (16, 0x709a_d823_8bfb_79ff),
+            // Re-recorded once, deliberately, while M20 was still unreleased.
+            // The two edits were inside SQL comments — the applied schema is
+            // byte-identical either way, and the only database that had run
+            // this migration was this development machine. That is the *only*
+            // circumstance in which a number here may be changed rather than a
+            // new migration added; the comments now name no blocker number, so
+            // a future renumbering cannot make this happen again.
+            (17, 0x3905_0f33_a709_3a14),
         ];
 
         for migration in MIGRATIONS {

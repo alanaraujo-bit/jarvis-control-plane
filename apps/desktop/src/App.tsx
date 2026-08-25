@@ -25,6 +25,8 @@ import { Analytics } from "./surfaces/analytics/Analytics";
 import { Accounts } from "./surfaces/accounts/Accounts";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
 import { Missions } from "./surfaces/missions/Missions";
+import { Auth } from "./surfaces/identity/Auth";
+import { registerLocaleSetter, useIdentity } from "./surfaces/identity/useIdentity";
 import { Onboarding } from "./surfaces/onboarding/Onboarding";
 import { useOnboarding } from "./surfaces/onboarding/useOnboarding";
 import { Projects } from "./surfaces/projects/Projects";
@@ -69,6 +71,23 @@ export function App() {
   const openTerminal = useTerminals((state) => state.openTerminal);
   const onboardingSeen = useOnboarding((state) => state.seen);
   const loadOnboarding = useOnboarding((state) => state.load);
+  const identity = useIdentity((state) => state.report);
+  const loadIdentity = useIdentity((state) => state.load);
+  const authOpen = useIdentity((state) => state.authOpen);
+
+  /**
+   * Whether the auth screen is what is on screen (M20).
+   *
+   * Two ways in, and they are different questions. `prompted === false` is the
+   * product offering an account **once**, on a machine that has never been
+   * asked; `authOpen` is somebody deliberately going there from Settings, which
+   * has to keep working forever after that one offer is spent.
+   *
+   * It is not a gate either way: the screen's own "Continue without an account"
+   * is a real destination, and nothing in the core asks who is signed in before
+   * deciding whether work may happen. See `identity`'s module note.
+   */
+  const authShowing = identity !== null && (identity.prompted === false || authOpen);
 
   const [surface, setSurface] = useState<SurfaceId>("mission-control");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -238,6 +257,20 @@ export function App() {
     [openProject],
   );
 
+  // Who is signed in, and whether an account has ever been offered (M20).
+  // Fetched up front for the same reason onboarding is: the reveal below waits
+  // on it, so the window never shows the shell for a frame and then swaps to
+  // the auth screen.
+  useEffect(() => {
+    void loadIdentity();
+  }, [loadIdentity]);
+
+  // The locale lives in React context and `useIdentity` is not a component, so
+  // signing in cannot reach the setter by itself. Registered once, here.
+  useEffect(() => {
+    registerLocaleSetter(setLocale);
+  }, [setLocale]);
+
   // Whether this machine has ever gotten past the welcome screen (§13).
   // Fetched once, up front, so the reveal below never shows the normal shell
   // for one frame before swapping to onboarding.
@@ -253,7 +286,10 @@ export function App() {
   // a real boolean, even on failure (see `useOnboarding`'s own comment) —
   // this must never be the reason the window stays hidden (item 31, HANDOFF).
   useEffect(() => {
-    if (onboardingSeen === null) return;
+    // `identity` is the same kind of gate as `onboardingSeen`, and `load()`
+    // always resolves it — even on failure — so this cannot be the reason the
+    // window stays hidden either.
+    if (onboardingSeen === null || identity === null) return;
     let cancelled = false;
     const reveal = async () => {
       if (!("__TAURI_INTERNALS__" in window)) return;
@@ -265,7 +301,7 @@ export function App() {
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [onboardingSeen]);
+  }, [onboardingSeen, identity]);
 
   // Keep the presentation channels current without rebuilding the listener.
   useEffect(() => {
@@ -354,6 +390,12 @@ export function App() {
    */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Nothing the shell owns opens over the auth screen. These are capture
+      // phase and `preventDefault` — they answer before any widget does — so
+      // without this guard Ctrl+K would open the command palette on top of a
+      // login form, over a product the person has not reached yet. The same
+      // reasoning gates the bell and the Notebook below.
+      if (authShowing) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         event.stopPropagation();
@@ -385,7 +427,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [togglePalette]);
+  }, [togglePalette, authShowing]);
 
   const commands = useMemo<Command[]>(() => {
     const navigation: Command[] = RAIL_ITEMS.filter((item) =>
@@ -515,13 +557,15 @@ export function App() {
   return (
     <div className="app">
       <TitleBar
-        onOpenPalette={togglePalette}
+        onOpenPalette={authShowing ? undefined : togglePalette}
         // Gated the same way the bell is: onboarding is one screen with one
         // question on it, and a control that opens a library of prompts on a
         // first-run install is a door to somewhere that does not exist yet.
-        onOpenNotebook={onboardingSeen !== false ? () => setNotebookOpen(true) : undefined}
+        onOpenNotebook={
+          onboardingSeen !== false && !authShowing ? () => setNotebookOpen(true) : undefined
+        }
         notifications={
-          onboardingSeen !== false ? (
+          onboardingSeen !== false && !authShowing ? (
             <NotificationBell
               count={outstanding}
               open={notificationsOpen}
@@ -544,12 +588,19 @@ export function App() {
         // One gate rather than two: this covers the shortcut as well as the
         // titlebar button, so neither can open a library of prompts over a
         // first-run screen that exists to ask one question.
-        open={notebookOpen && onboardingSeen !== false}
+        open={notebookOpen && onboardingSeen !== false && !authShowing}
         onClose={() => setNotebookOpen(false)}
         target={notebookTarget}
       />
 
-      {onboardingSeen === false ? (
+      {/* Ordered as somebody meets the product: who you are, then what is on
+          this machine, then the product itself. Identity comes first because
+          the welcome screen's environment scan is about the machine, and being
+          asked who you are *after* being shown a machine report reads as an
+          interruption rather than as an opening. */}
+      {authShowing ? (
+        <Auth />
+      ) : onboardingSeen === false ? (
         <Onboarding onOpenProject={(project) => openProjectDirect(project)} />
       ) : (
         <div className="app__body">
@@ -666,12 +717,22 @@ export function App() {
         </div>
       )}
 
-      {onboardingSeen !== false && <StatusBar onOpenAccounts={() => goTo("accounts")} />}
+      {onboardingSeen !== false && !authShowing && (
+        <StatusBar onOpenAccounts={() => goTo("accounts")} />
+      )}
 
       <Toasts items={toasts} onOpen={openNotification} onDismiss={dismiss} />
 
-      <CommandPalette open={paletteOpen} commands={commands} onClose={() => setPaletteOpen(false)} />
-      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchResult} />
+      <CommandPalette
+        open={paletteOpen && !authShowing}
+        commands={commands}
+        onClose={() => setPaletteOpen(false)}
+      />
+      <GlobalSearch
+        open={searchOpen && !authShowing}
+        onClose={() => setSearchOpen(false)}
+        onSelect={handleSearchResult}
+      />
     </div>
   );
 }

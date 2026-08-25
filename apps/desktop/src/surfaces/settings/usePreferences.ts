@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { remember } from "../../app/identityMemory";
 import { invoke, isTauri } from "../../app/platform";
 
 /** Every preference §64 exposes, as the product will actually use them. */
@@ -76,6 +77,24 @@ function publish(next: Preferences) {
 
 let loaded = false;
 
+/**
+ * Re-read the preferences the core owns.
+ *
+ * Signing in writes an account's values straight into the settings table, so
+ * the copy this module is holding is one sign-in out of date. Everything reads
+ * from the shared cache, so re-reading once and publishing is the whole fix —
+ * and it is why applying preferences in place (§64) keeps working: a running
+ * terminal picks up the new type size without being rebuilt.
+ */
+export async function refreshPreferences(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    publish(await invoke<Preferences>("settings_preferences"));
+  } catch {
+    // The cache still holds what the product is actually using.
+  }
+}
+
 export function usePreferences() {
   const [prefs, setPrefs] = useState<Preferences>(cache);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +123,9 @@ export function usePreferences() {
   const set = useCallback(async (key: string, value: number | null) => {
     try {
       publish(await invoke<Preferences>("settings_set_preference", { key, value }));
+      // `null` restores the default, which is a real choice — but an account
+      // stores values, not the absence of one, so there is nothing to carry.
+      if (value !== null) remember(key, value);
       setError(null);
     } catch (cause) {
       setError(String(cause));
@@ -114,6 +136,7 @@ export function usePreferences() {
   const setSwitch = useCallback(async (key: string, value: boolean) => {
     try {
       publish(await invoke<Preferences>("settings_set_notification", { key, value }));
+      remember(key, value);
       setError(null);
     } catch (cause) {
       setError(String(cause));

@@ -12,6 +12,37 @@ Values are read from the source rather than from a screenshot.</p>
   unset rather than failing the screen.</p>
 </div>
 
+<h2>Account</h2>
+
+<p>An account keeps <em>your</em> preferences, so they follow you rather than belonging to a
+machine. It is entirely optional: J.A.R.V.I.S. is local-first, nothing in the core asks who is
+signed in before deciding whether work may happen, and an unattended run at 3am behaves exactly
+the same whether anybody is signed in or not.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Setting</th><th>Values</th><th>Default</th><th>Applies</th></tr></thead>
+  <tbody>
+    <tr><td>Signed in as</td><td>An e-mail address and a name</td><td>Nobody</td><td>Signing in applies everything the account carries; signing out puts nothing back, so the interface never changes appearance while you are looking at it.</td></tr>
+    <tr><td>Password</td><td>At least 8 characters, no composition rules</td><td>—</td><td>Argon2id, stored as a PHC string. Five wrong guesses rest the account for one minute; a correct password clears the count.</td></tr>
+    <tr><td>Continue with Google</td><td>—</td><td>Unavailable</td><td>On the screen and honestly disabled until J.A.R.V.I.S. is registered with Google. A local account works today.</td></tr>
+    <tr><td>Delete this account</td><td>—</td><td>—</td><td>Takes the account and its preferences. Projects, sessions and history are untouched — they belong to the machine, not to an account.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">What an account carries, and what it does not</span>
+  <p><strong>Carried:</strong> theme, language, terminal type size and scrollback, how far an agent
+  may go on its own, and the three notification switches.</p>
+  <p><strong>Not carried:</strong> whether this machine has seen the welcome screen, the speech
+  model on disk, the environment scan, guardrail policy per project, and the phone pairing. Each of
+  those is a fact about a machine or a folder, and carrying one to a second machine would be wrong
+  rather than merely unhelpful.</p>
+  <p>Signing up <strong>inherits</strong> whatever this machine is already set to, so making an
+  account never resets an app you were already using.</p>
+</div>
+
 <h2>Appearance</h2>
 
 <div class="tablewrap">

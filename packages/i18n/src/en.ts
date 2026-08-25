@@ -956,6 +956,93 @@ export const en = {
   "history.empty.noMatch.title": "Nothing matched",
   "history.empty.noMatch.body": "This searches session names and everything said inside them. Try fewer words, or widen the filters.",
 
+  // ---- Identity (M20) — the account that belongs to a person ---------------
+  // Not `accounts.*`, which is a provider subscription (M13/M16).
+  "identity.signIn.title": "Welcome back",
+  "identity.signIn.subtitle": "Sign in and your setup comes with you.",
+  "identity.signUp.title": "Make yourself at home",
+  "identity.signUp.subtitle": "An account keeps your preferences — on this machine and the next one.",
+
+  "identity.field.name": "Name",
+  "identity.field.namePlaceholder": "How should we call you?",
+  "identity.field.email": "E-mail",
+  "identity.field.emailPlaceholder": "you@example.com",
+  "identity.field.password": "Password",
+  "identity.field.passwordPlaceholder": "At least {min} characters",
+
+  "identity.or": "or",
+
+  "identity.action.signIn": "Sign in",
+  "identity.action.signUp": "Create account",
+  "identity.action.google": "Continue with Google",
+  "identity.action.skip": "Continue without an account",
+  "identity.action.signOut": "Sign out",
+  "identity.action.working": "Just a moment…",
+
+  "identity.toggle.noAccount": "No account yet?",
+  "identity.toggle.hasAccount": "Already have one?",
+
+  "identity.password.show": "Show password",
+  "identity.password.hide": "Hide password",
+  "identity.password.capsLock": "Caps Lock is on",
+  "identity.password.strength": "Strength",
+  "identity.password.strength.weak": "Weak",
+  "identity.password.strength.fair": "Fair",
+  "identity.password.strength.good": "Good",
+  "identity.password.strength.strong": "Strong",
+  "identity.email.didYouMean": "Did you mean {suggestion}?",
+
+  // The button is here because it is going to work. It is disabled because it
+  // does not work yet, and it says which — see B6 and §81.
+  "identity.google.soon": "Soon",
+  "identity.google.unavailable": "Google sign-in arrives once J.A.R.V.I.S. is registered with Google. A local account works today, and links to Google later.",
+
+  "identity.skip.hint": "J.A.R.V.I.S. works completely without an account. Everything stays on this machine either way.",
+
+  "identity.carries.title": "What your account carries",
+  "identity.carries.appearance": "Theme and language",
+  "identity.carries.terminal": "Terminal type size and scrollback",
+  "identity.carries.autonomy": "How far an agent may go on its own",
+  "identity.carries.notifications": "How you want to be interrupted",
+  "identity.carries.local": "Your projects, sessions and credentials stay on this machine. An account never moves them.",
+
+  "identity.known.title": "On this machine",
+  "identity.known.other": "Use another address",
+  "identity.known.never": "Never signed in",
+  "identity.known.lastSeen": "Last signed in {when}",
+
+  "identity.error.unknownEmail": "No account here uses that address.",
+  "identity.error.wrongPassword": "That password is not right. {count} tries left.",
+  "identity.error.wrongPassword_one": "That password is not right. One try left.",
+  "identity.error.lockedOut": "Too many attempts. Try again in {seconds}s.",
+  "identity.error.noPassword": "This account signs in with Google, not with a password.",
+  "identity.error.nameRequired": "A name, so the product knows what to call you.",
+  "identity.error.invalidEmail": "That does not look like an e-mail address.",
+  "identity.error.emailTaken": "There is already an account with that address.",
+  "identity.error.passwordTooShort": "At least {min} characters. Length is what actually helps.",
+  "identity.error.currentWrong": "That is not your current password.",
+  "identity.error.generic": "That did not work.",
+
+  // ---- Identity in Settings -------------------------------------------------
+  "identity.settings.title": "Account",
+  "identity.settings.blurb": "Who you are, and what follows you between machines.",
+  "identity.settings.signedOut.title": "You are not signed in",
+  "identity.settings.signedOut.body": "Everything works as it is. An account exists to keep your preferences and to be the seat a future sync attaches to.",
+  "identity.settings.open": "Sign in or create an account",
+  "identity.settings.profile": "Profile",
+  "identity.settings.saved": "Saved",
+  "identity.settings.password": "Password",
+  "identity.settings.password.current": "Current password",
+  "identity.settings.password.next": "New password",
+  "identity.settings.password.change": "Change password",
+  "identity.settings.password.changed": "Password changed",
+  "identity.settings.danger": "Delete this account",
+  "identity.settings.danger.body": "Removes the account and the preferences it carries. Your projects, sessions and history are untouched — they belong to this machine, not to an account.",
+  "identity.settings.danger.confirm": "Type your password to confirm",
+  "identity.settings.danger.action": "Delete account",
+  "identity.settings.carried": "Carried by this account",
+  "identity.settings.since": "With you since {when}",
+
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",

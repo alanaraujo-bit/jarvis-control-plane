@@ -947,6 +947,65 @@ it in the prompt. The same note into a shell was refused with a sentence and
 wrote nothing. Both themes, 1442px and 786px. See D47 and
 [`docs/M19-NOTEBOOK.md`](M19-NOTEBOOK.md).
 
+## M20 — Identity: an account that belongs to a person  ✅
+
+Alan asked for somewhere to keep a user's settings in the database, and for a
+login and signup screen worth looking at — with the Google button already on it,
+"since we're going to have that too".
+
+The decision that shaped the rest was refusing the obvious shape. A login screen
+is normally a gate, and a gate is wrong in *this* product: it is local-first
+(§3), half of it runs with nobody present (unattended runs, the search backfill,
+the notification feed), and there are installations with real work already in
+them. So an account is **additive** — nothing in the core asks who is signed in
+before deciding whether work may happen, and **Continue without an account** is a
+real destination rather than a delay before the same wall.
+
+- [x] Migration 17 — `identity_accounts` and `identity_settings`. `settings`
+      deliberately did **not** grow a scope column: its "unset is no row"
+      contract is read unscoped by three existing modules, and scoping it would
+      have silently changed what every one of them sees.
+- [x] `identity` module — Argon2id (PHC string stored whole), a five-try
+      one-minute lockout that a correct password clears, and 27 tests. Named
+      `identity` because `accounts` already means a *provider subscription*
+      (M13/M16), and two things called "Accounts" is a real confusion.
+- [x] `identity::prefs` — mirror, not scope. Theme, language, terminal type
+      size and scrollback, turn budget and the three notification switches
+      follow a person; `onboarding.seen`, the speech model, the environment
+      scan and guardrail policy stay with the machine. Decided per key, because
+      there is no rule.
+- [x] The auth screen: two columns, the left saying *what an account is for*
+      because "why would I sign in to a local tool" is the only question anybody
+      has here. Drifting neutral light behind a masked grid, four staggered
+      rows, disclosures that animate a height nobody measured, a strength meter
+      that is advice and never a gate, a "did you mean gmail.com?" for the
+      typo that is invisible because the address is well-formed, and a Caps Lock
+      warning the browser is the only thing that knows about.
+- [x] **Continue with Google** — present, badged, honestly disabled, and it says
+      why when clicked (B7). The loopback/PKCE flow is deliberately absent: its
+      shape depends on a credential that does not exist yet, and an untested
+      subsystem built on a guess is worse than one marked gap.
+- [x] An Account section in Settings — profile, password, what the account
+      carries, and a delete that asks for the password first.
+
+**Verified in the real build:** created an account, signed out, mistyped the
+password and read the countdown with its plural right, signed in, and — the
+feature's whole point — signed in on a machine set to **dark + pt-BR** and
+watched it become **light + English** because that is what the account carried.
+Deleted the account with the wrong password (refused) and then the right one
+(gone, app untouched). Both themes, both languages, pixels sampled rather than
+judged.
+
+**Three bugs the looking found that the suite could not.** The auth screen would
+not close after a *successful* signup, because `mark_prompted` ran after the
+report had already been built. WebView2 draws its own reveal control inside a
+password field, so the card had two eyes doing the same thing. And three closed
+disclosures were holding 32px of empty card, because a grid track's automatic
+minimum is the item's *margin* box and `min-height: 0` only zeroes the content
+box — settled by measuring the real markup headlessly, not by reading the CSS,
+which is correct in isolation either way. See D48 and
+[`docs/M20-IDENTITY.md`](M20-IDENTITY.md).
+
 ## Next steps
 
 1. Re-verify voice dictation end to end by ear on a real microphone — the
