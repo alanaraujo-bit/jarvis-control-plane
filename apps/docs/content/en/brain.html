@@ -1,1 +1,112 @@
-<p>TODO</p>
+<p>The project's own memory. What is written here is handed to <strong>every agent that starts in
+this project</strong>, before it reads a single file. See <a href="page:memory">Memory</a> for
+the concept; this page is the surface.</p>
+
+<figure class="fig">
+  <img src="../img/brain.png" alt="The Brain area showing knowledge entries grouped under What this project is, How work is done here, Things that will bite you, and What words mean here, with a briefing size counter above.">
+  <figcaption><b>The counter is the real size of the brief.</b> <em>What an agent receives</em>
+  opens it, so you can read exactly what gets sent rather than trusting a description of
+  it.</figcaption>
+</figure>
+
+<h2>Three tabs</h2>
+
+<div class="defs">
+  <div>
+    <dt>Knowledge</dt>
+    <dd>Facts about this project, grouped into four kinds. These are briefed.</dd>
+  </div>
+  <div>
+    <dt>Notes</dt>
+    <dd>Your working memory for this project. Pinned, reordered, deleted — and
+    <strong>never</strong> composed into a brief.</dd>
+  </div>
+  <div>
+    <dt>History</dt>
+    <dd>This project's own story: what happened here, rather than the global
+    <a href="page:activity">Activity</a> feed.</dd>
+  </div>
+</div>
+
+<h2>The four kinds, and how to choose</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Kind</th><th>Ask yourself</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>What this project is</strong></td>
+      <td>What would you say in the first thirty seconds to someone new?</td>
+      <td>The billing service: invoices, credit notes, and the reconciliation job at 02:00 UTC.</td>
+    </tr>
+    <tr>
+      <td><strong>How work is done here</strong></td>
+      <td>What convention would an agent violate without knowing?</td>
+      <td>An invoice is immutable once issued. Corrections are credit notes, never edits.</td>
+    </tr>
+    <tr>
+      <td><strong>Things that will bite you</strong></td>
+      <td>What has already cost somebody an hour?</td>
+      <td>The dev server listens on 4173, not 3000 — 3000 is held by something else here.</td>
+    </tr>
+    <tr>
+      <td><strong>What words mean here</strong></td>
+      <td>Which of your words mean something specific?</td>
+      <td>A tenant is a billing account, not a user.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Stated and derived are separate</h2>
+
+<p>What you wrote carries <strong>You wrote this</strong>. What an agent wrote carries
+<strong>An agent recorded this</strong>, in amber. And facts the product <em>derived</em> — the
+branch, the languages, what changed recently — live on their own tab, are recomputed on every
+read, and are never stored.</p>
+
+<p>That separation makes <a href="page:confidence">the confidence rule</a> structural. You cannot
+mistake a computed fact for a stated one, because they are not in the same list.</p>
+
+<h2>Retiring</h2>
+
+<p>Knowledge that stops being true is <strong>retired</strong>, not deleted: it stops being
+briefed and the record stays. A fact that governed this project for six months is part of its
+story even after it stops being true — and a deleted one leaves the next person wondering why the
+code looks like that.</p>
+
+<h2>Promoting a note</h2>
+
+<p>When a note turns out to be a fact the next agent should know, one action promotes it into
+knowledge — and it leaves the notes list, because it is now a different kind of thing. There is
+no state where the same sentence is both.</p>
+
+<h2>What an agent writes here</h2>
+
+<p>At the end of a successful <a href="page:guide-unattended">unattended run</a>, once, the agent
+is asked what would still matter <em>next time</em>. Not a summary of what it did. It is
+forbidden from touching anything while it answers, and it is given a named escape hatch that is
+expected to fire most of the time.</p>
+
+<p>A manually completed mission is never asked — typing a question into a terminal you are
+watching is a different conversation to interrupt.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">The real one</span>
+  <p>An agent finished a trivial unattended mission and answered: <em>GOTCHA: The dev server runs
+  on port 4173, not the conventional 3000, because port 3000 on this machine is already held by
+  an unrelated port scanner — anyone expecting localhost:3000 will find nothing there.</em> That
+  appeared in the Gotcha tab under <b>An agent recorded this</b>, in amber, with the briefed-size
+  counter moving and Activity recording it right after the mission's own completion.</p>
+</div>
+
+<h2>How it gets to the agent</h2>
+
+<p>Out of band. The brief is written into J.A.R.V.I.S.'s own data directory and passed to Claude
+Code with <code>--append-system-prompt-file</code>. <strong>Nothing is written into your
+repository</strong> — a context file in a working tree would appear in
+<a href="page:review">Review</a>, in your <code>git status</code>, and eventually in a commit.</p>
+
+<p>Codex has no equivalent flag on 0.147.0, so it is honestly reported as
+<code>OpeningMessage</code> rather than being handed a file it would never read.
+See <a href="page:providers">Providers and capabilities</a>.</p>

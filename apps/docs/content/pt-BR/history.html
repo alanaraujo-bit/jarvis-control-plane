@@ -1,1 +1,105 @@
-<p>TODO</p>
+<p>Toda sessão que esta máquina já rodou: com título, agrupada por quando aconteceu, pesquisável
+pelo que foi <em>dito</em> dentro dela, e abrível de novo.</p>
+
+<figure class="fig">
+  <img src="../img/history.png" alt="A tela de Histórico mostrando sessões agrupadas em Hoje e Ontem, algumas com títulos dados pelo agente, cada uma com projeto, provedor, turnos, duração, tokens e tamanho em disco.">
+  <figcaption><b>Títulos marcados como <em>nomeada pelo agente</em> vieram do próprio Claude
+  Code.</b> O cabeçalho declara o total e quanto os logs custam em disco.</figcaption>
+</figure>
+
+<h2>Dois fatos fizeram disso uma lacuna</h2>
+
+<p>A coluna <code>sessions.title</code> existia desde a primeira migração e <strong>nada nunca
+tinha escrito nela</strong>, então toda sessão no banco ficava sem título. E a consulta que
+alimenta as abas de terminal filtra sessões que não terminaram — correto para abas, e isso fazia
+uma sessão encerrada ficar inalcançável de qualquer lugar do produto, exceto tropeçando em uma
+frase dela na busca.</p>
+
+<h2>De onde vem um título</h2>
+
+<p>A precedência é <strong>usuário &gt; provedor &gt; derivado</strong>, aplicada em SQL e não na
+tela que por acaso está renderizando.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Fonte</th><th>Como</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Você</strong></td><td>Renomeie ali mesmo. Sempre ganha.</td></tr>
+    <tr><td><strong>O provedor</strong></td><td>O Claude Code escreve a própria linha <code>ai-title</code>, e ninguém estava lendo — presente em 89 das 124 transcrições da máquina em que isso foi construído. Ela é retirada <em>antes</em> do filtro de ruído que corretamente a descarta para a <a href="page:conversation">Conversa</a>.</td></tr>
+    <tr><td><strong>Derivado</strong></td><td>Calculado a partir do que foi dito. O Codex não declara título nenhum, então as sessões dele caem aqui — uma <a href="page:providers">diferença de capacidade</a> real, com um teste que falha se os dois provedores algum dia se descreverem de forma idêntica.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Toda sessão mais antiga foi preenchida fora do caminho de inicialização, a partir do índice de
+busca em vez de reandar os logs, com a ordenação em relação ao preenchimento da busca tornada
+segura em vez de presumida.</p>
+
+<h2>Buscando o que foi realmente dito</h2>
+
+<p>A caixa de busca procura em nomes <strong>e em tudo que foi dito dentro</strong>, pelo mesmo
+índice de texto completo que a <a href="page:search">Busca global</a> usa. Um resultado de título
+fica acima de um resultado de corpo, e um resultado de corpo te mostra a linha em que casou.</p>
+
+<p>Esta é a parte que a referência na qual isso foi modelado não consegue fazer.</p>
+
+<h2>Continuar uma sessão</h2>
+
+<p>Uma linha abre uma <strong>prévia</strong> — a conversa, somente leitura — e a prévia oferece o
+caminho de volta para um terminal:</p>
+
+<ul>
+  <li>Uma sessão <strong>viva</strong> é reencontrada.</li>
+  <li>Uma <strong>encerrada</strong> é continuada por um agente novo que recebe a conversa antiga,
+  numa aba com o nome dela.</li>
+</ul>
+
+<p>As duas CLIs retomam por mecanismos opostos e só uma delas pode ser acompanhada depois, então
+o modelo de capacidades diz qual — e onde não dá para funcionar, a oferta está <em>ausente com um
+motivo</em> em vez de presente e quebrada.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado plantando um fato</span>
+  <p>Um fato foi plantado numa sessão, a sessão foi fechada, depois continuada, depois perguntada
+  sobre o fato. A resposta voltou: <strong>"Âmbar."</strong></p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Uma sessão começa onde ela diz que começa</span>
+  <p>Achado continuando uma sessão dentro de uma pasta que tinha sido apagada, e vendo um agente
+  real abrir no diretório pessoal do usuário. Isso é pior do que um erro — o agente então trabalha
+  alegremente nos arquivos errados. Agora é recusado, e a recusa cobre todo lançamento dentro de
+  um projeto movido, não só esse caminho.</p>
+</div>
+
+<h2>Apagar apaga de verdade</h2>
+
+<p>Linhas, entradas do índice de texto completo, <em>e</em> o diretório de log da sessão — e ela
+te diz quantos bytes liberou. Uma sessão viva é recusada em vez de meio apagada.</p>
+
+<h2>O armazenamento é tornado visível, não gerenciado</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Nenhuma política de retenção foi inventada</span>
+  <p>Decidir que sessões mais velhas que N dias devem ser apagadas é uma decisão sobre o histórico
+  de outra pessoa, e não é uma para tomar levianamente no lugar dela. Então a superfície
+  simplesmente diz <strong>quanto os logs custam</strong> — total de sessões, total de megabytes,
+  tamanho por sessão — o que transforma isso numa decisão que alguém <em>consegue</em> tomar.</p>
+</div>
+
+<h2>Dois bugs que o olhar encontrou</h2>
+
+<ul>
+  <li>Toda linha estava <strong>quarenta pixels alta demais</strong>, porque uma grade de quatro
+  itens tinha três colunas e o quarto quebrava para uma segunda linha invisível.</li>
+  <li>Clicar numa linha de um projeto <strong>arquivado</strong> não fazia absolutamente nada —
+  uma passagem em branco que estava na Busca global desde que ela foi construída.</li>
+</ul>
+
+<div class="callout">
+  <span class="callout__title">Uma coisa deliberadamente não construída</span>
+  <p>A captura de referência na qual isso foi modelado tem uma aba <strong>Web</strong>. Aquelas
+  são as sessões na nuvem do Claude. Este produto é local em primeiro lugar e não tem essas
+  sessões, então a aba está ausente em vez de vazia. Veja
+  <a href="page:not-built">O que não está pronto</a>.</p>
+</div>

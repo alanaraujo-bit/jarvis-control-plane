@@ -1,1 +1,114 @@
-<p>TODO</p>
+<p>A memória do próprio projeto. O que é escrito aqui é entregue a <strong>todo agente que começa
+neste projeto</strong>, antes de ele ler um único arquivo. Veja <a href="page:memory">Memória</a>
+para o conceito; esta página é a superfície.</p>
+
+<figure class="fig">
+  <img src="../img/brain.png" alt="A área Memória mostrando entradas de conhecimento agrupadas em O que este projeto é, Como se trabalha aqui, O que vai te morder, e O que as palavras significam aqui, com um contador de tamanho do briefing acima.">
+  <figcaption><b>O contador é o tamanho real do briefing.</b> <em>O que um agente recebe</em> abre
+  ele, para você ler exatamente o que é enviado em vez de confiar numa descrição
+  disso.</figcaption>
+</figure>
+
+<h2>Três abas</h2>
+
+<div class="defs">
+  <div>
+    <dt>Conhecimento</dt>
+    <dd>Fatos sobre este projeto, agrupados em quatro tipos. Estes são entregues no briefing.</dd>
+  </div>
+  <div>
+    <dt>Notas</dt>
+    <dd>Sua memória de trabalho para este projeto. Fixadas, reordenadas, apagadas — e
+    <strong>nunca</strong> compostas num briefing.</dd>
+  </div>
+  <div>
+    <dt>Histórico</dt>
+    <dd>A história do próprio projeto: o que aconteceu aqui, em vez do feed global de
+    <a href="page:activity">Atividade</a>.</dd>
+  </div>
+</div>
+
+<h2>Os quatro tipos, e como escolher</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Tipo</th><th>Pergunte a si mesmo</th><th>Exemplo</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>O que este projeto é</strong></td>
+      <td>O que você diria nos primeiros trinta segundos para alguém novo?</td>
+      <td>O serviço de cobrança: notas fiscais, notas de crédito, e o job de conciliação às 02:00 UTC.</td>
+    </tr>
+    <tr>
+      <td><strong>Como se trabalha aqui</strong></td>
+      <td>Que convenção um agente violaria sem saber?</td>
+      <td>Uma nota fiscal é imutável depois de emitida. Correções são notas de crédito, nunca edições.</td>
+    </tr>
+    <tr>
+      <td><strong>O que vai te morder</strong></td>
+      <td>O que já custou uma hora de alguém?</td>
+      <td>O servidor escuta na 4173, não na 3000 — a 3000 aqui está ocupada por outra coisa.</td>
+    </tr>
+    <tr>
+      <td><strong>O que as palavras significam aqui</strong></td>
+      <td>Quais das suas palavras querem dizer algo específico?</td>
+      <td>Um tenant é uma conta de cobrança, não um usuário.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Declarado e derivado são separados</h2>
+
+<p>O que você escreveu carrega <strong>Você escreveu isto</strong>. O que um agente escreveu
+carrega <strong>Um agente registrou isto</strong>, em âmbar. E fatos que o produto
+<em>derivou</em> — o branch, as linguagens, o que mudou recentemente — moram numa aba própria, são
+recalculados a cada leitura, e nunca são guardados.</p>
+
+<p>Essa separação torna <a href="page:confidence">a regra de confiança</a> estrutural. Você não
+consegue confundir um fato calculado com um declarado, porque eles não estão na mesma lista.</p>
+
+<h2>Aposentar</h2>
+
+<p>Conhecimento que deixa de ser verdade é <strong>aposentado</strong>, não apagado: ele para de
+ser entregue e o registro fica. Um fato que governou este projeto por seis meses faz parte da
+história dele mesmo depois de deixar de ser verdade — e um apagado deixa a próxima pessoa se
+perguntando por que o código está assim.</p>
+
+<h2>Promover uma nota</h2>
+
+<p>Quando uma nota se revela um fato que o próximo agente deveria saber, uma ação a promove a
+conhecimento — e ela sai da lista de notas, porque agora é outro tipo de coisa. Não existe estado
+em que a mesma frase seja as duas.</p>
+
+<h2>O que um agente escreve aqui</h2>
+
+<p>No fim de uma <a href="page:guide-unattended">execução sem supervisão</a> bem-sucedida, uma
+vez, o agente é perguntado o que ainda importaria <em>da próxima vez</em>. Não um resumo do que ele
+fez. Ele é proibido de encostar em qualquer coisa enquanto responde, e recebe uma saída de
+emergência nomeada que se espera que dispare na maior parte das vezes.</p>
+
+<p>Uma missão concluída manualmente nunca é perguntada — digitar uma pergunta num terminal que
+você está assistindo é uma conversa diferente de interromper.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">A de verdade</span>
+  <p>Um agente terminou uma missão trivial sem supervisão e respondeu: <em>GOTCHA: The dev server
+  runs on port 4173, not the conventional 3000, because port 3000 on this machine is already held
+  by an unrelated port scanner — anyone expecting localhost:3000 will find nothing there.</em>
+  Isso apareceu na aba de armadilhas sob <b>Um agente registrou isto</b>, em âmbar, com o contador
+  de tamanho do briefing se movendo e a Atividade registrando logo depois da própria conclusão da
+  missão.</p>
+</div>
+
+<h2>Como chega ao agente</h2>
+
+<p>Fora de banda. O briefing é escrito no diretório de dados do próprio J.A.R.V.I.S. e passado ao
+Claude Code com <code>--append-system-prompt-file</code>. <strong>Nada é escrito no seu
+repositório</strong> — um arquivo de contexto numa árvore de trabalho apareceria na
+<a href="page:review">Revisão</a>, no seu <code>git status</code>, e mais cedo ou mais tarde num
+commit.</p>
+
+<p>O Codex não tem flag equivalente na 0.147.0, então ele é honestamente informado como
+<code>OpeningMessage</code> em vez de receber um arquivo que nunca leria.
+Veja <a href="page:providers">Provedores e capacidades</a>.</p>

@@ -1,1 +1,71 @@
-<p>TODO</p>
+<p>Quanto o trabalho custou, em tokens e no seu próprio tempo, somado a partir dos mesmos
+<a href="page:session-log">logs de sessão</a> que todo o resto lê.</p>
+
+<figure class="fig">
+  <img src="../img/analytics.png" alt="A tela de Métricas mostrando tempo humano, tempo de execução dos agentes, sessões e arquivos alterados, depois totais de token, depois barras divididas por provedor, modelo, projeto e dia.">
+  <figcaption><b>Alavancagem humana primeiro, tokens depois.</b> Os quatro números do topo são os
+  que respondem se isso está funcionando; as contagens de token respondem quanto
+  custou.</figcaption>
+</figure>
+
+<h2>Alavancagem humana</h2>
+
+<div class="defs">
+  <div>
+    <dt>Tempo humano ativo</dt>
+    <dd>Os minutos em que você de fato digitou em uma sessão. <strong>Medido a partir de interação
+    real</strong>, não inferido de quanto tempo uma janela ficou aberta.</dd>
+  </div>
+  <div>
+    <dt>Execução de agentes</dt>
+    <dd>Quanto tempo as sessões ficaram ativas.</dd>
+  </div>
+  <div>
+    <dt>Sessões · Arquivos alterados</dt>
+    <dd>O volume de trabalho, a partir dos quadros <code>FileChange</code> que a Revisão já
+    lê.</dd>
+  </div>
+</div>
+
+<p>A razão entre os dois primeiros é o número que este produto existe para mover. Ele é declarado
+simplesmente em vez de virar uma pontuação, porque uma pontuação precisaria de uma escala com a
+qual ninguém concordou.</p>
+
+<h2>Tokens</h2>
+
+<p>Entrada, saída, cache lido e cache escrito, depois divididos por provedor, modelo, projeto e
+dia. Todos eles são <span class="badge" data-t="official">Oficiais</span> — o próprio objeto
+<code>usage</code> do provedor, somado a partir de quadros <code>Usage</code>.</p>
+
+<p>Nada aqui é estimado. Se um número não pode ser sustentado por uma declaração do provedor, ele
+não é mostrado como se pudesse. Veja <a href="page:confidence">Oficial e Observado</a>.</p>
+
+<h2>Notas sobre o desenho dos gráficos</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Um matiz só, de propósito</span>
+  <p>As barras usam uma cor só porque <strong>cada linha já está nomeada ao lado dela</strong>: a
+  barra carrega magnitude, o rótulo carrega identidade. Colorir por posição codificaria o
+  comprimento duas vezes, também como matiz — a mesma informação duas vezes, num canal que depois
+  não pode ser usado para mais nada.</p>
+</div>
+
+<p>E uma divisão de categoria única não desenha barra nenhuma. Um retângulo de largura total
+repetindo o número que está do lado dele não é um gráfico; é decoração que aprendeu a parecer
+dado.</p>
+
+<h2>Períodos</h2>
+
+<p>7, 30 e 90 dias. Longo o bastante para uma semana lenta não parecer um colapso, curto o
+bastante para o que você mudou mês passado ainda estar visível nos números.</p>
+
+<div class="cards">
+  <a class="card" href="page:accounts">
+    <strong>Contas e cota</strong>
+    <span>O que sobrou em vez do que foi gasto — a outra metade da mesma pergunta.</span>
+  </a>
+  <a class="card" href="page:activity">
+    <strong>Atividade</strong>
+    <span>Os mesmos eventos, listados em vez de contados.</span>
+  </a>
+</div>

@@ -1,1 +1,72 @@
-<p>TODO</p>
+<p>What happened, in order, filterable. Not a debug log — a record of the moments worth
+knowing.</p>
+
+<h2>Recorded at moments, not at events</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Why this is not a firehose</span>
+  <p>Every byte an agent writes is already in <a href="page:session-log">the session log</a>.
+  Activity does not repeat it. It records the moments a person would want to reconstruct later:
+  a session started, a mission changed state, a guardrail decided something, an agent wrote to
+  the Brain, an account switched, a run stopped and why.</p>
+</div>
+
+<p>A feed that records everything is a feed nobody reads, and then the one event that mattered is
+buried under nine hundred that did not.</p>
+
+<h2>Filtering</h2>
+
+<p>By project, by kind, and by time. The filters exist because the two questions people actually
+ask are different shapes: <em>what happened in this project?</em> and <em>what happened around
+14:30?</em></p>
+
+<h2>Everything here is translated</h2>
+
+<p>Activity entries are sentences J.A.R.V.I.S. wrote, so they carry a translation code and their
+specifics as arguments — never English text stored in your database and shown to a Portuguese
+reader.</p>
+
+<p>The exception is the same one everywhere else: <strong>an agent's own words, and a tool's own
+output, are not translated.</strong> If an entry quotes something the agent said, that quote is
+what it said.</p>
+
+<h2>The project's own history</h2>
+
+<p>Activity is global. A project's <strong>Brain → History</strong> tab is the same idea scoped
+to one project — its own story, without the noise of everything else you were doing that week.
+Two surfaces because they answer two different questions, not because one is a filtered view
+somebody forgot to make.</p>
+
+<h2>What it is good for</h2>
+
+<div class="defs">
+  <div>
+    <dt>Reconstructing an unattended run</dt>
+    <dd>Every turn boundary, every verification, and the reason it stopped — in sequence.
+    See <a href="page:guide-unattended">Run a mission unattended</a>.</dd>
+  </div>
+  <div>
+    <dt>Finding out why a completion was revoked</dt>
+    <dd>The re-verification that failed is here, with the criterion it failed on.</dd>
+  </div>
+  <div>
+    <dt>Auditing what a guardrail did</dt>
+    <dd>Every decision, with the operation it classified and the answer it gave.</dd>
+  </div>
+  <div>
+    <dt>Understanding an account switch</dt>
+    <dd>When work moved, from which account to which, and what triggered it.</dd>
+  </div>
+</div>
+
+<div class="cards">
+  <a class="card" href="page:search">
+    <strong>Global Search</strong>
+    <span>Searches activity too, alongside knowledge, notes, missions and what was said in any
+    conversation.</span>
+  </a>
+  <a class="card" href="page:analytics">
+    <strong>Analytics</strong>
+    <span>The same events, counted rather than listed.</span>
+  </a>
+</div>

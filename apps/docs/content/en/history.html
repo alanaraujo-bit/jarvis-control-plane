@@ -1,1 +1,103 @@
-<p>TODO</p>
+<p>Every session this machine has ever run: titled, grouped by when it happened, searchable by
+what was <em>said</em> inside it, and openable again.</p>
+
+<figure class="fig">
+  <img src="../img/history.png" alt="The History screen showing sessions grouped under Today and Yesterday, some with agent-given titles, each with project, provider, turns, duration, tokens and size on disk.">
+  <figcaption><b>Titles marked <em>named by the agent</em> came from Claude Code itself.</b> The
+  header states the total and what the logs cost on disk.</figcaption>
+</figure>
+
+<h2>Two facts made this a gap</h2>
+
+<p><code>sessions.title</code> had existed since the first migration and <strong>nothing had ever
+written to it</strong>, so every session in the database was untitled. And the query that feeds
+the terminal tabs filters on sessions that have not ended — correct for tabs, and it meant a
+finished session was unreachable from anywhere in the product except by stumbling on one of its
+own sentences in search.</p>
+
+<h2>Where a title comes from</h2>
+
+<p>Precedence is <strong>user &gt; provider &gt; derived</strong>, enforced in SQL rather than in
+whichever screen happens to be rendering.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Source</th><th>How</th></tr></thead>
+  <tbody>
+    <tr><td><strong>You</strong></td><td>Rename it inline. Always wins.</td></tr>
+    <tr><td><strong>The provider</strong></td><td>Claude Code writes its own <code>ai-title</code> line, and nobody was reading it — present in 89 of the 124 transcripts on the machine this was built against. It is lifted <em>before</em> the noise filter that correctly drops it for <a href="page:conversation">Conversation</a>.</td></tr>
+    <tr><td><strong>Derived</strong></td><td>Computed from what was said. Codex states no title at all, so its sessions land here — a real <a href="page:providers">capability difference</a>, with a test that fails if the two providers ever describe themselves identically.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Every older session was backfilled off the startup path, from the search index rather than by
+re-walking the logs, with the ordering against the search backfill made safe rather than assumed.</p>
+
+<h2>Searching what was actually said</h2>
+
+<p>The search box searches names <strong>and everything said inside</strong>, through the same
+full-text index <a href="page:search">Global Search</a> uses. A title match sorts above a body
+match, and a body match shows you the line it matched on.</p>
+
+<p>This is the part the reference this was modelled on cannot do at all.</p>
+
+<h2>Continuing a session</h2>
+
+<p>A row opens a <strong>preview</strong> — the conversation, read-only — and the preview offers
+the way back into a terminal:</p>
+
+<ul>
+  <li>A <strong>live</strong> session is rejoined.</li>
+  <li>A <strong>finished</strong> one is continued by a new agent handed the old conversation, in
+  a tab named after it.</li>
+</ul>
+
+<p>Both CLIs resume by opposite mechanisms and only one of them can be followed afterwards, so
+the capability model says which — and where it cannot work, the offer is <em>absent with a
+reason</em> rather than present and broken.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified by planting a fact</span>
+  <p>A fact was planted in a session, the session was closed, then continued, then asked about
+  the fact. The answer came back: <strong>"Amber."</strong></p>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A session starts where it says it starts</span>
+  <p>Found by continuing a session into a folder that had been deleted, and watching a real agent
+  open in the user's home directory instead. That is worse than an error — the agent then works
+  happily on the wrong files. It is refused now, and the refusal covers every launch into a moved
+  project, not just this one path.</p>
+</div>
+
+<h2>Deleting really deletes</h2>
+
+<p>Rows, full-text index entries, <em>and</em> the session's log directory — and it tells you how
+many bytes it freed. A live session is refused rather than half-deleted.</p>
+
+<h2>Storage is made visible, not managed</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">No retention policy was invented</span>
+  <p>Deciding that sessions older than N days should be deleted is a decision about somebody
+  else's history, and it is not one to make casually on their behalf. So the surface simply says
+  <strong>what the logs cost</strong> — total sessions, total megabytes, size per session — which
+  turns it into a decision somebody <em>can</em> make.</p>
+</div>
+
+<h2>Two bugs the looking found</h2>
+
+<ul>
+  <li>Every row was <strong>forty pixels too tall</strong>, because a four-item grid had three
+  columns and the fourth wrapped onto an invisible second row.</li>
+  <li>Clicking a row for an <strong>archived</strong> project did nothing at all — a silent
+  fall-through that turned out to have been in Global Search since it was built.</li>
+</ul>
+
+<div class="callout">
+  <span class="callout__title">One thing deliberately not built</span>
+  <p>The reference screenshot this was modelled on has a <strong>Web</strong> tab. Those are
+  Claude's cloud sessions. This product is local-first and does not have them, so the tab is
+  absent rather than empty. See <a href="page:not-built">What is not built</a>.</p>
+</div>

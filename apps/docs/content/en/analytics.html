@@ -1,1 +1,68 @@
-<p>TODO</p>
+<p>What the work cost, in tokens and in your own time, folded from the same
+<a href="page:session-log">session logs</a> everything else reads.</p>
+
+<figure class="fig">
+  <img src="../img/analytics.png" alt="The Analytics screen showing human time, agent runtime, sessions and files changed, then token totals, then bars broken down by provider, model, project and day.">
+  <figcaption><b>Human leverage first, tokens second.</b> The four numbers at the top are the
+  ones that answer whether this is working; the token counts answer what it cost.</figcaption>
+</figure>
+
+<h2>Human leverage</h2>
+
+<div class="defs">
+  <div>
+    <dt>Human time</dt>
+    <dd>The minutes you actually spent typing in a session. <strong>Measured from real
+    interaction</strong>, not inferred from how long a window was open.</dd>
+  </div>
+  <div>
+    <dt>Agent runtime</dt>
+    <dd>How long sessions were active.</dd>
+  </div>
+  <div>
+    <dt>Sessions · Files changed</dt>
+    <dd>The volume of work, from the <code>FileChange</code> frames Review already reads.</dd>
+  </div>
+</div>
+
+<p>The ratio between the first two is the number this product exists to move. It is stated
+plainly rather than turned into a score, because a score would need a scale nobody agreed on.</p>
+
+<h2>Tokens</h2>
+
+<p>Input, output, cache read and cache written, then broken down by provider, model, project and
+day. Every one of these is <span class="badge" data-t="official">Official</span> — the provider's
+own <code>usage</code> object, folded from <code>Usage</code> frames.</p>
+
+<p>Nothing here is estimated. If a number cannot be sourced from a provider statement, it is not
+shown as though it could. See <a href="page:confidence">Official and Observed</a>.</p>
+
+<h2>Notes on the chart design</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">One hue, on purpose</span>
+  <p>Bars use a single colour because <strong>each row is already named beside it</strong>: the
+  bar carries magnitude, the label carries identity. Colouring by rank would double-encode length
+  as hue — the same information twice, in a channel that then cannot be used for anything
+  else.</p>
+</div>
+
+<p>And a single-category breakdown drops its bar entirely. A full-width rectangle restating the
+number sitting next to it is not a chart; it is decoration that has learned to look like
+data.</p>
+
+<h2>Ranges</h2>
+
+<p>7, 30 and 90 days. Long enough that a slow week does not read as a collapse, short enough that
+what you changed last month is still visible in the numbers.</p>
+
+<div class="cards">
+  <a class="card" href="page:accounts">
+    <strong>Accounts and quota</strong>
+    <span>What is left rather than what was spent — the other half of the same question.</span>
+  </a>
+  <a class="card" href="page:activity">
+    <strong>Activity</strong>
+    <span>The same events, listed rather than counted.</span>
+  </a>
+</div>

@@ -1,1 +1,72 @@
-<p>TODO</p>
+<p>O que aconteceu, em ordem, filtrável. Não é um log de depuração — é um registro dos momentos
+que valem a pena saber.</p>
+
+<h2>Registrado em momentos, não em eventos</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Por que isso não é uma mangueira de incêndio</span>
+  <p>Cada byte que um agente escreve já está no <a href="page:session-log">log da sessão</a>. A
+  Atividade não repete. Ela registra os momentos que uma pessoa iria querer reconstruir depois:
+  uma sessão iniciou, uma missão mudou de estado, uma proteção decidiu alguma coisa, um agente
+  escreveu na Memória, uma conta trocou, uma execução parou e por quê.</p>
+</div>
+
+<p>Um feed que registra tudo é um feed que ninguém lê, e aí o único evento que importava fica
+enterrado sob novecentos que não importavam.</p>
+
+<h2>Filtrando</h2>
+
+<p>Por projeto, por tipo e por tempo. Os filtros existem porque as duas perguntas que as pessoas
+de fato fazem têm formatos diferentes: <em>o que aconteceu neste projeto?</em> e <em>o que
+aconteceu por volta das 14:30?</em></p>
+
+<h2>Tudo aqui é traduzido</h2>
+
+<p>Entradas de atividade são frases que o J.A.R.V.I.S. escreveu, então elas carregam um código de
+tradução e os detalhes como argumentos — nunca texto em inglês guardado no seu banco e mostrado a
+quem lê em português.</p>
+
+<p>A exceção é a mesma de todo lugar: <strong>as palavras do próprio agente, e a saída da própria
+ferramenta, não são traduzidas.</strong> Se uma entrada cita algo que o agente disse, essa citação
+é o que ele disse.</p>
+
+<h2>O histórico do próprio projeto</h2>
+
+<p>A Atividade é global. A aba <strong>Memória → Histórico</strong> de um projeto é a mesma ideia
+com escopo de um projeto — a história dele, sem o ruído de tudo o mais que você estava fazendo
+naquela semana. Duas superfícies porque respondem duas perguntas diferentes, não porque uma é
+uma visão filtrada que alguém esqueceu de fazer.</p>
+
+<h2>Para que ela serve</h2>
+
+<div class="defs">
+  <div>
+    <dt>Reconstruir uma execução sem supervisão</dt>
+    <dd>Cada fronteira de turno, cada verificação, e a razão de ter parado — em sequência.
+    Veja <a href="page:guide-unattended">Executar uma missão sem supervisão</a>.</dd>
+  </div>
+  <div>
+    <dt>Descobrir por que uma conclusão foi revogada</dt>
+    <dd>A reverificação que falhou está aqui, com o critério em que ela falhou.</dd>
+  </div>
+  <div>
+    <dt>Auditar o que uma proteção fez</dt>
+    <dd>Cada decisão, com a operação que ela classificou e a resposta que deu.</dd>
+  </div>
+  <div>
+    <dt>Entender uma troca de conta</dt>
+    <dd>Quando o trabalho se moveu, de qual conta para qual, e o que disparou.</dd>
+  </div>
+</div>
+
+<div class="cards">
+  <a class="card" href="page:search">
+    <strong>Busca global</strong>
+    <span>Também busca na atividade, junto com conhecimento, notas, missões e o que foi dito em
+    qualquer conversa.</span>
+  </a>
+  <a class="card" href="page:analytics">
+    <strong>Métricas</strong>
+    <span>Os mesmos eventos, contados em vez de listados.</span>
+  </a>
+</div>
