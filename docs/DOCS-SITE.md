@@ -84,3 +84,73 @@ Proven working on this machine on 2026-08-25.
 ## Status
 
 See the checklist at the bottom of this file, rewritten as work lands.
+
+---
+
+## What was built
+
+**47 pages, 94 partials, both languages, no dependencies.**
+
+| Section | Pages |
+|---|---|
+| Start here | Overview, Install, Your first ten minutes |
+| Concepts | Session log, Providers, Missions, Autonomy, Guardrails, Confidence, Memory, Accounts, Local-first |
+| Surfaces | 17 — every screen the product has |
+| Guides | 6 task-shaped walkthroughs |
+| Reference | Shortcuts, Provider matrix, Data locations, Settings, Glossary |
+| Architecture | How it is built, Inside the guardrail, Inside the autopilot, Distribution |
+| Project state | What is built, What is not built, Known blockers |
+
+**20 figures**, all photographs of the real 0.5.0 build. **8 diagrams**, inline
+SVG drawn from the page's own tokens so they theme with it.
+
+### Tooling added along the way
+
+| Tool | Does |
+|---|---|
+| `apps/docs/build.mjs` | Builds, and fails on locale divergence, a missing image, a missing alt, or a dead internal link |
+| `apps/docs/audit.mjs` | The tier below that — dead anchors, diverged locales, untranslated Portuguese, uncaptioned figures, unused images |
+| `apps/docs/test-search.mjs` | Runs the shipped `site.js` in a DOM stub and lifts its real ranking function |
+| `apps/docs/serve.mjs` | A local static server |
+| `apps/docs/shoot-page.ps1` | Renders a built page headlessly, at any width, in either theme |
+| `tools/shoot.ps1` | Drives the app to a surface and photographs it in one call |
+| `tools/crop.ps1` | Crops before scaling |
+| `tools/redact.ps1` | Replaces personal data in a figure |
+
+### Bugs this pass found in its own work
+
+1. **The theme could not be previewed at all.** A `\b` inside a template
+   literal is consumed before it reaches the browser, so the built page
+   carried a real backspace character in the regex and the match never fired.
+2. **`$args` is an automatic PowerShell variable.** Assigning to it silently
+   does not do what it looks like, and the screenshot URL lost its query
+   string — which is what made the first bug look like it might be elsewhere.
+3. **The search returned results for `zzzqqq`.** Subsequence matching is right
+   for the short titles the product's palette ranks and wrong over 2,600
+   characters of prose, where almost any string of letters matches.
+4. **The first search test reimplemented the ranking** and passed against its
+   own copy while the real one changed underneath. The ranking is now one
+   function, lifted whole into the test.
+5. **The pt-BR summary for Guardrails said eight operations.** `classify.rs`
+   has nine — `git.discard-changes` was added after the roadmap's count was
+   written. The roadmap is still wrong; the docs are not.
+
+### One mistake made against real data, and repaired
+
+The screenshot automation clicked *New note* and then sent Enter, which
+re-fired the still-focused button **48 times** and left 48 empty notes in the
+real notebook. Repaired through the product's own delete affordance — direct
+deletion from the database was refused, correctly — and verified back to one
+note, the real one, untouched.
+
+The lesson is in `tools/shoot.ps1` now: never send Enter straight after
+clicking a button.
+
+## Left for Alan
+
+- **Deploying it.** `cd apps/docs && vercel` — set up and not run, because
+  publishing is outward-facing and the account carries two unrelated projects
+  called `jarvis` and `jarvis-guardian`. Pick a name that cannot be confused
+  with those.
+- **B-DOC1 in `BLOCKERS.md`** — an unanswered AnyDesk remote-access request
+  that appeared during this session. Read that one first.
