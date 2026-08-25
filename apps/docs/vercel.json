@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "installCommand": "echo no dependencies",
   "framework": null,
-  "cleanUrls": true,
+  "cleanUrls": false,
   "trailingSlash": false,
   "headers": [
     {

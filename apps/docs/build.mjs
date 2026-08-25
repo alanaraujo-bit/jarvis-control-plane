@@ -307,7 +307,24 @@ ${alternates}
 // Build
 // ---------------------------------------------------------------------------
 
-const version = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8")).version;
+/**
+ * The version in the top bar is the *product's*, read from the repository root.
+ *
+ * A subdirectory deploy only uploads this directory, so the root is not there —
+ * the first production deploy failed on exactly that. Fall back to this
+ * package's own version, and when both are present, check they agree: a docs
+ * site quietly advertising a version the product does not have is worse than a
+ * build that stops.
+ */
+const ownVersion = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+let version = ownVersion;
+if (existsSync(join(REPO, "package.json"))) {
+  const rootVersion = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8")).version;
+  if (rootVersion !== ownVersion) {
+    warn(`version drift: repository is ${rootVersion}, apps/docs/package.json is ${ownVersion}`);
+  }
+  version = rootVersion;
+}
 
 rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
