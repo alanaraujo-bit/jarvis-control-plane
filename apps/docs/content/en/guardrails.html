@@ -1,1 +1,146 @@
-<p>TODO</p>
+<p>You are going to leave an agent running while you do something else. Guardrails are what
+makes that a reasonable thing to do: nine classes of operation that get stopped and held for a
+decision <em>before</em> they execute.</p>
+
+<figure class="fig">
+  <img src="../img/settings-guardrails.png" alt="The Guardrails section of Settings, listing nine sensitive operations, each with Always ask, Allow and Never allow.">
+  <figcaption><b>One row per operation the core reports.</b> The list is free to grow without
+  this screen being touched — which is exactly why it is its own section rather than a group
+  inside a longer page.</figcaption>
+</figure>
+
+<h2>The nine operations</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Operation</th><th>Identifier</th><th>What matches</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Force push</strong></td><td><code>git.force-push</code></td><td>Overwriting a branch on a remote. Deliberately <em>not</em> <code>--force-with-lease</code>, which refuses when the remote moved.</td></tr>
+    <tr><td><strong>Rewrite history</strong></td><td><code>git.history-rewrite</code></td><td><code>reset --hard</code>, <code>rebase</code>, <code>filter-branch</code>.</td></tr>
+    <tr><td><strong>Delete a branch</strong></td><td><code>git.branch-delete</code></td><td>Deleting a remote branch, or force-deleting a local one.</td></tr>
+    <tr><td><strong>Throw away uncommitted work</strong></td><td><code>git.discard-changes</code></td><td><code>git restore</code>, <code>checkout -- &lt;file&gt;</code>, <code>stash drop</code>. The one thing Git keeps no copy of.</td></tr>
+    <tr><td><strong>Delete a whole folder</strong></td><td><code>fs.recursive-delete</code></td><td><code>rm -rf</code>, <code>Remove-Item -Recurse</code>, <code>git clean -f</code>.</td></tr>
+    <tr><td><strong>Read a credential file</strong></td><td><code>secrets.access</code></td><td><code>.env</code>, private keys, <code>.npmrc</code>. Example files deliberately do not count.</td></tr>
+    <tr><td><strong>Deploy to production</strong></td><td><code>deploy.production</code></td><td><code>vercel --prod</code>, <code>wrangler deploy</code>, <code>terraform apply</code>.</td></tr>
+    <tr><td><strong>Publish a package</strong></td><td><code>package.publish</code></td><td><code>npm publish</code>, <code>cargo publish</code>, <code>docker push</code>.</td></tr>
+    <tr><td><strong>Run something downloaded</strong></td><td><code>remote.execute</code></td><td><code>curl | sh</code>, <code>iex (iwr …)</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Three answers, resolved down a chain</h2>
+
+<p>Each operation gets <strong>Always ask</strong>, <strong>Allow</strong> or <strong>Never
+allow</strong>, resolved project → global → default. The default is Ask. The chain is
+<a href="page:autonomy">the same shape autonomy uses</a>, on purpose.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Allow is silence, not permission</span>
+  <p><em>Allow</em> means the guard does not object. It does not mean the operation was
+  reviewed, and it does not mean it is safe. The distinction is written into the source next to
+  the enum, because a reader who mistakes the two will design the next feature wrongly.</p>
+</div>
+
+<h2>Where it can actually be enforced — and where it cannot</h2>
+
+<p>This is the part most tools would quietly overstate. The
+<a href="page:providers">capability model</a> reports the truth per situation instead:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Situation</th><th>What happens</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>A verification command <em>J.A.R.V.I.S.</em> runs for a mission</td>
+      <td><strong>Real enforcement.</strong> We own the process.</td>
+    </tr>
+    <tr>
+      <td>A <strong>Claude Code</strong> session</td>
+      <td><strong>Real enforcement</strong>, through its pre-tool hook. Verified against 2.1.240:
+      a force push was refused before it executed.</td>
+    </tr>
+    <tr>
+      <td>A <strong>Codex</strong> session</td>
+      <td>Same hook mechanism, but Codex will not run it until you trust it in Codex's own
+      interface. Reported as <code>PreExecutionWhenTrusted</code> — observed, not guarded, until
+      you do.</td>
+    </tr>
+    <tr>
+      <td>A <strong>human</strong> typing in a terminal</td>
+      <td><strong>Nothing, deliberately.</strong> Guardrails govern agents. Your terminal is
+      your terminal.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>It fails open, and that is the right call</h2>
+
+<p>No policy snapshot, malformed JSON, or a version the guard does not understand: it stays
+silent and the tool call proceeds.</p>
+
+<p>This looks backwards until you count. The guard process runs <strong>before every tool call
+in every agent session</strong>. A guard that failed <em>closed</em> would turn any bug in
+itself — a missing file, a parse error, a version skew after an update — into an agent that
+cannot do anything at all, in every project, until someone diagnoses it. Failing open means a
+bug costs you the guardrail; failing closed means a bug costs you the product.</p>
+
+<h2>How the classifier decides</h2>
+
+<p>It is heuristic matching over command text: it tokenises, respects quoting, and reads each
+program with its arguments. It is <strong>not</strong> a shell parser and does not pretend to
+be.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Read this sentence twice</span>
+  <p>A command the classifier does <em>not</em> flag has <strong>not been proven safe</strong>.
+  It failed to match a pattern. Those are different claims, and only one of them is true.</p>
+</div>
+
+<p>The negative cases are the load-bearing ones. These must <strong>not</strong> match, or the
+guardrail becomes the first thing anyone switches off:</p>
+
+<pre><code><span class="g">✓ no match</span>  git push --force-with-lease origin main
+<span class="c">             refuses on its own when the remote moved — the safe spelling</span>
+
+<span class="g">✓ no match</span>  echo "rm -rf /tmp/x"
+<span class="c">             a string being printed, not a directory being deleted</span>
+
+<span class="g">✓ no match</span>  npm publish --dry-run
+<span class="c">             publishes nothing</span>
+
+<span class="g">✓ no match</span>  cat .env.example
+<span class="c">             an example file is not a credential</span>
+
+<span class="r">✗ matches</span>   pnpm build &amp;&amp; git push --force &amp;&amp; npm publish
+<span class="c">             a chain is not one command; each part is classified</span></code></pre>
+
+<h2>Where a discard is guarded and a stage is not</h2>
+
+<p>Inside <a href="page:review">Review</a>, only <strong>discard</strong> is a guarded action.
+Staging and unstaging move the index and are reversible; asking about them would teach you to
+switch the guardrail off, and then the discard is unguarded too. Guarding everything is how you
+end up guarding nothing.</p>
+
+<p>The gate there also <em>names</em> its operation rather than classifying a command string it
+just built itself, and it writes no pending row — you are at the screen, so the question is
+asked and answered there.</p>
+
+<h2>Under Unattended, "ask" refuses</h2>
+
+<p>A rule set to Ask cannot ask anyone during an <a href="page:guide-unattended">unattended
+run</a>. Rather than park the agent on a prompt nobody will answer, the guard refuses, and the
+mission moves to Waiting with a reason. The session tells the guard that it is driven, which is
+how the guard knows.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified against a real agent</span>
+  <p>Against real Claude Code 2.1.240: a force push was refused before it executed, and under
+  Unattended an <code>rm -rf</code> was stopped with the directory still there afterwards.
+  Separately, in the installed app: a mission whose acceptance criterion was
+  <code>npm publish</code> had the check <strong>held</strong> rather than run, the approval was
+  answered, and the mission left Waiting.</p>
+</div>
+
+<p><a href="page:internals-guardrail">Inside the guardrail</a> explains the mechanism — a
+separate process, a snapshot on disk, and decisions appended to a file the session follows.</p>

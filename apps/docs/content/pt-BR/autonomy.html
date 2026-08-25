@@ -1,1 +1,152 @@
-<p>TODO</p>
+<p>Autonomia responde uma pergunta: <strong>quanto o agente decide sozinho?</strong> As
+<a href="page:guardrails">proteções</a> respondem outra, mais estreita — o que ele nunca pode
+fazer, independentemente. Autonomia é a pergunta mais ampla, e é por isso que as Configurações
+colocam ela acima das Proteções: a cerca só faz sentido depois que você sabe até onde vai o
+campo.</p>
+
+<h2>Três perfis</h2>
+
+<div class="defs">
+  <div>
+    <dt>Guiada</dt>
+    <dd>A pessoa fica por perto e o agente consulta com frequência. Use quando a mudança é
+    delicada, quando você ainda não confia no formato da tarefa, ou quando você quer ver ele
+    pensar.</dd>
+  </div>
+  <div>
+    <dt>Autônoma</dt>
+    <dd>O agente resolve o que cai dentro da alçada dele e pergunta quando algo não cai. O modo
+    de trabalho comum, e o que assume que você está no teclado.</dd>
+  </div>
+  <div>
+    <dt>Sem supervisão</dt>
+    <dd>Feito para ser deixado sozinho. Continue implementando, testando, consertando e
+    verificando até a missão estar pronta, genuinamente bloqueada, ou falhada. Ninguém está no
+    teclado, e o produto se comporta como se isso fosse verdade.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Sem supervisão é uma afirmação sobre você, não sobre o agente</span>
+  <p>Colocar uma missão em Sem supervisão é você dizendo <em>eu não vou assistir isso</em>. O
+  produto leva ao pé da letra, e vários comportamentos mudam por causa disso — veja abaixo.</p>
+</div>
+
+<h2>A cadeia: missão → projeto → global</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 660 130" role="img" aria-labelledby="d-au">
+  <title id="d-au">A autonomia é resolvida primeiro pela missão, depois pelo projeto, depois
+  pelo padrão global.</title>
+
+  <rect x="4" y="42" width="150" height="44" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="79" y="62" text-anchor="middle">Esta missão</text>
+  <text class="d-text-sm" x="79" y="78" text-anchor="middle">perguntada primeiro</text>
+  <path class="d-line" d="M154 64 H208" marker-end="url(#aa)"/>
+  <text class="d-text-sm" x="181" y="54" text-anchor="middle">sem valor</text>
+
+  <rect class="d-fill-surface d-stroke" x="210" y="42" width="150" height="44" rx="7"/>
+  <text class="d-text" x="285" y="62" text-anchor="middle">Este projeto</text>
+  <text class="d-text-sm" x="285" y="78" text-anchor="middle">Projeto → Configurações</text>
+  <path class="d-line" d="M360 64 H414" marker-end="url(#aa)"/>
+  <text class="d-text-sm" x="387" y="54" text-anchor="middle">sem valor</text>
+
+  <rect class="d-fill-surface d-stroke" x="416" y="42" width="150" height="44" rx="7"/>
+  <text class="d-text" x="491" y="62" text-anchor="middle">Padrão global</text>
+  <text class="d-text-sm" x="491" y="78" text-anchor="middle">Configurações → Autonomia</text>
+
+  <defs>
+    <marker id="aa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+<p class="diagram__caption">Sem valor é genuinamente sem valor — é a ausência de uma linha, não
+um padrão guardado que parece igual. É isso que faz uma mudança no nível do projeto alcançar
+toda missão que nunca opinou.</p>
+
+<p><a href="page:guardrails">As proteções resolvem pela mesma cadeia</a>, deliberadamente. Duas
+configurações que se comportam do mesmo jeito são uma coisa para aprender em vez de duas.</p>
+
+<h3>Uma auditoria achou três valores que ninguém conseguia mudar</h3>
+
+<p>O produto usava, mostrava na tela, e não dava jeito nenhum de ajustar: os dois níveis
+superiores desta cadeia, e o limite de turnos do piloto automático — que o painel exibia
+alegremente como <em>turno 3 de 24</em> enquanto 24 era uma constante no código. Tamanho de
+texto e histórico do terminal também estavam fixos no código. Todos agora são configurações;
+nenhum deles era um recurso novo.</p>
+
+<h2>O que muda em Sem supervisão</h2>
+
+<h3>O piloto automático assume a cadeira</h3>
+
+<p>Depois de cada turno ele verifica a missão contra os critérios reais dela, e então ou manda a
+próxima instrução nomeando o que ainda não passa, ou para com um motivo. Existem exatamente três
+finais e <em>continuar e torcer</em> não é um deles. Veja
+<a href="page:internals-autopilot">Dentro do piloto automático</a>.</p>
+
+<h3>"Perguntar" vira recusa</h3>
+
+<p>Uma proteção em <em>Sempre perguntar</em> não consegue perguntar para ninguém — você não está
+lá. Estacionar o agente num prompt que ninguém vai responder desperdiça a execução inteira,
+então em Sem supervisão uma regra de <em>perguntar</em> <strong>recusa</strong>, e a missão vai
+para Esperando com um motivo que você lê quando voltar.</p>
+
+<p>Uma sessão dirigida avisa à proteção que é dirigida, e é assim que a proteção sabe fazer
+isso.</p>
+
+<h3>Turnos terminados param de te notificar</h3>
+
+<p>Com o limite padrão, uma execução sem supervisão produziria vinte notificações enquanto você
+estava fora <em>por escolha</em>, e depois uma vigésima primeira quando ela de fato parasse — a
+única que você pediu, no fim de uma pilha. Então os turnos terminados de uma sessão dirigida são
+descartados.</p>
+
+<p>As <strong>perguntas</strong> dela não. Um agente dirigido que para para perguntar é a única
+coisa numa execução sem supervisão que vale interromper alguém, porque ele não consegue
+continuar até ser respondido.</p>
+
+<h3>O agente é perguntado o que aprendeu</h3>
+
+<p>No fim de uma execução sem supervisão bem-sucedida — uma vez, e só aí — o agente recebe uma
+pergunta estreita sobre o que ainda importaria <em>da próxima vez</em>, e a resposta dele vai
+para a <a href="page:brain">Memória</a> do projeto. Ele é proibido de encostar em qualquer coisa
+enquanto responde, e recebe uma saída de emergência nomeada (<code>NOTHING TO RECORD</code>) que
+se espera que dispare na maior parte das vezes.</p>
+
+<p>Uma missão concluída manualmente nunca é perguntada, deliberadamente: digitar uma pergunta
+num terminal que alguém está assistindo é uma conversa diferente de interromper.</p>
+
+<h3>Uma pasta não confiada é recusada de saída</h3>
+
+<p>O Claude Code pergunta se você confia numa pasta na primeira vez que abre uma. Uma
+<a href="page:worktrees">worktree</a> nova é sempre uma pasta nova em folha, então uma execução
+sem supervisão iniciada ali ficaria travada para sempre numa pergunta que ninguém está presente
+para responder. Iniciar é recusado, com o motivo.</p>
+
+<h2>O limite de turnos</h2>
+
+<p>Uma execução sem supervisão para depois de um número fixo de turnos. Os limites são decisões
+de produto, não números arbitrários:</p>
+
+<ul>
+  <li><strong>Abaixo de 4</strong>, uma execução não consegue terminar nada real e toda missão
+  acabaria em Falhou.</li>
+  <li><strong>Acima de 100</strong>, <em>rodar até acabar</em> deixa de ser um orçamento — que é
+  exatamente o que a regra contra consumir recursos indefinidamente existe para impedir.</li>
+</ul>
+
+<p>Dois detalhes que importam mais do que parecem. Os limites são aplicados <em>no núcleo</em>,
+não só desenhados no controle deslizante: um valor fora da faixa é recusado na entrada, e um
+valor fora da faixa já guardado por uma versão antiga é limitado na saída. E <strong>uma
+execução mantém o orçamento com que começou</strong> — relê-lo a cada turno deixaria uma mudança
+nas Configurações mover a linha de chegada debaixo de uma execução já em andamento.</p>
+
+<div class="callout">
+  <span class="callout__title">Onde ajustar</span>
+  <p>Globalmente em <strong>Configurações → Autonomia</strong>; por projeto na área
+  <strong>Configurações</strong> do próprio projeto; por missão na própria missão. O painel é
+  literalmente o mesmo componente nos casos global e de projeto, e é por isso que eles não
+  conseguem divergir.</p>
+</div>

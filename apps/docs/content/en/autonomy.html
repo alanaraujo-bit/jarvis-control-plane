@@ -1,1 +1,148 @@
-<p>TODO</p>
+<p>Autonomy answers one question: <strong>how much does the agent decide on its own?</strong>
+<a href="page:guardrails">Guardrails</a> answer a different and narrower one — what it may never
+do regardless. Autonomy is the broader question, which is why Settings puts it above
+Guardrails: the fence only makes sense once you know how far the field goes.</p>
+
+<h2>Three profiles</h2>
+
+<div class="defs">
+  <div>
+    <dt>Guided</dt>
+    <dd>The human stays close and the agent checks in often. Use it when the change is
+    delicate, when you do not yet trust the shape of the task, or when you want to watch it
+    think.</dd>
+  </div>
+  <div>
+    <dt>Autonomous</dt>
+    <dd>The agent handles what falls inside its remit and asks when something does not. The
+    ordinary working mode, and the one that assumes you are at the keyboard.</dd>
+  </div>
+  <div>
+    <dt>Unattended</dt>
+    <dd>Designed to be left alone. Keep implementing, testing, fixing and verifying until the
+    mission is done, genuinely blocked, or failed. Nobody is at the keyboard, and the product
+    behaves as if that is true.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Unattended is a statement about you, not about the agent</span>
+  <p>Setting a mission to Unattended is you saying <em>I am not going to watch this</em>. The
+  product takes that literally, and several behaviours change because of it — see below.</p>
+</div>
+
+<h2>The chain: mission → project → global</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 660 130" role="img" aria-labelledby="d-au">
+  <title id="d-au">Autonomy is resolved from the mission first, then the project, then the
+  global default.</title>
+
+  <rect x="4" y="42" width="150" height="44" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="79" y="62" text-anchor="middle">This mission</text>
+  <text class="d-text-sm" x="79" y="78" text-anchor="middle">asked first</text>
+  <path class="d-line" d="M154 64 H208" marker-end="url(#aa)"/>
+  <text class="d-text-sm" x="181" y="54" text-anchor="middle">unset</text>
+
+  <rect class="d-fill-surface d-stroke" x="210" y="42" width="150" height="44" rx="7"/>
+  <text class="d-text" x="285" y="62" text-anchor="middle">This project</text>
+  <text class="d-text-sm" x="285" y="78" text-anchor="middle">Project → Settings</text>
+  <path class="d-line" d="M360 64 H414" marker-end="url(#aa)"/>
+  <text class="d-text-sm" x="387" y="54" text-anchor="middle">unset</text>
+
+  <rect class="d-fill-surface d-stroke" x="416" y="42" width="150" height="44" rx="7"/>
+  <text class="d-text" x="491" y="62" text-anchor="middle">Global default</text>
+  <text class="d-text-sm" x="491" y="78" text-anchor="middle">Settings → Autonomy</text>
+
+  <defs>
+    <marker id="aa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+<p class="diagram__caption">Unset is genuinely unset — it is the absence of a row, not a stored
+default that looks the same. That is what lets a project-level change reach every mission that
+never expressed an opinion.</p>
+
+<p><a href="page:guardrails">Guardrails resolve down the same chain</a>, deliberately. Two
+settings that behave the same way are one thing to learn instead of two.</p>
+
+<h3>An audit found three values nobody could change</h3>
+
+<p>The product used them, showed them on screen, and gave no way to set them: the two upper
+levels of this chain, and the autopilot's turn budget — which the panel cheerfully rendered as
+<em>turn 3 of 24</em> while 24 was a constant in the source. Terminal type size and scrollback
+were hard-coded too. All are now settings; none of them were new features.</p>
+
+<h2>What changes under Unattended</h2>
+
+<h3>The autopilot takes the seat</h3>
+
+<p>After every turn it verifies the mission against its real criteria, then either sends the
+next instruction naming what does not pass yet, or stops with a reason. There are exactly three
+endings and <em>keep going and hope</em> is not one of them.
+See <a href="page:internals-autopilot">Inside the autopilot</a>.</p>
+
+<h3>"Ask" becomes a refusal</h3>
+
+<p>A guardrail set to <em>Always ask</em> cannot ask anyone — you are not there. Parking the
+agent on a prompt nobody will answer wastes the whole run, so under Unattended an
+<em>ask</em> rule <strong>refuses</strong> instead, and the mission goes to Waiting with a
+reason you can read when you come back.</p>
+
+<p>A driven session tells the guardrail it is driven, which is how the guard knows to do this.</p>
+
+<h3>Finished turns stop notifying you</h3>
+
+<p>Under the default budget an unattended run would otherwise produce twenty notifications
+while you were away <em>by choice</em>, and then a twenty-first when it actually stopped — the
+only one you asked for, at the bottom of a pile. So a driven session's finished turns are
+dropped.</p>
+
+<p>Its <strong>questions</strong> are not. A driven agent that stops to ask is the one thing
+about an unattended run worth interrupting somebody for, because it cannot continue until they
+answer.</p>
+
+<h3>The agent is asked what it learned</h3>
+
+<p>At the end of a successful unattended run — once, and only then — the agent gets one narrow
+question about what would still matter <em>next time</em>, and its answer goes into the
+project's <a href="page:brain">Brain</a>. It is forbidden from touching anything while
+answering, and it is given a named escape hatch (<code>NOTHING TO RECORD</code>) that is
+expected to fire most of the time.</p>
+
+<p>A manually completed mission is never asked, deliberately: typing a question into a terminal
+somebody is watching is a different conversation to interrupt.</p>
+
+<h3>An untrusted folder is refused up front</h3>
+
+<p>Claude Code asks whether you trust a folder the first time it opens one. A fresh
+<a href="page:worktrees">worktree</a> is always a brand-new folder, so an unattended run started
+there would hang forever on a question nobody is present to answer. Starting is refused instead,
+with the reason.</p>
+
+<h2>The turn budget</h2>
+
+<p>An unattended run stops after a fixed number of turns. The bounds are product decisions, not
+arbitrary limits:</p>
+
+<ul>
+  <li><strong>Below 4</strong>, a run cannot finish anything real and every mission would end in
+  Failed.</li>
+  <li><strong>Above 100</strong>, <em>run until done</em> stops being a budget at all — which is
+  exactly what the rule against consuming resources indefinitely exists to prevent.</li>
+</ul>
+
+<p>Two details that matter more than they look. The bounds are enforced <em>in the core</em>,
+not only drawn in the slider: an out-of-range value is refused on the way in, and an
+out-of-range value already stored by an older build is clamped on the way out. And
+<strong>a run keeps the budget it started with</strong> — re-reading it each turn would let a
+change in Settings move the finish line under a run that is already going.</p>
+
+<div class="callout">
+  <span class="callout__title">Where to set it</span>
+  <p>Globally in <strong>Settings → Autonomy</strong>; per project in the project's own
+  <strong>Settings</strong> area; per mission on the mission itself. The panel is literally the
+  same component in the global and project cases, which is why they cannot drift apart.</p>
+</div>

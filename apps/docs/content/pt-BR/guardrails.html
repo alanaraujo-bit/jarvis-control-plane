@@ -1,1 +1,147 @@
-<p>TODO</p>
+<p>Você vai deixar um agente rodando enquanto faz outra coisa. As proteções são o que torna isso
+uma decisão razoável: nove classes de operação que são paradas e retidas para uma decisão
+<em>antes</em> de executarem.</p>
+
+<figure class="fig">
+  <img src="../img/settings-guardrails.png" alt="A seção Proteções das Configurações, listando nove operações sensíveis, cada uma com Sempre perguntar, Permitir e Nunca permitir.">
+  <figcaption><b>Uma linha por operação que o núcleo informa.</b> A lista é livre para crescer
+  sem que esta tela seja tocada — que é exatamente por que ela é uma seção própria em vez de um
+  grupo dentro de uma página mais longa.</figcaption>
+</figure>
+
+<h2>As nove operações</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Operação</th><th>Identificador</th><th>O que casa</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Push forçado</strong></td><td><code>git.force-push</code></td><td>Sobrescrever um branch no remoto. Deliberadamente <em>não</em> inclui <code>--force-with-lease</code>, que se recusa quando o remoto mudou.</td></tr>
+    <tr><td><strong>Reescrever o histórico</strong></td><td><code>git.history-rewrite</code></td><td><code>reset --hard</code>, <code>rebase</code>, <code>filter-branch</code>.</td></tr>
+    <tr><td><strong>Apagar um branch</strong></td><td><code>git.branch-delete</code></td><td>Apagar um branch remoto, ou forçar a remoção de um local.</td></tr>
+    <tr><td><strong>Jogar fora trabalho não commitado</strong></td><td><code>git.discard-changes</code></td><td><code>git restore</code>, <code>checkout -- &lt;arquivo&gt;</code>, <code>stash drop</code>. A única coisa da qual o Git não guarda cópia.</td></tr>
+    <tr><td><strong>Apagar uma pasta inteira</strong></td><td><code>fs.recursive-delete</code></td><td><code>rm -rf</code>, <code>Remove-Item -Recurse</code>, <code>git clean -f</code>.</td></tr>
+    <tr><td><strong>Ler um arquivo de credencial</strong></td><td><code>secrets.access</code></td><td><code>.env</code>, chaves privadas, <code>.npmrc</code>. Arquivos de exemplo deliberadamente não contam.</td></tr>
+    <tr><td><strong>Publicar em produção</strong></td><td><code>deploy.production</code></td><td><code>vercel --prod</code>, <code>wrangler deploy</code>, <code>terraform apply</code>.</td></tr>
+    <tr><td><strong>Publicar um pacote</strong></td><td><code>package.publish</code></td><td><code>npm publish</code>, <code>cargo publish</code>, <code>docker push</code>.</td></tr>
+    <tr><td><strong>Executar algo baixado</strong></td><td><code>remote.execute</code></td><td><code>curl | sh</code>, <code>iex (iwr …)</code>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Três respostas, resolvidas por uma cadeia</h2>
+
+<p>Cada operação recebe <strong>Sempre perguntar</strong>, <strong>Permitir</strong> ou
+<strong>Nunca permitir</strong>, resolvidas projeto → global → padrão. O padrão é Perguntar. A
+cadeia tem <a href="page:autonomy">o mesmo formato que a autonomia usa</a>, de propósito.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Permitir é silêncio, não permissão</span>
+  <p><em>Permitir</em> quer dizer que a proteção não faz objeção. Não quer dizer que a operação
+  foi revisada, e não quer dizer que ela é segura. A distinção está escrita no código ao lado do
+  enum, porque quem confundir as duas vai desenhar o próximo recurso errado.</p>
+</div>
+
+<h2>Onde dá para aplicar de verdade — e onde não dá</h2>
+
+<p>Esta é a parte que a maioria das ferramentas exageraria discretamente. O
+<a href="page:providers">modelo de capacidades</a> informa a verdade por situação:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Situação</th><th>O que acontece</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Um comando de verificação que o <em>J.A.R.V.I.S.</em> roda para uma missão</td>
+      <td><strong>Aplicação real.</strong> O processo é nosso.</td>
+    </tr>
+    <tr>
+      <td>Uma sessão do <strong>Claude Code</strong></td>
+      <td><strong>Aplicação real</strong>, pelo hook pré-ferramenta dele. Verificado contra a
+      2.1.240: um push forçado foi recusado antes de executar.</td>
+    </tr>
+    <tr>
+      <td>Uma sessão do <strong>Codex</strong></td>
+      <td>Mesmo mecanismo de hook, mas o Codex não executa ele até você confiar nele na interface
+      do próprio Codex. Informado como <code>PreExecutionWhenTrusted</code> — observado, não
+      protegido, até você fazer isso.</td>
+    </tr>
+    <tr>
+      <td>Uma <strong>pessoa</strong> digitando num terminal</td>
+      <td><strong>Nada, deliberadamente.</strong> As proteções governam agentes. Seu terminal é
+      seu terminal.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Ela falha aberta, e essa é a escolha certa</h2>
+
+<p>Sem snapshot de política, JSON malformado, ou uma versão que a proteção não entende: ela fica
+em silêncio e a chamada de ferramenta prossegue.</p>
+
+<p>Isso parece invertido até você fazer a conta. O processo da proteção roda <strong>antes de
+toda chamada de ferramenta em toda sessão de agente</strong>. Uma proteção que falhasse
+<em>fechada</em> transformaria qualquer bug nela mesma — um arquivo faltando, um erro de parse,
+uma diferença de versão depois de uma atualização — em um agente que não consegue fazer nada, em
+todo projeto, até alguém diagnosticar. Falhar aberta faz um bug te custar a proteção; falhar
+fechada faz um bug te custar o produto.</p>
+
+<h2>Como o classificador decide</h2>
+
+<p>É casamento heurístico sobre o texto do comando: ele tokeniza, respeita aspas, e lê cada
+programa com seus argumentos. Ele <strong>não</strong> é um parser de shell e não finge ser.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Leia esta frase duas vezes</span>
+  <p>Um comando que o classificador <em>não</em> sinaliza <strong>não foi provado
+  seguro</strong>. Ele falhou em casar com um padrão. São afirmações diferentes, e só uma delas é
+  verdadeira.</p>
+</div>
+
+<p>Os casos negativos são os que sustentam tudo. Estes <strong>não</strong> podem casar, ou a
+proteção vira a primeira coisa que qualquer um desliga:</p>
+
+<pre><code><span class="g">✓ não casa</span>  git push --force-with-lease origin main
+<span class="c">            se recusa sozinho quando o remoto mudou — a grafia segura</span>
+
+<span class="g">✓ não casa</span>  echo "rm -rf /tmp/x"
+<span class="c">            uma string sendo impressa, não um diretório sendo apagado</span>
+
+<span class="g">✓ não casa</span>  npm publish --dry-run
+<span class="c">            não publica nada</span>
+
+<span class="g">✓ não casa</span>  cat .env.example
+<span class="c">            um arquivo de exemplo não é uma credencial</span>
+
+<span class="r">✗ casa</span>      pnpm build &amp;&amp; git push --force &amp;&amp; npm publish
+<span class="c">            uma cadeia não é um comando; cada parte é classificada</span></code></pre>
+
+<h2>Onde um descarte é protegido e um stage não é</h2>
+
+<p>Dentro da <a href="page:review">Revisão</a>, só o <strong>descarte</strong> é uma ação
+protegida. Adicionar e remover do índice mexem no índice e são reversíveis; perguntar sobre eles
+te ensinaria a desligar a proteção, e aí o descarte também fica desprotegido. Proteger tudo é
+como se acaba não protegendo nada.</p>
+
+<p>A trava ali também <em>nomeia</em> a operação dela em vez de classificar uma string de
+comando que ela mesma acabou de montar, e não escreve linha pendente nenhuma — você está na
+tela, então a pergunta é feita e respondida ali.</p>
+
+<h2>Em Sem supervisão, "perguntar" recusa</h2>
+
+<p>Uma regra em Perguntar não consegue perguntar para ninguém durante uma
+<a href="page:guide-unattended">execução sem supervisão</a>. Em vez de estacionar o agente num
+prompt que ninguém vai responder, a proteção recusa, e a missão vai para Esperando com um
+motivo. A sessão avisa à proteção que é dirigida, e é assim que a proteção sabe.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado contra um agente real</span>
+  <p>Contra o Claude Code 2.1.240 real: um push forçado foi recusado antes de executar, e em Sem
+  supervisão um <code>rm -rf</code> foi parado com o diretório ainda lá depois. Separadamente, no
+  app instalado: uma missão cujo critério de aceitação era <code>npm publish</code> teve a
+  checagem <strong>retida</strong> em vez de executada, a aprovação foi respondida, e a missão
+  saiu de Esperando.</p>
+</div>
+
+<p><a href="page:internals-guardrail">Dentro da proteção</a> explica o mecanismo — um processo
+separado, um snapshot em disco, e decisões anexadas a um arquivo que a sessão acompanha.</p>

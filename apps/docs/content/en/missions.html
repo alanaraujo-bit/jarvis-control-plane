@@ -1,1 +1,177 @@
-<p>TODO</p>
+<p>An agent that says <em>Done!</em> has told you what it believes. A mission is the mechanism
+for finding out whether it is true — and for noticing later when it stops being true.</p>
+
+<h2>What a mission is made of</h2>
+
+<div class="defs">
+  <div>
+    <dt>A title and an intent</dt>
+    <dd>What you want. Ordinary prose, in your words.</dd>
+  </div>
+  <div>
+    <dt>Acceptance criteria</dt>
+    <dd>The conditions that decide whether it is finished. Each one is either
+    <strong>required</strong> or not, and each one carries a <em>verification</em> — the thing
+    that will actually be run.</dd>
+  </div>
+  <div>
+    <dt>An autonomy profile</dt>
+    <dd>How much the agent decides on its own. See <a href="page:autonomy">Autonomy</a>.</dd>
+  </div>
+  <div>
+    <dt>Evidence</dt>
+    <dd>What each check produced, kept — not a green tick, the actual outcome.</dd>
+  </div>
+</div>
+
+<h2>The four kinds of verification</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Kind</th><th>What it does</th><th>Checked by</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Command</code></td>
+      <td>Runs a command and compares its exit code with the one you expected (0 unless you say
+      otherwise). Runs in the project directory unless given another.</td>
+      <td>J.A.R.V.I.S.</td>
+    </tr>
+    <tr>
+      <td><code>FileExists</code></td>
+      <td>A path, relative to the project, must be there.</td>
+      <td>J.A.R.V.I.S.</td>
+    </tr>
+    <tr>
+      <td><code>FileContains</code></td>
+      <td>A path must be there <em>and</em> contain given text.</td>
+      <td>J.A.R.V.I.S.</td>
+    </tr>
+    <tr>
+      <td><code>Manual</code></td>
+      <td>Only a person can judge it. Recorded as such, so it is never mistaken for something
+      that was actually checked.</td>
+      <td>You</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The point of the fourth one</span>
+  <p><code>Manual</code> exists so that <em>"the login screen looks right"</em> can be a real
+  criterion without pretending a machine verified it. Its evidence reads
+  <em>confirmed by you</em>, never <em>passed</em>. A criterion that cannot be checked can only
+  ever be <strong>claimed</strong>, and the product refuses to blur the two.</p>
+</div>
+
+<h2>The seven states, and why two of them exist</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 210" role="img" aria-labelledby="d-ms">
+  <title id="d-ms">A mission moves from Ready through Running and Verifying to Completed, with
+  Waiting, Blocked and Failed as honest exits.</title>
+
+  <rect class="d-fill-surface d-stroke" x="4" y="82" width="104" height="34" rx="6"/>
+  <text class="d-text" x="56" y="103" text-anchor="middle">Ready</text>
+  <path class="d-line" d="M108 99 H150" marker-end="url(#am)"/>
+
+  <rect class="d-fill-surface d-stroke" x="152" y="82" width="104" height="34" rx="6"/>
+  <text class="d-text" x="204" y="103" text-anchor="middle">Running</text>
+  <path class="d-line" d="M256 99 H298" marker-end="url(#am)"/>
+
+  <rect class="d-fill-surface d-stroke" x="300" y="82" width="104" height="34" rx="6"/>
+  <text class="d-text" x="352" y="103" text-anchor="middle">Verifying</text>
+  <path class="d-line" d="M404 99 H540" marker-end="url(#am)"/>
+  <text class="d-text-sm" x="472" y="92" text-anchor="middle">every required one holds</text>
+
+  <rect x="542" y="82" width="152" height="34" rx="6" fill="var(--state-success-bg)" stroke="var(--state-success)" stroke-opacity="0.4"/>
+  <text class="d-text" x="618" y="103" text-anchor="middle" fill="var(--state-success)">Completed</text>
+
+  <path class="d-line" d="M352 82 V44 H542" marker-end="url(#am)"/>
+  <rect x="544" y="26" width="152" height="34" rx="6" fill="var(--state-waiting-bg)" stroke="var(--state-waiting)" stroke-opacity="0.4"/>
+  <text class="d-text" x="620" y="47" text-anchor="middle" fill="var(--state-waiting)">Waiting · Blocked</text>
+
+  <path class="d-line" d="M352 116 V158 H542" marker-end="url(#am)"/>
+  <rect x="544" y="140" width="152" height="34" rx="6" fill="var(--state-danger-bg)" stroke="var(--state-danger)" stroke-opacity="0.4"/>
+  <text class="d-text" x="620" y="161" text-anchor="middle" fill="var(--state-danger)">Failed</text>
+
+  <text class="d-text-sm" x="410" y="38">needs a person</text>
+  <text class="d-text-sm" x="410" y="176">out of budget, or stalled</text>
+
+  <defs>
+    <marker id="am" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<p><strong>Waiting</strong> and <strong>Blocked</strong> are the two that most tools do not
+have, and they are the reason this model is worth anything. A mission that cannot proceed has
+to say so. The alternatives are quietly declaring success, or burning your tokens forever — and
+both of those are things an agent will happily do if the model gives it nowhere else to go.</p>
+
+<p>A blocked mission must also explain itself. <em>Blocked</em> with no reason is a state
+nobody can act on.</p>
+
+<h2>Completion is refused, not requested</h2>
+
+<p>You cannot mark a mission complete because you feel it is. The checks run; if a required
+criterion does not hold, completion is refused and the surface says which one and why.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified against the real product</span>
+  <p>A mission was created, completion was refused, verification was run, the work was done,
+  verification passed, and the mission completed. Then the artifact was deleted from disk and
+  the completion was <strong>revoked</strong> — because the evidence stopped holding.</p>
+</div>
+
+<h3>Revocation is the part people do not expect</h3>
+
+<p>Evidence is re-checked, and a completion whose evidence no longer holds does not stay
+completed. This is what makes a mission different from a checkbox: a checkbox records that
+somebody once believed something. A mission records whether it is <em>currently</em> true.</p>
+
+<h3>Withdrawing a criterion is recorded, never deleted</h3>
+
+<p>If a criterion turns out to have been the wrong ask, you withdraw it — with a reason. It
+stays in the record, marked withdrawn, with your reason attached. Deleting it would let a
+mission be made to pass by removing the tests it failed, which is precisely the manoeuvre this
+whole model exists to prevent.</p>
+
+<h2>What evidence looks like</h2>
+
+<p>Every sentence J.A.R.V.I.S. writes as evidence is a translated string with the specifics
+substituted in, not English text stored in your database. A failing command reads, in
+Portuguese, exactly:</p>
+
+<pre><code>`exit 1` saiu com código 1, esperado 0</code></pre>
+
+<p>The command's own <strong>output</strong> — stdout, stderr, an OS error string — is stored
+with no translation code at all, deliberately. That is the tool speaking, not a sentence
+J.A.R.V.I.S. wrote, and translating it would be inventing words nobody said.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A bug worth knowing about</span>
+  <p>When evidence gained its translation codes, the code threading them through was correct and
+  a raw <code>INSERT</code> in a different function still named only the original columns. Every
+  code would have been computed perfectly and then silently dropped on the way into the
+  database. The same gap existed separately in the manual-confirmation path. Both are now pinned
+  by tests that read the evidence back <em>through the real database</em> — because a correct
+  struct is not the same thing as correct bytes on disk.</p>
+</div>
+
+<h2>Missions and agents are linked</h2>
+
+<p>A mission knows which agent sessions worked on it, and a session knows which mission it
+serves. That link is what makes the thread readable end to end: mission → agent → terminal →
+conversation → evidence. <a href="page:mission-control">Mission Control</a> is built on it, and
+so is the <a href="page:guide-unattended">unattended run</a>, where the autopilot takes the
+human's seat and verifies after every turn.</p>
+
+<div class="callout">
+  <span class="callout__title">In the source</span>
+  <p><code>mission/model.rs</code> is the state machine and the verification kinds;
+  <code>mission/verify.rs</code> runs the real checks and writes the evidence;
+  <code>mission/store.rs</code> is persistence.</p>
+</div>

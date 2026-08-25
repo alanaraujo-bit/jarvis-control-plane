@@ -1,1 +1,179 @@
-<p>TODO</p>
+<p>Um agente que diz <em>Pronto!</em> te contou no que ele acredita. Uma missão é o mecanismo
+para descobrir se é verdade — e para perceber depois quando deixa de ser.</p>
+
+<h2>Do que uma missão é feita</h2>
+
+<div class="defs">
+  <div>
+    <dt>Um título e uma intenção</dt>
+    <dd>O que você quer. Prosa comum, nas suas palavras.</dd>
+  </div>
+  <div>
+    <dt>Critérios de aceitação</dt>
+    <dd>As condições que decidem se está terminada. Cada um é <strong>obrigatório</strong> ou
+    não, e cada um carrega uma <em>verificação</em> — a coisa que vai de fato ser executada.</dd>
+  </div>
+  <div>
+    <dt>Um perfil de autonomia</dt>
+    <dd>Quanto o agente decide sozinho. Veja <a href="page:autonomy">Autonomia</a>.</dd>
+  </div>
+  <div>
+    <dt>Evidência</dt>
+    <dd>O que cada checagem produziu, guardado — não um tique verde, o resultado de fato.</dd>
+  </div>
+</div>
+
+<h2>Os quatro tipos de verificação</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Tipo</th><th>O que faz</th><th>Conferido por</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Command</code></td>
+      <td>Roda um comando e compara o código de saída com o que você esperava (0, a menos que
+      diga outro). Roda no diretório do projeto, salvo se receber outro.</td>
+      <td>J.A.R.V.I.S.</td>
+    </tr>
+    <tr>
+      <td><code>FileExists</code></td>
+      <td>Um caminho, relativo ao projeto, tem que estar lá.</td>
+      <td>J.A.R.V.I.S.</td>
+    </tr>
+    <tr>
+      <td><code>FileContains</code></td>
+      <td>Um caminho tem que estar lá <em>e</em> conter o texto informado.</td>
+      <td>J.A.R.V.I.S.</td>
+    </tr>
+    <tr>
+      <td><code>Manual</code></td>
+      <td>Só uma pessoa consegue julgar. Registrado como tal, para nunca ser confundido com algo
+      que foi realmente conferido.</td>
+      <td>Você</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A razão de existir do quarto</span>
+  <p><code>Manual</code> existe para que <em>"a tela de login está com a cara certa"</em> possa
+  ser um critério de verdade sem fingir que uma máquina verificou. A evidência dele lê
+  <em>confirmado por você</em>, nunca <em>passou</em>. Um critério que não pode ser conferido só
+  pode ser <strong>alegado</strong>, e o produto se recusa a embaçar os dois.</p>
+</div>
+
+<h2>Os sete estados, e por que dois deles existem</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 210" role="img" aria-labelledby="d-ms">
+  <title id="d-ms">Uma missão vai de Pronta, passando por Em execução e Verificando, até
+  Concluída, com Esperando, Bloqueada e Falhou como saídas honestas.</title>
+
+  <rect class="d-fill-surface d-stroke" x="4" y="82" width="104" height="34" rx="6"/>
+  <text class="d-text" x="56" y="103" text-anchor="middle">Pronta</text>
+  <path class="d-line" d="M108 99 H150" marker-end="url(#am)"/>
+
+  <rect class="d-fill-surface d-stroke" x="152" y="82" width="104" height="34" rx="6"/>
+  <text class="d-text" x="204" y="103" text-anchor="middle">Em execução</text>
+  <path class="d-line" d="M256 99 H298" marker-end="url(#am)"/>
+
+  <rect class="d-fill-surface d-stroke" x="300" y="82" width="104" height="34" rx="6"/>
+  <text class="d-text" x="352" y="103" text-anchor="middle">Verificando</text>
+  <path class="d-line" d="M404 99 H540" marker-end="url(#am)"/>
+  <text class="d-text-sm" x="472" y="92" text-anchor="middle">todo obrigatório se sustenta</text>
+
+  <rect x="542" y="82" width="152" height="34" rx="6" fill="var(--state-success-bg)" stroke="var(--state-success)" stroke-opacity="0.4"/>
+  <text class="d-text" x="618" y="103" text-anchor="middle" fill="var(--state-success)">Concluída</text>
+
+  <path class="d-line" d="M352 82 V44 H542" marker-end="url(#am)"/>
+  <rect x="544" y="26" width="152" height="34" rx="6" fill="var(--state-waiting-bg)" stroke="var(--state-waiting)" stroke-opacity="0.4"/>
+  <text class="d-text" x="620" y="47" text-anchor="middle" fill="var(--state-waiting)">Esperando · Bloqueada</text>
+
+  <path class="d-line" d="M352 116 V158 H542" marker-end="url(#am)"/>
+  <rect x="544" y="140" width="152" height="34" rx="6" fill="var(--state-danger-bg)" stroke="var(--state-danger)" stroke-opacity="0.4"/>
+  <text class="d-text" x="620" y="161" text-anchor="middle" fill="var(--state-danger)">Falhou</text>
+
+  <text class="d-text-sm" x="410" y="38">precisa de uma pessoa</text>
+  <text class="d-text-sm" x="410" y="176">sem orçamento, ou travada</text>
+
+  <defs>
+    <marker id="am" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<p><strong>Esperando</strong> e <strong>Bloqueada</strong> são os dois que a maioria das
+ferramentas não tem, e são a razão pela qual este modelo vale alguma coisa. Uma missão que não
+consegue prosseguir tem que dizer isso. As alternativas são declarar sucesso caladinha, ou
+queimar seus tokens para sempre — e as duas são coisas que um agente faz com prazer se o modelo
+não deixar outro lugar para ele ir.</p>
+
+<p>Uma missão bloqueada também tem que se explicar. <em>Bloqueada</em> sem motivo é um estado
+sobre o qual ninguém consegue agir.</p>
+
+<h2>A conclusão é recusada, não pedida</h2>
+
+<p>Você não consegue marcar uma missão como concluída porque acha que ela está. As checagens
+rodam; se um critério obrigatório não se sustenta, a conclusão é recusada e a superfície diz
+qual e por quê.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado no produto real</span>
+  <p>Uma missão foi criada, a conclusão foi recusada, a verificação rodou, o trabalho foi feito,
+  a verificação passou, e a missão concluiu. Aí o artefato foi apagado do disco e a conclusão
+  foi <strong>revogada</strong> — porque a evidência parou de se sustentar.</p>
+</div>
+
+<h3>A revogação é a parte que as pessoas não esperam</h3>
+
+<p>A evidência é reconferida, e uma conclusão cuja evidência não se sustenta mais não continua
+concluída. É isso que faz uma missão ser diferente de um checkbox: um checkbox registra que
+alguém um dia acreditou em alguma coisa. Uma missão registra se ela é <em>hoje</em> verdade.</p>
+
+<h3>Retirar um critério é registrado, nunca apagado</h3>
+
+<p>Se um critério se revela o pedido errado, você o retira — com um motivo. Ele fica no
+registro, marcado como retirado, com o seu motivo anexado. Apagar deixaria uma missão passar
+pela remoção dos testes que ela falhou, que é exatamente a manobra que este modelo todo existe
+para impedir.</p>
+
+<h2>Como a evidência se parece</h2>
+
+<p>Toda frase que o J.A.R.V.I.S. escreve como evidência é uma string traduzida com os detalhes
+substituídos dentro, e não texto em inglês guardado no seu banco. Um comando que falha lê,
+exatamente:</p>
+
+<pre><code>`exit 1` saiu com código 1, esperado 0</code></pre>
+
+<p>A <strong>saída</strong> do próprio comando — stdout, stderr, uma string de erro do sistema
+operacional — é guardada sem código de tradução nenhum, deliberadamente. Ali é a ferramenta
+falando, não uma frase que o J.A.R.V.I.S. escreveu, e traduzir seria inventar palavras que
+ninguém disse.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Um bug que vale conhecer</span>
+  <p>Quando a evidência ganhou seus códigos de tradução, o código que os conduzia estava correto
+  e um <code>INSERT</code> cru em outra função continuava nomeando só as colunas originais. Todo
+  código teria sido calculado perfeitamente e depois descartado em silêncio no caminho para o
+  banco. A mesma brecha existia separadamente no caminho da confirmação manual. Os dois agora
+  são fixados por testes que leem a evidência de volta <em>pelo banco de dados real</em> —
+  porque uma struct correta não é a mesma coisa que bytes corretos em disco.</p>
+</div>
+
+<h2>Missões e agentes são ligados</h2>
+
+<p>Uma missão sabe quais sessões de agente trabalharam nela, e uma sessão sabe qual missão ela
+serve. Esse vínculo é o que torna o fio legível de ponta a ponta: missão → agente → terminal →
+conversa → evidência. A <a href="page:mission-control">Central de Missões</a> é construída em
+cima dele, e a <a href="page:guide-unattended">execução sem supervisão</a> também, onde o piloto
+automático assume a cadeira da pessoa e verifica depois de cada turno.</p>
+
+<div class="callout">
+  <span class="callout__title">No código</span>
+  <p><code>mission/model.rs</code> é a máquina de estados e os tipos de verificação;
+  <code>mission/verify.rs</code> roda as checagens reais e escreve a evidência;
+  <code>mission/store.rs</code> é a persistência.</p>
+</div>
