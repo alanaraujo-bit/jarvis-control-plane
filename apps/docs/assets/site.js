@@ -180,6 +180,47 @@
     });
   }
 
+  /**
+   * Score one index row against a folded query. Returns null for no match.
+   *
+   * Three tiers, strongest first, because they answer three different
+   * questions:
+   *
+   *  1. The title *contains* the query — you named the page. Ranked by how
+   *     much of the title the match covers, so "sessão" puts both pages whose
+   *     titles are about sessions at the top rather than picking one by an
+   *     accident of subsequence walking.
+   *  2. Title, section and summary match as a *subsequence* — the product's
+   *     own command palette behaviour, so "mc" finds Mission Control.
+   *  3. The body contains every word. Deliberately NOT a subsequence: over
+   *     2,600 characters of prose almost any string of letters matches as one,
+   *     and "zzzqqq" returning results reads as a broken search rather than a
+   *     permissive one.
+   *
+   * Exported on the closure so the test can lift this exact function rather
+   * than reimplementing it — a test that reimplements what it tests passes
+   * while the shipped code is broken.
+   */
+  function rankRow(row, needle, words) {
+    var at = row._t.indexOf(needle);
+    if (at !== -1) {
+      var coverage = needle.length / Math.max(row._t.length, 1);
+      var s = 100 + coverage * 40 + (at === 0 ? 8 : 0);
+      return { rank: row.h ? s - 3 : s, where: "head" };
+    }
+
+    var sub = score(row._t + " " + row._g + " " + row._d, row.t, needle);
+    if (sub !== null) return { rank: row.h ? sub - 3 : sub, where: "head" };
+
+    if (!row._b) return null;
+    var span = 0;
+    for (var w = 0; w < words.length; w++) {
+      if (row._b.indexOf(words[w]) === -1) return null;
+      span += words[w].length;
+    }
+    return { rank: span * 1.5, where: "body" };
+  }
+
   function search(query) {
     var needle = fold(query.trim());
     if (!needle) {
@@ -191,25 +232,14 @@
         })
         .slice(0, 40);
     }
+    // Every whitespace-separated word, so "session log" and "log session"
+    // both work on a body.
+    var words = needle.split(" ").filter(Boolean);
+
     var out = [];
     for (var i = 0; i < index.length; i++) {
-      var row = index[i];
-      // Title, section and summary first; the body only if none of them match.
-      // A body hit on a 2,600-character page is a weaker answer than a title
-      // hit, and scoring them together buries the strong one.
-      var head = row._t + " " + row._g + " " + row._d;
-      var s = score(head, row.t, needle);
-      var where = "head";
-      if (s === null && row._b) {
-        s = score(row._b, row.t, needle);
-        where = "body";
-        if (s !== null) s = s * 0.35;
-      }
-      if (s === null) continue;
-      if (row._t.indexOf(needle) === 0) s += 24; // an exact prefix is what you meant
-      else if (row._t.indexOf(needle) !== -1) s += 12;
-      if (row.h) s -= 3; // a heading sits just under its own page
-      out.push({ row: row, rank: s, where: where, needle: needle });
+      var hit = rankRow(index[i], needle, words);
+      if (hit) out.push({ row: index[i], rank: hit.rank, where: hit.where, needle: needle });
     }
     out.sort(function (a, b) {
       return b.rank - a.rank;

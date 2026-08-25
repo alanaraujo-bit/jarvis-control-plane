@@ -241,13 +241,26 @@ ${alternates}
 <link rel="stylesheet" href="../assets/site.css">
 <script>
   /* Applied before first paint: a documentation site that flashes the wrong
-     theme is the first thing anyone notices about it. */
-  try {
-    var t = localStorage.getItem("jarvis-docs-theme");
-    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
-    else document.documentElement.dataset.theme =
+     theme is the first thing anyone notices about it.
+
+     A "theme" query parameter wins over everything, so a link can carry the
+     theme it was meant to be read in — which is also how this site's own
+     screenshots are taken, without a preference from one run leaking into the
+     next. */
+  (function () {
+    /* Parsed rather than matched with a regex: this script is embedded in a
+       template literal, and a backslash escape inside one is consumed before
+       it ever reaches the browser. A \\b here became a real backspace
+       character and the match silently never fired. */
+    var q = new URLSearchParams(location.search).get("theme");
+    if (q === "light" || q === "dark") { document.documentElement.dataset.theme = q; return; }
+    try {
+      var t = localStorage.getItem("jarvis-docs-theme");
+      if (t === "light" || t === "dark") { document.documentElement.dataset.theme = t; return; }
+    } catch (e) { /* private windows and blocked site data both throw */ }
+    document.documentElement.dataset.theme =
       matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  } catch (e) { document.documentElement.dataset.theme = "dark"; }
+  })();
 </script>
 </head>
 <body>

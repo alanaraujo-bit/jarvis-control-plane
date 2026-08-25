@@ -72,8 +72,8 @@
           "slug": "guardrails",
           "title": { "en": "Guardrails", "pt-BR": "Proteções" },
           "summary": {
-            "en": "The fence around autonomy: eight classes of sensitive operation, held for a decision before they run, in a process that fails open on purpose.",
-            "pt-BR": "A cerca em volta da autonomia: oito classes de operação sensível, retidas para uma decisão antes de rodarem, em um processo que falha aberto de propósito."
+            "en": "The fence around autonomy: nine classes of sensitive operation, held for a decision before they run, in a process that fails open on purpose.",
+            "pt-BR": "A cerca em volta da autonomia: nove classes de operação sensível, retidas para uma decisão antes de rodarem, em um processo que falha aberto de propósito."
           }
         },
         {
