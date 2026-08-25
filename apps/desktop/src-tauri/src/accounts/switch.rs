@@ -86,6 +86,15 @@ pub fn set_active(db: &Database, account_id: &str) -> Result<Account> {
 }
 
 /// Next signed-in, unpaused and non-exhausted account in rotation order.
+///
+/// **An account on the same subscription is not a destination.** Two
+/// configuration directories can be signed into one provider account, and when
+/// they are, moving from one to the other buys nothing: it is the same
+/// allowance, the same window and the same reset. Worse, it does not merely
+/// fail to help — the exhaustion filter above does not catch it while the
+/// window is merely *nearing*, so under `OnThreshold` the rotation would move
+/// to the twin, hit the same threshold on the next reading, and come straight
+/// back. A ping-pong between two views of one window, neither of them helping.
 pub fn next_available(db: &Database, current: &Account) -> Option<Account> {
     let mut accounts: Vec<_> = list(db)
         .ok()?
@@ -93,6 +102,7 @@ pub fn next_available(db: &Database, current: &Account) -> Option<Account> {
         .filter(|candidate| {
             candidate.provider == current.provider
                 && candidate.id != current.id
+                && !super::same_subscription(current, candidate)
                 && candidate.signed_in
                 && !candidate.paused
                 && !super::quota::for_account(db, candidate)

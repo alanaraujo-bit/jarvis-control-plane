@@ -34,6 +34,55 @@ export const en = {
   "nav.accounts": "Accounts",
   "nav.settings": "Settings",
 
+  // ---- The Notebook (M19) --------------------------------------------------
+  // Alan's own library: ideas, and the prompts he had been keeping in WhatsApp
+  // messages to himself. Never briefed to an agent — that is what the Brain is
+  // for (§36) — but a note can be handed to the agent on screen.
+  "notebook.title": "Notebook",
+  "notebook.open": "Open the notebook",
+  "notebook.close": "Close",
+  "notebook.search": "Search your notes and prompts",
+  "notebook.searchEmpty": "Nothing matches \u201C{query}\u201D.",
+  "notebook.all": "All notes",
+  "notebook.unfiled": "Unfiled",
+  "notebook.newNote": "New note",
+  "notebook.newNotebook": "New folder",
+  "notebook.newNotebook.placeholder": "Folder name",
+  "notebook.notebooks": "Folders",
+  "notebook.rename": "Rename",
+  "notebook.deleteNotebook": "Delete folder",
+  // Says where the notes go, rather than asking whether to destroy them —
+  // deleting a folder never deletes what is in it (migration 16).
+  "notebook.deleteNotebook.confirm": "Delete the folder \u201C{name}\u201D? The {count} notes inside move to Unfiled — nothing is lost.",
+  "notebook.deleteNotebook.confirm_one": "Delete the folder \u201C{name}\u201D? The note inside moves to Unfiled — nothing is lost.",
+  "notebook.deleteNotebook.confirmEmpty": "Delete the folder \u201C{name}\u201D? It is empty.",
+  "notebook.deleteNote": "Delete note",
+  "notebook.deleteNote.confirm": "Delete \u201C{name}\u201D? This one cannot be undone.",
+  "notebook.duplicate": "Duplicate",
+  "notebook.pin": "Pin",
+  "notebook.unpin": "Unpin",
+  "notebook.moveTo": "Move to",
+  "notebook.copy": "Copy",
+  "notebook.copied": "Copied",
+  "notebook.titlePlaceholder": "Title",
+  "notebook.bodyPlaceholder": "Write it down. It saves itself.",
+  "notebook.untitled": "Untitled",
+  "notebook.empty.title": "Nothing here yet",
+  "notebook.empty.body": "Ideas, prompts, anything worth keeping. It is yours, it stays on this machine, and no agent is ever briefed with it.",
+  "notebook.noneSelected": "Pick a note, or start a new one.",
+  "notebook.count": "{count} notes",
+  "notebook.count_one": "{count} note",
+  "notebook.edited": "Edited {when}",
+  // Handing a prompt to the agent on screen — the one thing a notes app cannot
+  // do, and the reason this lives here rather than somewhere else.
+  "notebook.send": "Send to {agent}",
+  "notebook.send.noSession": "Open a terminal in a project to send a prompt straight to the agent.",
+  "notebook.send.failed": "That terminal is no longer on screen.",
+  // Refused rather than sent: this terminal has not asked for bracketed paste,
+  // so every line break would arrive as a submitted command. See `live.ts`.
+  "notebook.send.wouldSubmit": "This terminal would run each line as its own command. Send a prompt with line breaks to an agent — Claude Code or Codex.",
+  "notebook.shortcut": "Ctrl Shift N",
+
   // ---- Window chrome -------------------------------------------------------
   "window.minimize": "Minimize",
   "window.maximize": "Maximize",
@@ -88,13 +137,24 @@ export const en = {
   "env.someMissing": "Some tools are missing.",
 
   // ---- Settings (§64) ------------------------------------------------------
+  // The sections of Settings, as navigation. Each section's label is the name
+  // the thing already had — autonomy.title, guardrail.title, env.title — rather
+  // than a nav-only copy of it. Two spellings of "Guardrails" is how a
+  // catalogue starts disagreeing with itself.
+  "settings.nav.label": "Settings sections",
+  // One line under each section title, saying what the section is for. Only
+  // the sections whose panel does not already introduce itself need one.
+  "settings.appearance.blurb": "How J.A.R.V.I.S. looks, and the language it speaks.",
+  "settings.terminal.blurb": "How terminals are drawn, and how much of the past they keep.",
+  "settings.notifications.blurb": "When J.A.R.V.I.S. interrupts you, and how.",
+  "settings.environment.blurb": "The tools J.A.R.V.I.S. found on this machine.",
+  "settings.updates.blurb": "Which version you are on, and whether a newer one exists.",
   "settings.appearance": "Appearance",
   "settings.theme": "Theme",
   "settings.theme.dark": "Dark",
   "settings.theme.light": "Light",
   "settings.theme.system": "System",
   "settings.language": "Language",
-  "settings.agents": "Agents",
   "settings.companion": "Phone",
   "companion.title": "Mobile companion",
   "companion.subtitle": "Watch your agents from your phone, and answer when they need you.",
@@ -487,6 +547,12 @@ export const en = {
   "accounts.add": "Add account",
   "accounts.active": "Active",
   "accounts.machineAccount": "Machine account",
+  // Two configuration directories signed into one provider account. The
+  // sentence has to say the consequence, not just the fact — "same
+  // subscription" alone leaves someone looking at two identical gauges still
+  // wondering which number is real.
+  "accounts.sharedSubscription": "Same subscription as {name}. One allowance, shown twice — moving work between them gains nothing.",
+  "accounts.sharedSubscription.badge": "Shared allowance",
   "accounts.unnamed": "Unnamed account",
   "accounts.identityMissing": "Identity not available",
   "accounts.signIn": "Sign in",

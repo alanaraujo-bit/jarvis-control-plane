@@ -1714,3 +1714,215 @@ behind it runs once at startup and then every five minutes, and it asks for
 spawns for a fact that changes around a login and at no other time. That
 distinction is the difference between a chip worth having and a background task
 that starts eight CLIs every five minutes forever.
+
+## D45 — Everything visible at once is not the same as everything findable
+
+Settings had been one column with every group stacked in it, and the file said
+so on purpose: *"grouped into flat sections rather than a nested menu tree."*
+The argument was that a flat page hides nothing. It was the right instinct and
+the wrong conclusion, and reading the screen is what settles it: the theme
+picker, the terminal sliders, the autonomy control, a guardrail table that grows
+with the core, three notification switches, a phone pairing code, an environment
+scan and the updater were all equally present, so none of them was findable. To
+change one setting you scrolled past four unrelated decisions. To learn whether
+a setting existed you had to read all of them.
+
+So the groups became destinations: a fixed column of eight names on the left,
+one section on the right. What that buys is not tidiness. It is that **the list
+of names is readable without opening anything** — the column says what this
+product can be configured to do, which is exactly the question the flat page
+could only answer after you had scrolled the whole of it.
+
+### One level of hiding, not two
+
+The obvious next move — collapsible groups inside each section — is refused.
+The left column already answers "click and more options appear". Putting an
+accordion under it means two things to expand before a setting is on screen, and
+a setting behind two disclosures is more buried than one on a long page, not
+less. The sections are short enough to be read whole; that is the point of
+having eight of them.
+
+### A section that can grow on its own does not share a page
+
+Guardrails had been the tail of an "Agents" group that also held the autonomy
+default and the turn limit. But `GuardrailPanel` renders one row per operation
+the **core** reports (§26) — the list is data, and it is free to get longer
+without this screen being touched. Autonomy is two controls and will stay two.
+Pairing a fixed thing with an unbounded one means the page's shape depends on a
+decision made in Rust, which is how a group quietly turns back into a scroll.
+
+### The heading belongs to whoever already has one
+
+Half the old clutter was double-titling: the page heading said "Phone" and the
+panel beneath it said "Mobile companion"; "Agents" sat above "Autonomy". A
+sidebar would have made that a third label for the same thing.
+
+The rule is that a section whose panel already titles and explains itself —
+Autonomy, Guardrails, the phone, Environment, Updates — gets **no** heading from
+`Settings.tsx`. Only the three sections built out of loose fields get one, drawn
+in the same shape the panels use.
+
+That is also why no `embedded` prop was added to the panels. `AutonomyPanel` and
+`GuardrailPanel` are rendered inside a project too (§19), where their headers
+are the only headings there are; a prop to suppress them would have to be
+threaded through two call sites to fix a problem only one of them has, and the
+panel would then have two ways to be drawn for the rest of its life.
+
+### Which section you are in is a memory, not a preference
+
+It lives in a module store rather than component state, for two reasons and only
+two: the command palette can aim at a section — "Rescan" now lands on
+Environment rather than navigating to Settings and starting a scan three rooms
+away from where it put you — and coming back from a project returns to where you
+were. It is deliberately **not** written to disk. Where somebody was last
+session is not something they chose, and it stops being true the moment the
+reason they were there is gone.
+
+## D46 — An account is a directory, and two directories can be one subscription
+
+Found on screen: three Claude cards, two of them showing the same 74%, the same
+weekly window and the same reset. Read as duplicated statistics under two
+different names.
+
+They were not duplicated. `claude auth status --json` against each
+configuration directory says so plainly — `~/.claude` and the directory added
+third are both `alanvitoraraujo1@icloud.com`, org `f2df57c9…`; the second card
+is a genuinely different subscription. **One allowance, drawn twice.** The
+numbers were the only honest thing on the screen; the two names were the lie.
+
+This falls straight out of the choice made in §66 and restated at the top of
+`accounts/mod.rs`: an account in this product **is** a configuration directory,
+because rewriting one global credential file would log the user out of the
+session they are sitting in. That choice is still right. What it never
+accounted for is that the mapping is one-way — every account is a directory,
+but a directory is not an account, and the provider will happily sign two of
+them into the same person.
+
+### The key is the email, not the organisation
+
+A personal Claude organisation maps one-to-one onto a Pro account, and on this
+machine `org_id` would have given the right answer. It is still the wrong key:
+a Team plan puts several different people's separate allowances under one
+`org_id`, so keying on it would declare colleagues to be the same subscription —
+a wrong answer that gets worse the larger the team. The email is what the
+subscription attaches to.
+
+And **an unknown email is unknown, never same**. Codex 0.149.1 stopped writing
+`id_token_claims`, which leaves accounts with no identity at all; grouping those
+would make every nameless account a twin of every other one, which is the
+failure mode this rule exists to avoid rather than an edge case of it.
+
+Nothing is stored. The adopted row is read with the ambient environment, so
+signing `~/.claude` into somebody else changes the answer without this product
+being told — a `twin_of` column would be a fact that goes stale silently.
+
+### The half of this that was a bug, not a label
+
+Rotation is the reason accounts exist here at all, and `next_available` knew
+nothing about any of it. `OnExhaustion` was accidentally protected — both twins
+read exhausted at once, so the exhausted filter caught the second one — but
+`OnThreshold` was not: nearing the limit on Claude 1 would move new work to
+Claude 3, hit the same threshold on the next reading, and move it back. A
+ping-pong between two views of one window, neither of them helping, on the exact
+setting a person turns on because they want the product to handle this for them.
+
+A candidate on the same subscription is now not a destination.
+
+### Told, not prevented
+
+Two directories on one account is a legitimate thing to want — different MCP
+servers, different permissions, different settings. Sign-in is not refused and
+the second card is not hidden. It says what it is, above the dial rather than
+under it: somebody reading two identical numbers needs to know they are one
+number *before* they plan around them.
+
+## D47 — A note that can be handed to the agent is not a note-taking app
+
+Alan keeps his prompts in WhatsApp messages to himself and asked for somewhere
+better: a notepad reachable without leaving the terminal, and folders for the
+prompts and ideas he has been hoarding.
+
+The obvious build is a note-taking app inside a desktop app, which is a worse
+Notion. What makes this belong here is one action nothing else can do: **the
+note goes into the prompt of the agent you are watching.** Everything else in
+the design is downstream of making that true.
+
+### The measurement that decided the whole feature
+
+`session::typing::type_text` — the path the autopilot (§32) and dictation (§54)
+already use — **flattens every newline to a space**, and its docstring says
+exactly why: a `\n` reaching an agent CLI's line editor submits the fragment
+before it. Prompts are multi-paragraph. Routed through the obvious existing
+path, Alan's library would have arrived as run-on lines, and it would have
+*looked* like it worked.
+
+So it was measured rather than reasoned about, in the running app against real
+Claude Code 2.1.245: a three-line string pasted into the prompt arrived with its
+structure intact and unsent. Claude Code honours bracketed paste (DECSET 2004);
+without it the first `\r` would have submitted line one on its own.
+
+### Which means delivery is not a Rust command
+
+`paste()` normalises newlines *and then* brackets them — but only if **that
+terminal** enabled the mode. An agent CLI does; a plain PowerShell does not. A
+Rust implementation would have had to guess at a fact the frontend already
+holds, so the missing piece was never a command: it was a way to reach the right
+`Terminal` object. `surfaces/terminal/live.ts` is a `Map<sessionId, Terminal>`
+that `TerminalView` fills on mount, and sending goes through xterm's own
+`paste`, which is the identical path a real Ctrl+V takes — the most-exercised
+code in the product for this exact job.
+
+### The gate is a mode, not a kind of session
+
+The first version of the button offered itself for any live terminal and said,
+in a comment, that pasting into a shell "is not useful". That understates it: a
+twenty-line prompt into a shell is twenty carriage returns, which is twenty
+commands, run. A prompt library is full of `git reset --hard` written as an
+*example*, and §35 is explicit that guardrails govern agents rather than what a
+person types — nothing downstream would have caught it.
+
+The condition is therefore not "is this a shell" but **"has the program on the
+other end enabled bracketed paste right now"**, which `term.modes` answers.
+That also covers the case a kind-based check would miss: an agent CLI that has
+started but has not yet drawn its prompt — the experiment waited nine seconds
+for precisely that reason. Single-line text is always sent; there is no newline
+to become a submit.
+
+### Why this is not `project_notes` (§40)
+
+Notes already exist and they stay. They are working memory **about one
+project**, they can be promoted into knowledge an agent gets briefed with, and
+`brain::delete_note` states outright that a note "is a scratchpad entry whose
+whole purpose is to be temporary". The Notebook is the opposite on every axis:
+it belongs to no project (a prompt scoped to one project is useless), it is
+never briefed, and it is kept for months. Making `project_notes.project_id`
+nullable would have forced every reader to handle a note belonging to no
+project, starting with `promote_note`, which has to know *which* project's
+knowledge to write into. §23 forbids storing the same fact twice; these are not
+the same fact.
+
+### The schema is the safety, not the dialog
+
+`notebook_notes.notebook_id` is nullable and NULL means **unfiled**, so deleting
+a folder is `ON DELETE SET NULL` and its notes survive. Somebody who has kept
+forty prompts for a year should not be one mis-click from losing them, and a
+shape that cannot do the damage is a stronger guarantee than a confirmation
+somebody clicks through. The dialog says where the notes went rather than asking
+whether to destroy them.
+
+### Two things chosen rather than defaulted
+
+**One level of folders.** Nesting buys recursive rendering, cycle prevention on
+every move and a cascade decision, for a depth most people never build — the
+same trade `MAX_SLOTS` made for split panes.
+
+**No `kind` column.** A prompt is a note you send. A per-item switch is a switch
+somebody forgets to set, which is D21's lesson one module over.
+
+### An ordering that could reshuffle itself
+
+Found by a flaky test rather than on screen: `ORDER BY pinned, updated_at,
+created_at` has no defined result when two notes land in the same millisecond,
+which duplicating a note does every time. A list of unchanged notes that
+reorders between two reads is a bug even though every row is correct. `id` —
+a UUIDv7, so time-ordered — is now the final tiebreak: stable *and* meaningful.

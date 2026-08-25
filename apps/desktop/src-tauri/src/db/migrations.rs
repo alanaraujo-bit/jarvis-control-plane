@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 15;
+pub const SCHEMA_VERSION: u32 = 16;
 
 struct Migration {
     version: u32,
@@ -713,6 +713,67 @@ const MIGRATIONS: &[Migration] = &[Migration {
         payload    TEXT NOT NULL
     );
 "#,
+    },
+    Migration {
+        version: 16,
+        sql: r#"
+    -- ---- The Notebook (M19) -------------------------------------------------
+    --
+    -- The person's own library: ideas, and the prompts they have been keeping in
+    -- WhatsApp messages to themselves. Global, never briefed to an agent, and
+    -- hoarded for months.
+    --
+    -- **This is not `project_notes` (§40) and must not become it.** That table
+    -- is working memory *about one project*: it lives in that project's Brain,
+    -- it can be promoted into knowledge an agent is briefed with, and
+    -- `brain::delete_note` says in as many words that a note "is a scratchpad
+    -- entry whose whole purpose is to be temporary". Every one of those is the
+    -- opposite of what this table holds. Making `project_notes.project_id`
+    -- nullable to serve both would have forced `promote_note` -- which has to
+    -- know *which* project's knowledge to write into -- to handle a note that
+    -- belongs to no project. Two names for two things beats one name for two
+    -- behaviours (§23 is about not keeping the same fact twice, and these are
+    -- not the same fact).
+
+    -- Folders, one level deep.
+    --
+    -- A nullable self-referencing `parent_id` would buy recursive rendering,
+    -- cycle prevention on every move, and a decision about what a cascade does
+    -- -- in service of a nesting depth most people never build. This is the
+    -- same call `MAX_SLOTS` made for split panes, and it is a choice rather
+    -- than an oversight: a future session wanting nesting should add it
+    -- deliberately, not assume it was forgotten.
+    CREATE TABLE notebooks (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        position   INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+
+    -- `notebook_id` is nullable, and NULL means **unfiled** rather than
+    -- orphaned. That is what makes deleting a folder safe: ON DELETE SET NULL
+    -- drops its notes into Unfiled instead of taking them with it. Somebody who
+    -- has kept forty prompts for a year must not lose them to one click, and a
+    -- confirmation dialog is a weaker guarantee than a schema that cannot do
+    -- the damage in the first place.
+    CREATE TABLE notebook_notes (
+        id          TEXT PRIMARY KEY,
+        notebook_id TEXT REFERENCES notebooks (id) ON DELETE SET NULL,
+        -- Optional. The surface falls back to the body's first line, so there
+        -- is never a nameless row in the list and never a required field
+        -- between having an idea and writing it down.
+        title       TEXT NOT NULL DEFAULT '',
+        body        TEXT NOT NULL DEFAULT '',
+        pinned      INTEGER NOT NULL DEFAULT 0,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL
+    );
+
+    -- The list order, exactly: pinned first, then most recently edited.
+    CREATE INDEX idx_notebook_notes
+        ON notebook_notes (notebook_id, pinned DESC, updated_at DESC);
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -826,6 +887,7 @@ mod tests {
             (13, 0xc7ca_954d_e678_f1bd),
             (14, 0x1dd0_9220_2d82_afda),
             (15, 0x2668_ef6f_85b5_38f8),
+            (16, 0x709a_d823_8bfb_79ff),
         ];
 
         for migration in MIGRATIONS {

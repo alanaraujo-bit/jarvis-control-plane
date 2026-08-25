@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   Ticket,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import type { MessageKey } from "@jarvis/i18n";
@@ -58,6 +59,7 @@ import {
   remaining,
   resetMoment,
   severityBand,
+  sharedSubscriptions,
 } from "./format";
 import "./Accounts.css";
 
@@ -577,10 +579,16 @@ function AccountCardView({
   card,
   now,
   canPause,
+  sharesWith,
 }: {
   card: AccountCard;
   now: number;
   canPause: boolean;
+  /**
+   * The other accounts drawing on this same allowance, by name. Empty for the
+   * ordinary case of one directory per subscription.
+   */
+  sharesWith: string[];
 }) {
   const t = useT();
   const { locale } = useI18n();
@@ -631,6 +639,11 @@ function AccountCardView({
             {(reading?.plan ?? account.plan) && <span>{reading?.plan ?? account.plan}</span>}
             {account.orgName && <span title={account.orgName}>{account.orgName}</span>}
             {account.adopted && <span>{t("accounts.machineAccount")}</span>}
+            {sharesWith.length > 0 && (
+              <span className="accounts__shared-badge">
+                {t("accounts.sharedSubscription.badge")}
+              </span>
+            )}
           </div>
         </div>
         {/* The status dot takes its colour from the binding window when there
@@ -651,6 +664,17 @@ function AccountCardView({
           {t(`accounts.health.${verification}` as MessageKey)}
         </span>
       </header>
+
+      {/* Said above the dial, not below it. The whole card exists to answer
+          "how much is left", and somebody reading two cards with the same
+          number needs to know they are one number *before* they start planning
+          around them — a footnote under the gauge arrives too late. */}
+      {sharesWith.length > 0 && (
+        <p className="accounts__shared">
+          <Users size={13} strokeWidth={1.9} aria-hidden="true" />
+          {t("accounts.sharedSubscription", { name: sharesWith.join(", ") })}
+        </p>
+      )}
 
       {binding ? (
         <>
@@ -773,11 +797,29 @@ function Summary({ cards, now }: { cards: AccountCard[]; now: number }) {
   const activeBinding = active ? bindingOf(active) : null;
   const activeLeft = activeBinding ? remaining(activeBinding.percentUsed) : null;
 
+  // Accounts that are the active one seen through a second configuration
+  // directory. Suggesting one of them is the same advice `next_available`
+  // refuses to act on, and this line is on screen every visit while automatic
+  // rotation is off by default — so the wrong version of it would be read far
+  // more often than it would be acted on.
+  //
+  // The `+ 15` gate below already hides the ordinary case, because twins report
+  // the same percentage. It is not enough: the two probes land at different
+  // moments, so a refusal recorded against one of them can pull the pair apart
+  // for a few minutes and produce a recommendation to move work onto the
+  // allowance it just came from.
+  const twins = useMemo(
+    () => sharedSubscriptions(cards.map((card) => card.account), (account) => account.id),
+    [cards],
+  );
+  const twinsOfActive = active ? new Set(twins.get(active.account.id) ?? []) : new Set<string>();
+
   // The best place to go next, offered only when there is somewhere better.
   const alternative = cards
     .filter(
       (card) =>
         card.account.id !== active?.account.id &&
+        !twinsOfActive.has(card.account.id) &&
         card.account.signedIn &&
         !card.account.paused &&
         card.quota.health !== "exhausted",
@@ -967,6 +1009,24 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
     [provider, report],
   );
 
+  /**
+   * Which cards are one subscription seen twice.
+   *
+   * Derived from every account, not from `cards`: the filter above is by
+   * provider and so is the grouping, so passing the whole list costs nothing
+   * and cannot go stale when the provider tab changes. Recomputed rather than
+   * stored — signing a directory into a different account changes the answer,
+   * and nothing tells this screen when that happens.
+   */
+  const shared = useMemo(
+    () =>
+      sharedSubscriptions(
+        (report?.accounts ?? []).map((card) => card.account),
+        (account) => account.label || account.email || t("accounts.unnamed"),
+      ),
+    [report, t],
+  );
+
   return (
     <div className="accounts">
       <div className="accounts__inner">
@@ -1067,6 +1127,7 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
                 key={card.account.id}
                 card={card}
                 now={now}
+                sharesWith={shared.get(card.account.id) ?? []}
                 canPause={
                   card.account.paused ||
                   !card.account.active ||

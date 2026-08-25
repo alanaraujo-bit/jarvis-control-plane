@@ -118,3 +118,24 @@
 .titlebar__control svg {
   shape-rendering: crispEdges;
 }
+
+/* The Notebook trigger (M19). Its own class rather than .titlebar__control:
+   that one is 46px wide to match the Windows caption buttons and sets
+   `shape-rendering: crispEdges` for their hairline glyphs, which turns a
+   rounded lucide icon jagged. Sized to the bell beside it instead, so the
+   strip still reads as one row. */
+.titlebar__notebook {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 100%;
+  color: var(--text-secondary);
+  transition:
+    background-color var(--duration-instant) linear,
+    color var(--duration-fast) var(--ease-out);
+}
+
+.titlebar__notebook:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}

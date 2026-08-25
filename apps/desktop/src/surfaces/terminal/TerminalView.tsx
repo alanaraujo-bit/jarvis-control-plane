@@ -20,6 +20,7 @@ import { usePreferenceValues } from "../settings/usePreferences";
 import { PastedImage } from "./PastedImage";
 import { TerminalFind, type FindState } from "./TerminalFind";
 import { terminalSearchDecorations, terminalTheme } from "./theme";
+import { registerTerminal, unregisterTerminal } from "./live";
 import "./TerminalView.css";
 
 interface TerminalViewProps {
@@ -249,6 +250,11 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
       });
     });
 
+    // Published so the Notebook (M19) can paste a prompt into this exact
+    // terminal — see `live.ts` for why delivery goes through xterm's own
+    // `paste` rather than through a Rust command.
+    registerTerminal(sessionId, term);
+
     // ResizeObserver rather than a window listener: panes resize without the
     // window changing size at all.
     const observer = new ResizeObserver(() => {
@@ -258,6 +264,7 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
 
     return () => {
       disposed = true;
+      unregisterTerminal(sessionId);
       observer.disconnect();
       onData.dispose();
       results.dispose();

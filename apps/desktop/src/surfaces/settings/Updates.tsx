@@ -71,7 +71,10 @@ export function Updates() {
     <section className="updates">
       <div className="updates__head">
         <div>
-          <h2 className="updates__title">{t("update.title")}</h2>
+          <h2 className="updates__title">
+            <Download size={15} strokeWidth={1.75} aria-hidden="true" />
+            {t("update.title")}
+          </h2>
           {version && (
             <p className="updates__version">{t("update.current", { version })}</p>
           )}

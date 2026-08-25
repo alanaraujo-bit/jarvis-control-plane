@@ -1,35 +1,159 @@
+/* Settings (§64).
+
+   Two columns: a map on the left that never moves, and one section on the
+   right. The scroll belongs to the *pane*, not to the screen — a left column
+   that scrolls away is a map you lose halfway through reading it. */
 .settings {
   height: 100%;
-  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  overflow: hidden;
 }
 
-/* A reading measure, not a full-bleed dashboard. Settings is a document. */
-.settings__inner {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: var(--space-10) var(--space-9) var(--space-12);
+/* ---- The map -------------------------------------------------------------
+   A quiet column. It carries no surface of its own beyond a hairline, because
+   it is a list of names, not a panel. */
+.settings__nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-10);
+  gap: var(--space-6);
+  padding: var(--space-10) var(--space-5) var(--space-8);
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .settings__heading {
+  padding: 0 var(--space-3);
   font-size: var(--text-xl);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tighter);
   color: var(--text-primary);
 }
 
-.settings__section {
+.settings__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.settings__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-3);
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  text-align: left;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.settings__link svg {
+  flex: none;
+  color: var(--text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+/* Portuguese labels run longer than English ones. The column is fixed, so the
+   label wraps rather than being clipped or forcing the column wider — found by
+   reading the screen in pt-BR, where "Notificações" is the long one. */
+.settings__link-text {
+  min-width: 0;
+}
+
+.settings__link:hover:not([data-active]) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings__link:hover:not([data-active]) svg {
+  color: var(--text-secondary);
+}
+
+/* The selected room, spelled the way the rail spells it: a translucent wash
+   plus a short amber edge.
+
+   `--bg-raised` was tried first and is wrong — it is an opaque surface colour,
+   and in the light theme it sits on a background nearly the same value, so the
+   selected row was invisible. Found by switching the theme and looking. The
+   translucent `--bg-active` darkens whatever is behind it, which is the only
+   kind of highlight that works in two themes authored independently (§8). */
+.settings__link[data-active] {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.settings__link[data-active] svg {
+  color: var(--accent);
+}
+
+.settings__link:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: -1px;
+}
+
+/* ---- The section ---------------------------------------------------------
+   The reading measure stays on the pane's inner column, exactly as it did when
+   Settings was one long page. Settings is a document, not a dashboard. */
+.settings__pane {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Left-aligned, not centred. Centring a 780px column inside a pane this wide
+   left a two-hundred-pixel gutter between the map and the section it had just
+   opened, and the section read as belonging to nothing — seen on screen at
+   1442px, which is the size the window actually opens at. The section now
+   starts a normal gutter after the divider, and the measure is what stops it
+   running the full width of a large monitor. */
+.settings__pane-inner {
+  max-width: 860px;
+  padding: var(--space-10) var(--space-9) var(--space-12) var(--space-10);
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  animation: settings-enter var(--duration-base) var(--ease-out);
 }
 
-.settings__section-title {
+/* A section arrives rather than blinking into place. Short and decelerating,
+   with no movement worth calling movement (§10). */
+@keyframes settings-enter {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Deliberately the same shape as `.autonomy__title` / `.guardrails__title`, so
+   a section headed from here and a section headed by its own panel are the
+   same object on screen. */
+.settings__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
+}
+
+.settings__blurb {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  max-width: 62ch;
+  line-height: 1.5;
 }
 
 .settings__field {
@@ -42,6 +166,17 @@
 .settings__label-text {
   font-size: var(--text-base);
   color: var(--text-secondary);
+}
+
+/* Below the label column plus the widest control the two stop fitting on one
+   line. Stacking is the honest response to a narrow pane; squeezing the label
+   is not — the same rule `.autonomy__field` follows. */
+@media (max-width: 860px) {
+  .settings__field {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: var(--space-3);
+  }
 }
 
 /* ---- Segmented control ---------------------------------------------------
@@ -63,6 +198,7 @@
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
+  white-space: nowrap;
   transition:
     background-color var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
@@ -76,4 +212,117 @@
   background: var(--bg-overlay);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
+}
+
+/* ---- The pane is narrower than the window ---------------------------------
+   Every panel here decides when to stack by asking the *viewport* how wide it
+   is. That was true when Settings was one column running the width of the
+   screen; it stopped being true the moment a 220px map appeared beside it. The
+   pane is the window less the rail, less the map, less its own padding —
+   about 344px less — so a panel that stacks "below 620px" never stacked at
+   all, and at a 746px window the autonomy control ran off the right-hand edge
+   with a horizontal scrollbar under it. Found by resizing the real window.
+
+   Scoped to `.settings__pane` on purpose: `AutonomyPanel` and `NumberSetting`
+   are rendered inside a project too, where the arithmetic is different and
+   their own breakpoints are right. This corrects them here, where they are
+   wrong, and touches nothing there. */
+@media (max-width: 1060px) {
+  .settings__pane .numset__row {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: var(--space-3);
+  }
+
+  .settings__pane .numset__help {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings__pane .autonomy__field {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: var(--space-3);
+  }
+
+  .settings__pane .autonomy__note {
+    margin-left: 0;
+  }
+
+  /* The guardrail table is name-and-decision on one line. Below this the name
+     column has nothing left to give, so the decision moves under it — still
+     one row per operation, still hairline-separated, just two lines deep. */
+  .settings__pane .guardrails__row {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .settings__pane .guardrails__controls {
+    justify-self: start;
+  }
+}
+
+/* ---- Narrow window -------------------------------------------------------
+   Under about 720px of pane there is no room for a column beside a section, so
+   the map becomes a strip across the top. It is still the same list in the same
+   order — the shape changes, the content does not. */
+@media (max-width: 720px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings__nav {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: var(--space-6) var(--space-6) var(--space-4);
+    gap: var(--space-5);
+    overflow: visible;
+  }
+
+  .settings__heading {
+    padding: 0;
+    font-size: var(--text-lg);
+  }
+
+  .settings__list {
+    flex-direction: row;
+    gap: var(--space-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .settings__list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings__link {
+    width: auto;
+    flex: none;
+    padding: var(--space-3) var(--space-4);
+    white-space: nowrap;
+  }
+
+  /* The amber edge moves to the bottom: on a row it reads as a margin marker,
+     on a chip in a strip it has to read as an underline. */
+  .settings__link[data-active] {
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+
+  .settings__pane-inner {
+    padding: var(--space-8) var(--space-6) var(--space-10);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings__link,
+  .settings__link svg,
+  .settings__segment {
+    transition: none;
+  }
+
+  .settings__pane-inner {
+    animation: none;
+  }
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, ExternalLink, RefreshCw } from "lucide-react";
+import { Check, Copy, ExternalLink, RefreshCw, Wrench } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useT } from "../../app/i18n";
 import { isTauri } from "../../app/platform";
@@ -34,7 +34,10 @@ export function EnvironmentPanel() {
     <section className="env">
       <header className="env__header">
         <div>
-          <h2 className="env__title">{t("env.title")}</h2>
+          <h2 className="env__title">
+            <Wrench size={15} strokeWidth={1.75} aria-hidden="true" />
+            {t("env.title")}
+          </h2>
           {report && (
             <p className="env__subtitle">
               {report.ready ? t("env.allReady") : t("env.someMissing")}

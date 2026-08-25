@@ -1,0 +1,577 @@
+/* The Notebook (M19).
+
+   An overlay over whatever was on screen, because the request was to reach it
+   without leaving the terminal. Nothing behind it moves, resizes or unmounts —
+   a side panel would reflow the terminal and send a resize storm through a
+   running agent (§20's own constraint). */
+.nb__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 6vh var(--space-9);
+  background: rgba(0, 0, 0, 0.52);
+  animation: nb-scrim var(--duration-fast) var(--ease-out);
+}
+
+:root[data-theme="light"] .nb__scrim {
+  background: rgba(16, 16, 12, 0.26);
+}
+
+@keyframes nb-scrim {
+  from { opacity: 0; }
+}
+
+.nb {
+  width: min(1080px, 100%);
+  height: min(680px, 100%);
+  display: flex;
+  flex-direction: column;
+  /* `--bg-overlay`, not `--bg-surface`: seen on screen, the panel was the same
+     value as the app behind it and read as a pane rather than as something
+     lifted above the work. The same token the command palette and Global
+     Search already float on. */
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: nb-enter var(--duration-base) var(--ease-out);
+}
+
+@keyframes nb-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.995);
+  }
+}
+
+/* ---- Search, across the top ---------------------------------------------
+   One field for the whole overlay rather than one per pane: a prompt library
+   is found, not browsed, and the search is the primary gesture. */
+.nb__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nb__field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  color: var(--text-tertiary);
+}
+
+.nb__search {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  color: var(--text-primary);
+}
+
+.nb__search::placeholder {
+  color: var(--text-tertiary);
+}
+
+.nb__search:focus {
+  outline: none;
+}
+
+/* ---- Three panes ---------------------------------------------------------
+   Folders, notes, editor. The middle column stays visible rather than being a
+   step you pass through: finding the right prompt is the task. */
+.nb__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 196px 264px minmax(0, 1fr);
+}
+
+.nb__folders {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-4);
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+
+.nb__folders-rule {
+  height: 1px;
+  margin: var(--space-3) var(--space-3);
+  background: var(--border-subtle);
+}
+
+.nb__folder-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.nb__folder-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Where you are, spelled the way the rail and the settings map spell it:
+   a translucent wash and an amber edge. Amber is agent work (§6), so it marks
+   position here rather than colouring the row. */
+.nb__folder-row[data-active] {
+  background: var(--bg-active);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.nb__folder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) var(--space-4);
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  text-align: left;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.nb__folder-row[data-active] .nb__folder {
+  color: var(--text-primary);
+}
+
+.nb__folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb__folder-count {
+  flex: none;
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+}
+
+/* Rename and delete fade in on hover. A folder list where every row carries two
+   permanent buttons reads as a control panel rather than as a place.
+
+   `opacity`, never `display: none`. A hidden element cannot take focus, so Tab
+   skipped straight past them and — worse — the `:focus-within` rule that was
+   supposed to reveal them could never fire, because nothing inside could ever
+   be focused. The whole keyboard path was unreachable by construction.
+   Holding the space also means the row does not twitch when the pointer
+   crosses it. */
+.nb__folder-actions {
+  display: flex;
+  gap: 1px;
+  padding-right: var(--space-3);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.nb__folder-row:hover .nb__folder-actions,
+.nb__folder-actions:focus-within {
+  opacity: 1;
+}
+
+.nb__folder-form {
+  padding: var(--space-2) var(--space-3);
+}
+
+.nb__folder-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.nb__folder-input:focus {
+  outline: none;
+}
+
+.nb__add-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.nb__add-folder:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* ---- The note list ------------------------------------------------------- */
+.nb__list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.nb__list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nb__list-count {
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.nb__new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.nb__new:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.nb__notes {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nb__note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-4) var(--space-4);
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.nb__note:hover {
+  background: var(--bg-hover);
+}
+
+.nb__note[data-active] {
+  background: var(--bg-active);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.nb__note-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--text-tertiary);
+}
+
+.nb__note-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+/* The second line is the body with the name's own words removed, so a note
+   never restates its title as its preview. */
+.nb__note-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* ---- The editor ---------------------------------------------------------- */
+.nb__editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.nb__editor--empty {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-9);
+}
+
+.nb__editor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nb__title {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+.nb__title::placeholder {
+  color: var(--text-disabled);
+  font-weight: var(--weight-normal);
+}
+
+.nb__title:focus {
+  outline: none;
+}
+
+.nb__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nb__move {
+  height: 24px;
+  max-width: 130px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.nb__move:focus-visible {
+  outline: 1px solid var(--border-focus);
+}
+
+/* Monospace, and that is a decision rather than a default: most of what lands
+   here is a prompt, prompts contain paths, flags and code, and proportional
+   type makes an indented block stop lining up. */
+.nb__body-input {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-6) var(--space-7);
+  border: 0;
+  background: transparent;
+  resize: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-primary);
+  tab-size: 2;
+}
+
+.nb__body-input::placeholder {
+  color: var(--text-disabled);
+}
+
+.nb__body-input:focus {
+  outline: none;
+}
+
+.nb__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.nb__edited {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-micro);
+  color: var(--text-disabled);
+}
+
+.nb__said {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--state-success);
+}
+
+.nb__said[data-tone="warn"] {
+  color: var(--state-warning);
+}
+
+.nb__no-session {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-align: right;
+  max-width: 44ch;
+  line-height: 1.4;
+}
+
+/* The one action nothing else in this product can do. It is the only filled
+   button in the overlay, because it is the only one that reaches outside it. */
+.nb__send {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  background: var(--accent-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.nb__send:hover {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+/* ---- Shared bits --------------------------------------------------------- */
+.nb__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.nb__icon-button--tiny {
+  width: 20px;
+  height: 20px;
+}
+
+.nb__icon-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nb__icon-button[data-on] {
+  color: var(--accent);
+}
+
+.nb__icon-button--danger:hover {
+  color: var(--state-danger);
+}
+
+.nb__icon-button:focus-visible,
+.nb__new:focus-visible,
+.nb__send:focus-visible,
+.nb__note:focus-visible,
+.nb__folder:focus-visible,
+.nb__add-folder:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: -1px;
+}
+
+.nb__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+}
+
+.nb__empty-title {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.nb__empty-body {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  line-height: var(--leading-normal);
+  max-width: 46ch;
+  margin: 0 auto;
+}
+
+/* ---- Narrow window -------------------------------------------------------
+   The folder column goes first: it is navigation, and the search field above
+   already reaches every note without it. */
+@media (max-width: 900px) {
+  .nb__body {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+
+  .nb__folders {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb,
+  .nb__scrim {
+    animation: none;
+  }
+
+  .nb__note,
+  .nb__folder-row,
+  .nb__folder-actions,
+  .nb__icon-button,
+  .nb__send {
+    transition: none;
+  }
+}

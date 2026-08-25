@@ -223,3 +223,60 @@ cada repetição é um turno que aconteceu. A sonda é um relógio: pergunta a c
 cinco minutos se a pessoa está usando a conta, e um fim de semana parado
 escreveria mil linhas idênticas dizendo que nada aconteceu. Toda *mudança*
 continua registrada.
+
+---
+
+## Duas pastas, uma assinatura (D46)
+
+Achado na tela: três cartões do Claude, dois deles com os mesmos 74%, a mesma
+janela semanal e o mesmo reset. Parecia estatística duplicada.
+
+Não era. Perguntado a cada diretório de configuração:
+
+| Cartão | Diretório | E-mail | Org |
+| --- | --- | --- | --- |
+| Claude 1 | `~/.claude` (adotado) | `alanvitoraraujo1@icloud.com` | `f2df57c9…` |
+| Claude 2 | `…/accounts/claude-code/01a035c8…` | `alanvitoraraujo2a@gmail.com` | `018647f1…` |
+| Claude 3 | `…/accounts/claude-code/01a035cc…` | `alanvitoraraujo1@icloud.com` | `f2df57c9…` |
+
+Claude 1 e Claude 3 são **a mesma assinatura em duas pastas**. Os números eram
+a única coisa honesta na tela; os dois nomes é que mentiam.
+
+Isso cai direto da decisão do §66: uma conta aqui **é** um diretório de
+configuração. O mapeamento é de mão única — toda conta é um diretório, mas um
+diretório não é uma conta, e o provedor assina dois deles na mesma pessoa sem
+reclamar.
+
+**A chave é o e-mail, não a organização.** Uma org pessoal mapeia um-para-um
+numa conta Pro e daria a resposta certa nesta máquina, mas um plano Team põe
+cotas separadas de várias pessoas sob um `org_id` — e chamar colegas de gêmeos
+é um erro que piora quanto maior o time. E-mail ausente é **desconhecido, nunca
+igual**: o Codex 0.149.1 parou de escrever `id_token_claims`, e agrupar os sem
+nome faria cada conta anônima virar gêmea de todas as outras.
+
+Nada é gravado. A linha adotada é lida com o ambiente ambiente, então assinar
+`~/.claude` como outra pessoa muda a resposta sem este produto ser avisado —
+uma coluna `twin_of` seria um fato que envelhece calado.
+
+**A metade que era bug.** `next_available` não sabia disso. `OnExhaustion`
+estava protegido por acidente — os dois gêmeos leem esgotado ao mesmo tempo, e o
+filtro de esgotamento pegava o segundo. `OnThreshold` não estava: chegar perto
+do limite no Claude 1 movia o trabalho novo para o Claude 3, batia no mesmo
+limite na leitura seguinte e voltava. Um pinga-pongue entre duas vistas da mesma
+janela, nenhuma delas ajudando, exatamente na configuração que a pessoa liga
+porque quer que o produto resolva isso sozinho. Um candidato na mesma assinatura
+deixou de ser destino.
+
+**Avisado, não impedido.** Duas pastas numa conta é uma coisa legítima de
+querer — MCPs diferentes, permissões diferentes, configurações diferentes. O
+login não é recusado e o cartão não é escondido: ele diz o que é, **acima** do
+mostrador e não embaixo, porque quem lê dois números iguais precisa saber que é
+um número só *antes* de planejar em cima deles.
+
+**O custo que ficou.** Dois gêmeos continuam sondando de cinco em cinco minutos
+para chegar à mesma resposta — dois spawns onde um bastaria, exatamente o que a
+D44 evitou em outro lugar. Não foi deduplicado de propósito nesta passada:
+compartilhar uma leitura entre cartões significa decidir de quem é a leitura
+quando uma sonda falha e a outra não, e um cartão mostrando o número do vizinho
+é pior do que um spawn a mais. Fica registrado como custo conhecido, não como
+pendência esquecida.

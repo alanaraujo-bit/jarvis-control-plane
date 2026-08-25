@@ -819,3 +819,37 @@
 @media (prefers-reduced-motion: reduce) {
   .accounts__spin { animation: none; }
 }
+
+/* ---- Two directories, one allowance --------------------------------------
+   Said on the card because it cannot be seen from the numbers: both twins draw
+   the same dial off the same subscription, and two identical gauges under two
+   different names read as a bug in the reading rather than as the truth. */
+.accounts__shared {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.accounts__shared svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--state-warning);
+}
+
+/* In the meta line the same fact is a tag, not a sentence — it is what the eye
+   catches while scanning four cards, and the sentence below is what it reads
+   once it has stopped. `capitalize` is inherited from `.accounts__meta span`
+   and is wrong for a two-word label, so it is turned off here — through a
+   selector one step more specific rather than through `!important`, which
+   nothing else in this stylesheet needs. */
+.accounts__meta .accounts__shared-badge {
+  text-transform: none;
+  color: var(--state-warning);
+}

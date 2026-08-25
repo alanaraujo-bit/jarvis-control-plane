@@ -16,6 +16,7 @@ mod git;
 mod guardrail;
 mod history;
 mod mission;
+mod notebook;
 mod notify;
 mod onboarding;
 mod preview;
@@ -272,6 +273,16 @@ pub fn run() {
             brain::brain_set_note_pinned,
             brain::brain_delete_note,
             brain::brain_promote_note,
+            notebook::commands::notebook_report,
+            notebook::commands::notebook_create,
+            notebook::commands::notebook_rename,
+            notebook::commands::notebook_delete,
+            notebook::commands::notebook_note_create,
+            notebook::commands::notebook_note_update,
+            notebook::commands::notebook_note_pin,
+            notebook::commands::notebook_note_move,
+            notebook::commands::notebook_note_duplicate,
+            notebook::commands::notebook_note_delete,
             brain::brain_preview_brief,
             providers::list_providers,
             activity::list_activity,

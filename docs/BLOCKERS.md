@@ -192,3 +192,37 @@ and automatic switching, and the Brain relay — is built and covered.
 **What I need from you, unchanged:** Accounts screen → Add account → complete
 the browser sign-in. Once per subscription. The product never sees a password
 and never reads a token.
+
+### B6 — update after M18 (2026-08-25)
+
+**Partly done, and the remaining half is no longer blocked on you.**
+
+Alan has since signed in. What is registered on this machine now:
+
+| Card | Subscription | State when checked |
+| --- | --- | --- |
+| Claude 1 | `alanvitoraraujo1@icloud.com` (adopted `~/.claude`) | 71% left |
+| Claude 2 | `alanvitoraraujo2a@gmail.com` | **0% — exhausted** |
+| Claude 3 | `alanvitoraraujo1@icloud.com` — the *same* subscription as Claude 1 (D46) | 71% left |
+| Codex | `alanvitoraraujo1a@outlook.com` | 100% left |
+
+So there are **two** genuine Claude subscriptions, not three: the third
+directory landed on the account that already existed, which is what M18 exists
+to make visible. A third subscription would need a third email.
+
+**What this unblocks.** B6 was waiting on exactly one thing: account A genuinely
+exhausting, work moving to a separately authenticated account B, and the agent
+carrying on. The two allowances that scenario needs now exist and are *already
+at opposite ends* — Claude 2 is refusing and Claude 1/3 have room. The
+verification no longer needs a sign-in from Alan; it needs a real run.
+
+**What it costs, which is why it has not been run unasked.** It means making
+Claude 2 active, starting a real agent session against it, and letting the
+provider refuse a turn — `maybe_rotate` fires from the transcript tailer, so
+nothing short of a genuine refusal exercises the real path. That spends tokens
+on Alan's own accounts and writes real sessions to history. It is his call, not
+a thing to do while he is away.
+
+**What is left for Alan on B6:** nothing, unless he wants a third genuine Claude
+subscription. The remaining item is a run to schedule, not a credential to
+supply.

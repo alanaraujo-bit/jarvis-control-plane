@@ -156,6 +156,45 @@ pub fn transcript_root(provider: &str, config_dir: &Path) -> Option<PathBuf> {
     }
 }
 
+/// The subscription an account draws on, as a comparable key.
+///
+/// An account in this product is a configuration directory, and **two
+/// directories can be signed into the same provider account**. That is a
+/// legitimate thing to want — different MCP servers, different permissions,
+/// different settings — and it is also invisible: the two rows show the same
+/// allowance because there is only one, and nothing on screen says so.
+///
+/// The key is the **email**, not `org_id`. It is tempting to use the org
+/// because a personal org maps one-to-one onto a Pro account, and on this
+/// machine it happens to give the right answer. On a Team plan several
+/// different people share one `org_id` with separate allowances, and keying on
+/// it would declare unrelated colleagues to be the same subscription — a wrong
+/// answer that gets worse the larger the team.
+///
+/// **An unknown email is not a match.** Codex 0.149.1 stopped writing
+/// `id_token_claims`, which leaves accounts with no email at all (see
+/// `live::identity`); treating `None == None` would make every nameless
+/// account a twin of every other one. Absent means unknown, never same.
+pub fn subscription_key(account: &Account) -> Option<(String, String)> {
+    let email = account.email.as_deref()?.trim().to_lowercase();
+    if email.is_empty() {
+        return None;
+    }
+    Some((account.provider.clone(), email))
+}
+
+/// Whether two accounts are two views of one allowance.
+///
+/// Derived on every call rather than stored in a column: the adopted row is
+/// read with the ambient environment, so signing `~/.claude` into a different
+/// account changes the answer without anything in this product being told.
+pub fn same_subscription(a: &Account, b: &Account) -> bool {
+    match (subscription_key(a), subscription_key(b)) {
+        (Some(x), Some(y)) => x == y,
+        _ => false,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------

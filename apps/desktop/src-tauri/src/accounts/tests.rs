@@ -181,6 +181,73 @@ fn an_official_rejection_rotates_when_automatic_switching_is_enabled() {
 }
 
 #[test]
+fn rotation_refuses_a_second_directory_signed_into_the_same_account() {
+    // Found on this machine: three Claude cards, and two of them —
+    // `~/.claude` and one added later — were signed in as the same person, so
+    // they showed the same 74% and the same reset. Rotating between them moves
+    // the work and changes nothing.
+    let db = Database::open_in_memory().unwrap();
+    let mut twin = account("b", "claude-code", 1, false);
+    twin.email = Some("a@example.test".into());
+    let mut other = account("c", "claude-code", 2, false);
+    other.email = Some("someone.else@example.test".into());
+    insert(&db, &account("a", "claude-code", 0, true));
+    insert(&db, &twin);
+    insert(&db, &other);
+    insert_session(&db, "a");
+    switch::set_policy(&db, switch::AutoSwitchPolicy::OnExhaustion).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    db.with(|conn| {
+        conn.execute(
+            "INSERT INTO account_limit_events
+                 (account_id, ts_ms, window, status, resets_at_ms)
+             VALUES ('a', ?1, 'five_hour', 'rejected', ?2)",
+            rusqlite::params![now, now + 60 * 60 * 1_000],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+
+    let next = switch::maybe_rotate(&db, "a").expect("a different subscription is ready");
+    assert_eq!(
+        next.id, "c",
+        "the twin sits earlier in rotation order and must still be skipped"
+    );
+}
+
+#[test]
+fn an_account_with_no_email_is_unknown_rather_than_everyone_else() {
+    // Codex 0.149.1 stopped writing `id_token_claims`, so nameless accounts are
+    // a real state. Grouping them together would strand rotation on a provider
+    // where nothing can be told apart.
+    let mut left = account("a", "codex", 0, true);
+    left.email = None;
+    let mut right = account("b", "codex", 1, false);
+    right.email = Some("   ".into());
+
+    assert!(subscription_key(&left).is_none());
+    assert!(subscription_key(&right).is_none());
+    assert!(!same_subscription(&left, &right));
+}
+
+#[test]
+fn one_subscription_is_recognised_across_case_and_provider() {
+    let mut lower = account("a", "claude-code", 0, true);
+    lower.email = Some("Someone@Example.Test".into());
+    let mut upper = account("b", "claude-code", 1, false);
+    upper.email = Some("someone@example.test".into());
+    assert!(same_subscription(&lower, &upper));
+
+    // The same address at two providers is two subscriptions.
+    let mut elsewhere = account("c", "codex", 2, false);
+    elsewhere.email = Some("someone@example.test".into());
+    assert!(!same_subscription(&lower, &elsewhere));
+}
+
+#[test]
 fn a_manual_switch_never_relays_a_running_session() {
     let db = Database::open_in_memory().unwrap();
     insert(&db, &account("a", "claude-code", 0, true));

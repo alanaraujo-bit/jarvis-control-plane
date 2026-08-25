@@ -159,3 +159,54 @@ export function readingAge(readAtMs: number, now: number, t: Translate): string 
   if (hours > 0) return t("accounts.live.agoHours", { hours });
   return t("accounts.live.agoMinutes", { minutes });
 }
+
+/**
+ * Which cards are two views of one subscription.
+ *
+ * An account in this product is a **configuration directory**, and two
+ * directories can be signed into the same provider account. When they are, both
+ * cards draw the same dial off the same allowance — which is not a bug in the
+ * reading, it is the truth, and it is unreadable without being said out loud.
+ * Found on this machine with three Claude cards, two of which were
+ * `alanvitoraraujo1@icloud.com` in different directories and showed the same
+ * 74% and the same reset.
+ *
+ * Keyed on **email**, matching `accounts::subscription_key` in the core. Not on
+ * `org_id`: a personal organisation maps one-to-one onto a Pro account and
+ * would give the right answer here, but a Team plan puts several people's
+ * separate allowances under one org, and calling colleagues twins is a wrong
+ * answer that gets worse the bigger the team.
+ *
+ * An account with no email is **unknown, never same** — Codex builds exist that
+ * write no identity at all, and grouping those together would make every
+ * nameless account a twin of every other.
+ *
+ * Returns, for each account id, the display names of the other accounts on the
+ * same subscription; ids with no twin are absent.
+ */
+export function sharedSubscriptions<T extends { id: string; provider: string; email: string | null }>(
+  accounts: readonly T[],
+  name: (account: T) => string,
+): Map<string, string[]> {
+  const groups = new Map<string, T[]>();
+  for (const account of accounts) {
+    const email = account.email?.trim().toLowerCase();
+    if (!email) continue;
+    const key = `${account.provider}\u0000${email}`;
+    const group = groups.get(key);
+    if (group) group.push(account);
+    else groups.set(key, [account]);
+  }
+
+  const shared = new Map<string, string[]>();
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    for (const account of group) {
+      shared.set(
+        account.id,
+        group.filter((other) => other.id !== account.id).map(name),
+      );
+    }
+  }
+  return shared;
+}

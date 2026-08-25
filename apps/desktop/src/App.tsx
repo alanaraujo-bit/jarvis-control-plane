@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, Languages, Moon, RefreshCw, Search, Sun, SunMoon } from "lucide-react";
+import { Bell, Languages, Moon, NotebookPen, RefreshCw, Search, Sun, SunMoon } from "lucide-react";
 import { LOCALES, LOCALE_NAMES } from "@jarvis/i18n";
 import { Rail, RAIL_ITEMS, type SurfaceId } from "./shell/Rail";
 import { TitleBar } from "./shell/TitleBar";
@@ -32,6 +32,9 @@ import { ProjectWorkspace, type Area } from "./surfaces/project/ProjectWorkspace
 import type { Project } from "./surfaces/projects/useProjects";
 import type { SessionKind } from "./app/sessions";
 import { Settings } from "./surfaces/settings/Settings";
+import { Notebook } from "./surfaces/notebook/Notebook";
+import { CATEGORIES, CATEGORY } from "./surfaces/settings/categories";
+import { openSettingsCategory } from "./surfaces/settings/settingsNav";
 import { useEnvironmentStore } from "./surfaces/environment/useEnvironment";
 import { useProjects } from "./surfaces/projects/useProjects";
 import { useTerminals } from "./surfaces/terminal/useTerminals";
@@ -70,6 +73,7 @@ export function App() {
   const [surface, setSurface] = useState<SurfaceId>("mission-control");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
   // An open project takes over the surface area. The rail stays put, so the
   // user never loses their bearings when they go deeper (§85).
   const [openProject, setOpenProject] = useState<Project | null>(null);
@@ -89,6 +93,31 @@ export function App() {
   const outstanding = useNotifications((state) => state.outstanding);
   const { toasts, dismiss, clearToasts, setChannels } = useNotificationFeed();
   const { prefs } = usePreferences();
+
+  /**
+   * Where the Notebook's "Send to agent" would type (M19).
+   *
+   * The active tab of the project on screen, and nothing otherwise. The
+   * notebook is global — it opens from Mission Control, from Settings, from
+   * anywhere — so most of the time there is no answer, and the surface says so
+   * rather than offering a button that goes nowhere (§81).
+   *
+   * A shell is deliberately included. Pasting a prompt into a shell is not
+   * useful, but deciding *for* somebody which of their own terminals may
+   * receive their own text is a judgement this does not get to make.
+   */
+  const terminalTabs = useTerminals((state) => state.tabs);
+  const activeTabs = useTerminals((state) => state.activeTab);
+  const notebookTarget = useMemo(() => {
+    if (!openProject) return null;
+    const sessionId = activeTabs[openProject.id];
+    if (!sessionId) return null;
+    const tab = terminalTabs[openProject.id]?.find((candidate) => candidate.sessionId === sessionId);
+    // A historical tab is a transcript of a session that already ended — there
+    // is no process behind it to type into (§88).
+    if (!tab || tab.historical) return null;
+    return { sessionId, agent: tab.title };
+  }, [openProject, activeTabs, terminalTabs]);
 
   type Focus = {
     area?: Area;
@@ -332,6 +361,18 @@ export function App() {
       } else if (
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&
+        event.key.toLowerCase() === "n"
+      ) {
+        // The Notebook (M19). Registered here, in the capture phase, for the
+        // same reason Ctrl+K is: the terminal and Monaco both claim keys before
+        // a bubble-phase listener ever sees them — and a terminal holding focus
+        // is exactly when somebody reaches for their prompt library.
+        event.preventDefault();
+        event.stopPropagation();
+        setNotebookOpen((open) => !open);
+      } else if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
         event.key.toLowerCase() === "f"
       ) {
         // Global Search (§51). Same capture-phase reasoning as Ctrl+K above —
@@ -410,6 +451,15 @@ export function App() {
         run: () => setNotificationsOpen(true),
       },
       {
+        id: "notebook.open",
+        title: t("notebook.title"),
+        group: "Go to",
+        icon: NotebookPen,
+        keywords: "notebook notes prompts ideas bloco notas anotações prompts ideias",
+        hint: "Ctrl Shift N",
+        run: () => setNotebookOpen(true),
+      },
+      {
         id: "search.open",
         title: t("search.title"),
         group: "Go to",
@@ -425,19 +475,51 @@ export function App() {
         icon: RefreshCw,
         keywords: "environment scan doctor ambiente verificar",
         run: () => {
+          // Land on the section that owns the scan. Before Settings had
+          // sections this navigated to a page where everything was visible at
+          // once and the distinction did not exist; now arriving on Appearance
+          // while a scan runs three rooms away would be a lie about where the
+          // command went.
           goTo("settings");
+          openSettingsCategory("environment");
           void rescanEnvironment(true);
         },
       },
     ];
 
-    return [...navigation, ...appearance, ...actions];
+    /**
+     * Every section of Settings, reachable by name (§50).
+     *
+     * The left column is only a map once you are already in Settings. This is
+     * the same map from anywhere — typing "guardrails" or "proteções" goes
+     * straight to the section rather than to the screen it lives on.
+     */
+    const settings: Command[] = CATEGORIES.map((id) => {
+      const category = CATEGORY[id];
+      return {
+        id: `settings.${id}`,
+        title: t(category.label),
+        group: t("nav.settings"),
+        icon: category.icon,
+        keywords: category.keywords,
+        run: () => {
+          goTo("settings");
+          openSettingsCategory(id);
+        },
+      };
+    });
+
+    return [...navigation, ...appearance, ...actions, ...settings];
   }, [t, locale, preference, setLocale, setPreference, rescanEnvironment, goTo, outstanding]);
 
   return (
     <div className="app">
       <TitleBar
         onOpenPalette={togglePalette}
+        // Gated the same way the bell is: onboarding is one screen with one
+        // question on it, and a control that opens a library of prompts on a
+        // first-run install is a door to somewhere that does not exist yet.
+        onOpenNotebook={onboardingSeen !== false ? () => setNotebookOpen(true) : undefined}
         notifications={
           onboardingSeen !== false ? (
             <NotificationBell
@@ -453,6 +535,18 @@ export function App() {
         open={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
         onOpenNotification={openNotification}
+      />
+
+      {/* Over everything, including a project workspace. Nothing behind it
+          unmounts or resizes, so an agent mid-turn is untouched — which is the
+          whole point of it being an overlay (M19). */}
+      <Notebook
+        // One gate rather than two: this covers the shortcut as well as the
+        // titlebar button, so neither can open a library of prompts over a
+        // first-run screen that exists to ask one question.
+        open={notebookOpen && onboardingSeen !== false}
+        onClose={() => setNotebookOpen(false)}
+        target={notebookTarget}
       />
 
       {onboardingSeen === false ? (

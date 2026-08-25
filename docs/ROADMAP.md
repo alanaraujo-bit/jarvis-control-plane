@@ -849,6 +849,104 @@ providers.
 Full account, including everything the looking found:
 [`docs/M16-QUOTA.md`](M16-QUOTA.md). See D43 and D44.
 
+---
+
+## M17 — Settings as a place with rooms (§64)  ✅
+
+Alan opened Settings and said it was bagunçado: every group stacked in one
+column, so to change one thing you scrolled past four unrelated decisions, and
+to know whether a setting existed you had to read all of them. Everything was
+visible at once, which is not the same as findable.
+
+- [x] Eight sections as destinations — a fixed map on the left, one section on
+      the right: Appearance, Terminal, Autonomy, **Guardrails**, Notifications,
+      Phone, Environment, Updates, ordered by frequency of use.
+- [x] Guardrails split out of the old "Agents" group. It is one row per
+      operation the core reports (§26) — a list free to grow without this
+      screen being touched, and a section that can get longer on its own does
+      not share a page.
+- [x] One heading per section, never two. A panel that already titles and
+      explains itself keeps its own header; only the three sections built out
+      of loose fields get one from the shell. `AutonomyPanel` and
+      `GuardrailPanel` are untouched — they render inside a project too (§19).
+- [x] Every section reachable by name from the command palette, and `Rescan`
+      lands on Environment instead of wherever you happened to be last.
+- [x] No accordions inside a section. The left column already answers "click
+      and more options open"; a second level of hiding buries more, not less.
+
+**Verified in the real Tauri build** — all eight sections, dark and light,
+pt-BR and en, at 1440 / 1086 / 746 / 606 px. Four defects existed only on
+screen and not in the stylesheet: the section floating 215px from its map, the
+selected row invisible in the light theme, the active chip off-screen in the
+narrow strip, and **every panel asking the viewport how wide it was** when the
+pane is 344px narrower than the window. See D45 and
+[`docs/M17-SETTINGS.md`](M17-SETTINGS.md).
+
+---
+
+## M18 — Two directories, one subscription (§66)  ✅
+
+Alan sent a screenshot of the Accounts screen: three Claude cards, two showing
+identical statistics under different names. They were not duplicated readings.
+`claude auth status --json` against each configuration directory settles it —
+`~/.claude` and the third directory are both `alanvitoraraujo1@icloud.com`, org
+`f2df57c9…`. One allowance, drawn twice. The numbers were the only honest thing
+on that screen; the two names were the lie.
+
+- [x] `accounts::subscription_key` / `same_subscription` — keyed on **email**,
+      not `org_id` (a Team plan puts several people's separate allowances under
+      one org), and an absent email is *unknown, never same* (Codex 0.149.1
+      writes no identity at all).
+- [x] **The half that was a bug:** `next_available` treated a twin as a
+      destination. `OnExhaustion` was protected by accident; `OnThreshold` was
+      not, and would ping-pong new work between two views of one window — on
+      the exact setting a person turns on to have this handled for them.
+- [x] Both cards say what they are, above the dial rather than under it.
+- [x] The suggestion strip — a separate path, computed in the frontend — no
+      longer recommends a twin either.
+- [x] Told, not prevented. Two directories on one account is legitimate;
+      sign-in is not refused and nothing is hidden.
+
+Nothing is stored: the adopted row is read with the ambient environment, so a
+`twin_of` column would be a fact that goes stale silently. See D46 and the
+closing section of [`docs/M16-QUOTA.md`](M16-QUOTA.md).
+
+---
+
+## M19 — The Notebook  ✅
+
+Alan kept his prompts in WhatsApp messages to himself, and asked for a notepad
+he could reach without leaving the terminal plus folders for the prompts and
+ideas he had been hoarding. The build that matters is not the notepad — it is
+the one action a note-taking app cannot do: **hand the note to the agent you are
+watching.**
+
+- [x] Migration 16 — `notebooks` (flat, one level) and `notebook_notes`
+      (`notebook_id` nullable = unfiled). Deleting a folder is `ON DELETE SET
+      NULL`, so its notes survive: a shape that cannot lose forty prompts beats
+      a dialog somebody clicks through.
+- [x] `notebook` module, 7 tests, every mutation returning the whole report.
+- [x] An overlay on Ctrl+Shift+N — capture phase, because a terminal holding
+      focus is exactly when somebody reaches for their prompt library — plus a
+      titlebar button and a palette entry.
+- [x] Search, folders, autosave with a flush on every exit, pin, move,
+      duplicate, copy.
+- [x] **Send to agent**, through xterm's own `paste` rather than a Rust command,
+      and never submitted (§54's rule).
+- [x] Refused when the receiving program has not enabled bracketed paste,
+      because that is twenty commands rather than one prompt.
+
+**The measurement that decided it:** `session::typing::type_text` flattens every
+newline to a space, which would have delivered a multi-paragraph prompt as
+run-on lines while looking correct. Measured against real Claude Code 2.1.245
+instead of assumed — three lines arrived intact and unsent.
+
+**Verified in the real build:** a prompt typed, autosaved, closed, reopened, and
+sent into a live Claude Code, which showed `[Pasted text #1 +5 lines]` and left
+it in the prompt. The same note into a shell was refused with a sentence and
+wrote nothing. Both themes, 1442px and 786px. See D47 and
+[`docs/M19-NOTEBOOK.md`](M19-NOTEBOOK.md).
+
 ## Next steps
 
 1. Re-verify voice dictation end to end by ear on a real microphone — the
@@ -883,3 +981,18 @@ Full account, including everything the looking found:
 7. **Push to a phone is still its own scope.** The relay snapshot already
    carries what needs a person; delivering it as a push needs a developer
    account (B6).
+9. **Global Search does not find notebook notes (M19).** It finds `project_notes`
+   already, so a library of prompts that global search cannot see reads as a
+   broken search rather than as a boundary. Deferred deliberately, not missed:
+   it needs a new `SearchKind` through `search/mod.rs`, `GROUP_ICON`,
+   `GROUP_ORDER`, `subtitle()` and both catalogues — **and** a navigation
+   special case, because `onSelect` opens a project workspace and a notebook
+   note has no project to open. A protocol change deserves its own pass.
+
+8. **The account-rotation end-to-end run is now set up and unrun.** B6 was
+   blocked on a browser sign-in; that is done, and there are two genuine Claude
+   subscriptions on this machine sitting at opposite ends — one refusing, one
+   with room. What is left is a real run: make the exhausted account active,
+   start an agent, and watch the refusal move the work. It costs real tokens on
+   real accounts and writes real sessions, so it is scheduled, not slipped in.
+   See the B6 update dated 2026-08-25.

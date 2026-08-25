@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Search } from "lucide-react";
+import { NotebookPen, Search } from "lucide-react";
 import { Logo } from "../design/Logo";
 import { useT } from "../app/i18n";
 import { isTauri } from "../app/platform";
@@ -15,9 +15,14 @@ import "./TitleBar.css";
  */
 export function TitleBar({
   onOpenPalette,
+  onOpenNotebook,
   notifications,
 }: {
   onOpenPalette: () => void;
+  /** The Notebook (M19) — a callback rather than the component, for the same
+      reason the bell is passed in: the titlebar draws window chrome and should
+      not have to know what a notebook is. */
+  onOpenNotebook?: () => void;
   /** The notification bell (§49), passed in rather than reached for: the
       titlebar draws window chrome and should not have to know what a
       notification is. */
@@ -67,6 +72,21 @@ export function TitleBar({
       </button>
 
       <div className="titlebar__controls">
+        {/* Beside the bell, because both are the same kind of thing: a place
+            that is always one click away regardless of where you are. Absent
+            during onboarding, exactly as the bell is — a door to a library of
+            prompts, on a screen that exists to ask one question. */}
+        {onOpenNotebook && (
+          <button
+            type="button"
+            className="titlebar__notebook"
+            onClick={onOpenNotebook}
+            aria-label={t("notebook.open")}
+            title={`${t("notebook.open")} — ${t("notebook.shortcut")}`}
+          >
+            <NotebookPen size={14} strokeWidth={1.9} aria-hidden="true" />
+          </button>
+        )}
         {notifications}
         <button
           type="button"
