@@ -1,1 +1,100 @@
-<p>TODO</p>
+<p>A tela inicial. Ela responde uma pergunta — <em>o que precisa de mim?</em> — e depois sai da
+frente.</p>
+
+<h2>Quatro seções, na ordem que importa</h2>
+
+<div class="defs">
+  <div>
+    <dt>Precisa de você</dt>
+    <dd>Missões bloqueadas ou esperando, agentes que pararam para perguntar alguma coisa, decisões
+    de proteção que ninguém respondeu. Primeiro, porque é a única seção urgente.</dd>
+  </div>
+  <div>
+    <dt>Trabalhando agora</dt>
+    <dd>Agentes de fato em execução, e as missões contra as quais eles estão rodando. Esta é a
+    seção de tranquilidade: ela te diz que alguma coisa está acontecendo sem você ter que abrir
+    nada.</dd>
+  </div>
+  <div>
+    <dt>Concluídas recentemente</dt>
+    <dd>O que terminou, com a missão que terminou. Recente o bastante para ainda ser
+    interessante.</dd>
+  </div>
+  <div>
+    <dt>Projetos ativos</dt>
+    <dd>Onde você andou trabalhando, com o branch de cada um. O caminho de volta.</dd>
+  </div>
+</div>
+
+<h2>Uma seção vazia some</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A regra sobre a qual esta tela é construída</span>
+  <p>Uma seção sem nada dentro <strong>não é renderizada</strong> — nem como um título com um
+  estado vazio embaixo, nem como um espaço reservado acinzentado. Ela sumiu.</p>
+</div>
+
+<p>A razão é que o trabalho inteiro desta tela é tornar óbvia a coisa importante. Um título
+<em>Precisa de você</em> seguido de <em>Nada aqui</em> te ensina a pular aquele título, então no
+dia em que alguma coisa genuinamente estiver esperando, seu olho já aprendeu a não parar ali.
+Quatro seções vazias é uma tela que não diz nada, alto.</p>
+
+<p>Quando tudo está vazio, a tela fala isso uma vez — <em>Nada em execução</em> — e oferece a
+única ação útil: abrir um projeto.</p>
+
+<h2>Lendo uma linha</h2>
+
+<p>Uma linha de missão carrega o status dela, o projeto, e a coisa específica que está pendente —
+<em>1 não verificado</em> em vez de um aviso genérico. Clicar leva à missão, não a uma lista que
+contém a missão.</p>
+
+<p>Uma linha de agente leva à sessão que ela nomeia. Se aquele projeto já estiver aberto, ainda
+funciona: reabrir o mesmo projeto não é uma remontagem, e uma notificação que apontava para um
+projeto já aberto não fazia nada até isso ser corrigido.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Uma linha de um projeto arquivado</span>
+  <p>Clicar numa linha cujo projeto foi arquivado não fazia nada, em silêncio — uma passagem em
+  branco que estava lá desde que a Busca global foi construída. Agora ela diz o que aconteceu em
+  vez de engolir o clique.</p>
+</div>
+
+<h2>A barra de status embaixo</h2>
+
+<p>Duas coisas moram ali permanentemente, porque são as respostas de perguntas que você faz
+enquanto está fazendo outra coisa:</p>
+
+<ul>
+  <li><strong>Estado do ambiente</strong> — se as ferramentas de que este produto precisa foram
+  encontradas.</li>
+  <li><strong>Chips de cota</strong> — a cota restante de cada provedor e quando ela reseta.
+  Veja <a href="page:accounts">Contas e cota</a>.</li>
+</ul>
+
+<figure class="fig">
+  <img src="../img/quota-chips.png" alt="A barra de status mostrando Claude Code em 67 por cento resetando em 4 dias e 11 horas, e Codex em 100 por cento.">
+  <figcaption><b>A resposta onde a pergunta é feita.</b> Você pensa em cota quando está prestes a
+  começar alguma coisa, não quando está na tela de Contas.</figcaption>
+</figure>
+
+<h2>A barra lateral</h2>
+
+<p>Seis destinos e Configurações, e ela não cresce. Central de Missões, Projetos, Missões,
+Atividade, Histórico, Métricas — e Configurações, presa embaixo.</p>
+
+<p>Tudo que tem escopo de projeto mora <em>dentro</em> do projeto: Arquivos, o editor, Revisão,
+Prévia, Worktrees, Memória e as Configurações daquele projeto. Uma barra que cresce toda vez que
+um recurso é entregue é uma barra que ninguém consegue ler de relance.</p>
+
+<div class="cards">
+  <a class="card" href="page:missions">
+    <strong>Missões</strong>
+    <span>Do que as linhas desta tela são feitas, e por que uma conclusão pode ser
+    revogada.</span>
+  </a>
+  <a class="card" href="page:notifications">
+    <strong>Notificações</strong>
+    <span>Como o <em>precisa de você</em> chega até você quando esta tela não é a que você está
+    olhando.</span>
+  </a>
+</div>

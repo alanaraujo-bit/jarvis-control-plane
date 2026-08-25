@@ -1,1 +1,96 @@
-<p>TODO</p>
+<p>The same session as the <a href="page:terminal">Terminal</a>, read as structured turns.
+Not a second session, not a second store, and not ANSI scraped out of the terminal — a
+<a href="page:session-log">projection of the same log</a>.</p>
+
+<h2>What the toggle does, and does not do</h2>
+
+<p>Flipping <strong>Terminal · Conversation</strong> changes which projection is on screen. It
+does not touch the process. Nothing is restarted, no context is lost, and you can flip back and
+type mid-turn.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Where the structure comes from</span>
+  <p>Both CLIs write a structured JSONL transcript to disk <em>while running interactively</em>.
+  That was the question the entire product design turned on, and the answer is yes. Conversation
+  reads that, folded into the same log as the terminal bytes, in one order.</p>
+</div>
+
+<h2>What a turn shows</h2>
+
+<div class="defs">
+  <div>
+    <dt>Messages</dt>
+    <dd>User, assistant and system, each attributed. Your side reads <em>You</em>, the agent's
+    side reads <em>Agent</em>.</dd>
+  </div>
+  <div>
+    <dt>Tool calls, with their results</dt>
+    <dd>Paired rather than listed separately, so a call and what it returned are one thing to
+    read.</dd>
+  </div>
+  <div>
+    <dt>Thinking</dt>
+    <dd>Where the provider emits it, shown as its own kind rather than mixed into the reply.</dd>
+  </div>
+  <div>
+    <dt>Errors</dt>
+    <dd>Shown, not swallowed. An agent that failed is more interesting than one that was quiet
+    about failing.</dd>
+  </div>
+  <div>
+    <dt>Token usage per turn</dt>
+    <dd>Input, output, cache creation and cache read — <span class="badge" data-t="official">Official</span>,
+    from the provider's own <code>usage</code> object. Never an estimate dressed as a fact.
+    See <a href="page:confidence">Official and Observed</a>.</dd>
+  </div>
+</div>
+
+<h2>The turn boundary is stated, never inferred</h2>
+
+<p>A quiet terminal does not mean an agent finished. It might be thinking, waiting on a network
+call, or about to print another thousand lines. So the end of a turn comes from the
+<strong>provider</strong>:</p>
+
+<ul>
+  <li>Claude Code reports <code>stop_reason: "end_turn"</code>. <code>"tool_use"</code> means it
+  is still working.</li>
+  <li>Codex emits <code>event_msg/task_complete</code>.</li>
+</ul>
+
+<p>Both are projected as the same thing. This was checked against all 88 transcripts on the
+development machine: <strong>664 turn boundaries, none of them a <code>tool_use</code></strong>.
+It matters most for <a href="page:guide-unattended">unattended runs</a>, where inferring the end
+of a turn from silence would make the autopilot interrupt an agent mid-thought.</p>
+
+<h2>Reading a finished session</h2>
+
+<p>A session that ended still has a conversation, because the log is still there.
+<a href="page:history">History</a> and <a href="page:search">Global Search</a> both open one as a
+read-only tab. That tab was never started and is never closed on the backend — nothing was ever
+attached to it, so there is nothing to detach.</p>
+
+<h2>The parser, and what it survives</h2>
+
+<p>Reading a JSONL file that another process is actively appending to is less simple than it
+sounds. The tailer handles partial lines, UTF-8 sequences split across two reads, truncation,
+and CRLF.</p>
+
+<p>It was validated by running over every real transcript on the development machine — 79 files,
+<strong>49,905 conversation items</strong>, 19,582 of them carrying official usage — rather than
+against synthetic fixtures that only contain the shapes somebody thought of.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A bug this surface's data had, worth knowing</span>
+  <p>Usage and searchable text were routed by one <code>match</code>. A message carrying
+  <em>both</em> — the ordinary shape of an assistant reply — took the usage arm, so its text was
+  never indexed. Searching for an agent's own reply returned only the question that prompted it.
+  Found by running a real turn and searching for its answer, which is not a thing a unit test
+  would have thought to do.</p>
+</div>
+
+<h2>What is deliberately not translated</h2>
+
+<p>The interface around a conversation is translated. <strong>The conversation is not.</strong>
+An agent's own words are what it said; rendering them in another language would be presenting
+words nobody spoke as if they had been. The same rule governs command output stored as
+<a href="page:missions">mission evidence</a>.</p>

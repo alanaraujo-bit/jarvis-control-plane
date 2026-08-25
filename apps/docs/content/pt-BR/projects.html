@@ -1,1 +1,105 @@
-<p>TODO</p>
+<p>Um projeto é uma pasta real no seu disco. Abrir um não copia, não indexa e não escreve nada
+dentro dela — o J.A.R.V.I.S. pergunta ao Git o que ela é e lembra onde ela está.</p>
+
+<figure class="fig">
+  <img src="../img/projects.png" alt="A tela de Projetos listando dois projetos, cada um com seu branch e caminho completo no disco.">
+  <figcaption><b>O branch vem do Git, e a resposta para "isto é um repositório?" também.</b> Uma
+  pasta que não é repositório abre do mesmo jeito; ela simplesmente não tem branch para
+  mostrar.</figcaption>
+</figure>
+
+<h2>A área de trabalho: sete áreas sobre uma pasta</h2>
+
+<figure class="fig">
+  <img src="../img/project-areas.png" alt="O cabeçalho de um projeto mostrando o nome, o branch, e sete abas de área: Sessões, Arquivos, Revisão, Prévia, Worktrees, Memória e Configurações.">
+  <figcaption>O cabeçalho do projeto carrega as áreas. Visualmente distinto da pílula
+  Terminal/Conversa dentro de Sessões, para que dois controles segmentados nunca se
+  empilhem.</figcaption>
+</figure>
+
+<div class="cards">
+  <a class="card" href="page:terminal">
+    <strong>Sessões</strong>
+    <span>Terminais e agentes. A superfície principal, e onde o trabalho acontece.</span>
+  </a>
+  <a class="card" href="page:files-editor">
+    <strong>Arquivos</strong>
+    <span>A árvore, com entradas ignoradas pelo Git esmaecidas, e o Monaco atrás dela.</span>
+  </a>
+  <a class="card" href="page:review">
+    <strong>Revisão</strong>
+    <span>O que mudou, atribuído à sessão que mudou.</span>
+  </a>
+  <a class="card" href="page:preview">
+    <strong>Prévia</strong>
+    <span>O servidor de desenvolvimento que um agente acabou de subir, aberto pelo endereço que
+    ele imprimiu.</span>
+  </a>
+  <a class="card" href="page:worktrees">
+    <strong>Worktrees</strong>
+    <span>Dê a um agente o próprio checkout. Uma worktree é um projeto.</span>
+  </a>
+  <a class="card" href="page:brain">
+    <strong>Memória</strong>
+    <span>O que todo agente que começa aqui ouve antes de ler um arquivo.</span>
+  </a>
+  <a class="card" href="page:settings">
+    <strong>Configurações</strong>
+    <span>As regras de autonomia e proteção deste projeto.</span>
+  </a>
+</div>
+
+<h2>Por que estas não ficam na barra lateral</h2>
+
+<p>Arquivos, o editor, Revisão, Prévia e Worktrees são <strong>ferramentas de escopo de
+projeto</strong>. Colocar elas na barra faria a barra ou crescer toda vez que uma for entregue,
+ou ter que responder "qual projeto?" a cada clique.</p>
+
+<p>Então a barra fica com seis destinos e Configurações, e o cabeçalho do projeto carrega o
+resto. É uma regra mais sobre legibilidade do que sobre hierarquia: uma superfície de navegação
+que você não consegue absorver de relance deixou de ser navegação.</p>
+
+<h2>O confinamento de caminho é a fronteira de segurança</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Como o acesso a arquivos é restringido</span>
+  <p>O webview só nomeia caminhos <strong>relativos à raiz do projeto</strong>, e a própria raiz é
+  lida do banco de dados em vez de aceita de quem chamou. Duas checagens independentes vêm
+  depois: a requisição não pode conter componentes <code>..</code>, de raiz ou de unidade, e então
+  o caminho <em>resolvido</em> é reconferido contra o sistema de arquivos — para que um symlink
+  apontando para fora do projeto seja pego mesmo com a requisição parecendo inocente.</p>
+</div>
+
+<p>Testado contra um diretório temporário real, incluindo caminhos verbatim do Windows
+(<code>\\?\</code>) e dobra de maiúsculas, porque são exatamente esses os lugares onde uma
+checagem ingênua de prefixo deixa passar algo que não deveria.</p>
+
+<h2>Recentes, e arquivar</h2>
+
+<p>Projetos que você abriu ficam na lista com caminho e branch. Arquivar um tira ele do caminho
+sem apagar nada — as sessões, missões e histórico que pertencem a ele continuam lá, e tudo que
+aponta para ele continua resolvendo.</p>
+
+<h2>Uma worktree é um projeto</h2>
+
+<p>Abrir uma <a href="page:worktrees">worktree</a> abre ela como projeto, em todo lugar. A
+Revisão dentro de uma worktree compara contra o branch daquela worktree, os Arquivos navegam
+aquele checkout, e a Memória é a que pertence a ela. Não existe código específico de worktree em
+lugar nenhum das superfícies de arquivo, editor, Revisão ou Git — que é o teste de se aquela
+decisão tinha o formato certo.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Um bug que se escondeu nesta estrutura</span>
+  <p>Toda área de projeto estava mostrando <strong>dados velhos</strong>. As áreas são montadas
+  uma vez e escondidas com CSS, então um efeito chaveado no id do projeto nunca dispara de novo
+  depois do primeiro projeto. O comentário da própria Revisão alegava que ela relia a cada visita;
+  ela não relia. Vale saber se você estiver lendo este código: montado-e-escondido não é
+  desmontado.</p>
+</div>
+
+<h2>Uma sessão começa onde ela diz que começa</h2>
+
+<p>Se a pasta de um projeto foi movida ou apagada, iniciar uma sessão nele é
+<strong>recusado</strong>. Isso foi descoberto continuando uma sessão dentro de uma pasta apagada
+e vendo um agente real abrir no diretório pessoal do usuário — o que é pior do que um erro,
+porque aí o agente trabalha alegremente nos arquivos errados.</p>

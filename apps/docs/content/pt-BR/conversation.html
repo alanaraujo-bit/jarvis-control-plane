@@ -1,1 +1,99 @@
-<p>TODO</p>
+<p>A mesma sessão do <a href="page:terminal">Terminal</a>, lida como turnos estruturados. Não é
+uma segunda sessão, não é um segundo depósito, e não é ANSI raspado do terminal — é uma
+<a href="page:session-log">projeção do mesmo log</a>.</p>
+
+<h2>O que a chave faz, e o que ela não faz</h2>
+
+<p>Virar <strong>Terminal · Conversa</strong> muda qual projeção está na tela. Ela não encosta no
+processo. Nada reinicia, nenhum contexto se perde, e você pode virar de volta e digitar no meio
+de um turno.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">De onde vem a estrutura</span>
+  <p>As duas CLIs escrevem uma transcrição JSONL estruturada em disco <em>enquanto rodam
+  interativamente</em>. Essa foi a pergunta sobre a qual o desenho inteiro do produto girou, e a
+  resposta é sim. A Conversa lê isso, dobrado no mesmo log dos bytes do terminal, em uma ordem
+  só.</p>
+</div>
+
+<h2>O que um turno mostra</h2>
+
+<div class="defs">
+  <div>
+    <dt>Mensagens</dt>
+    <dd>Usuário, assistente e sistema, cada uma atribuída. Seu lado lê <em>Você</em>, o lado do
+    agente lê <em>Agente</em>.</dd>
+  </div>
+  <div>
+    <dt>Chamadas de ferramenta, com os resultados</dt>
+    <dd>Pareadas em vez de listadas separadamente, para que uma chamada e o que ela devolveu sejam
+    uma coisa só de ler.</dd>
+  </div>
+  <div>
+    <dt>Pensamento</dt>
+    <dd>Onde o provedor emite, mostrado como um tipo próprio em vez de misturado na resposta.</dd>
+  </div>
+  <div>
+    <dt>Erros</dt>
+    <dd>Mostrados, não engolidos. Um agente que falhou é mais interessante do que um que ficou
+    quieto sobre falhar.</dd>
+  </div>
+  <div>
+    <dt>Uso de token por turno</dt>
+    <dd>Entrada, saída, criação de cache e leitura de cache —
+    <span class="badge" data-t="official">Oficial</span>, do próprio objeto <code>usage</code> do
+    provedor. Nunca uma estimativa vestida de fato.
+    Veja <a href="page:confidence">Oficial e Observado</a>.</dd>
+  </div>
+</div>
+
+<h2>O fim do turno é declarado, nunca inferido</h2>
+
+<p>Um terminal quieto não significa que um agente terminou. Ele pode estar pensando, esperando
+uma chamada de rede, ou prestes a imprimir mais mil linhas. Então o fim de um turno vem do
+<strong>provedor</strong>:</p>
+
+<ul>
+  <li>O Claude Code informa <code>stop_reason: "end_turn"</code>. <code>"tool_use"</code>
+  significa que ele ainda está trabalhando.</li>
+  <li>O Codex emite <code>event_msg/task_complete</code>.</li>
+</ul>
+
+<p>Os dois são projetados como a mesma coisa. Isso foi conferido contra todas as 88 transcrições
+da máquina de desenvolvimento: <strong>664 fronteiras de turno, nenhuma delas um
+<code>tool_use</code></strong>. Importa mais nas
+<a href="page:guide-unattended">execuções sem supervisão</a>, onde inferir o fim de um turno pelo
+silêncio faria o piloto automático interromper um agente no meio do raciocínio.</p>
+
+<h2>Lendo uma sessão encerrada</h2>
+
+<p>Uma sessão que acabou ainda tem uma conversa, porque o log continua lá. O
+<a href="page:history">Histórico</a> e a <a href="page:search">Busca global</a> abrem uma como
+aba somente leitura. Essa aba nunca foi iniciada e nunca é fechada no backend — nada nunca esteve
+preso a ela, então não há nada para soltar.</p>
+
+<h2>O leitor, e o que ele sobrevive</h2>
+
+<p>Ler um arquivo JSONL no qual outro processo está anexando ativamente é menos simples do que
+parece. O leitor lida com linhas parciais, sequências UTF-8 partidas entre duas leituras,
+truncamento e CRLF.</p>
+
+<p>Ele foi validado rodando sobre toda transcrição real da máquina de desenvolvimento — 79
+arquivos, <strong>49.905 itens de conversa</strong>, 19.582 deles carregando uso oficial — em vez
+de contra fixtures sintéticas que só contêm as formas em que alguém pensou.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Um bug que os dados desta superfície tiveram, que vale conhecer</span>
+  <p>Uso e texto pesquisável eram roteados por um <code>match</code>. Uma mensagem carregando
+  <em>os dois</em> — a forma comum de uma resposta de assistente — pegava o braço do uso, então o
+  texto dela nunca era indexado. Buscar pela própria resposta de um agente devolvia só a pergunta
+  que a provocou. Achado rodando um turno real e buscando pela resposta dele, que não é uma coisa
+  em que um teste unitário teria pensado.</p>
+</div>
+
+<h2>O que deliberadamente não é traduzido</h2>
+
+<p>A interface em volta de uma conversa é traduzida. <strong>A conversa não é.</strong> As
+palavras do próprio agente são o que ele disse; renderizá-las em outro idioma seria apresentar
+palavras que ninguém falou como se tivessem sido faladas. A mesma regra governa a saída de
+comando guardada como <a href="page:missions">evidência de missão</a>.</p>

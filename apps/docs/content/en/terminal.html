@@ -1,1 +1,122 @@
-<p>TODO</p>
+<p>This is the hero surface. Every agent runs here, and it is a real pseudo-terminal — the same
+CLI, the same keys, the same TUI it draws for you outside this product.</p>
+
+<figure class="fig">
+  <img src="../img/terminal.png" alt="A terminal session in a project, showing git status, git log and git diff output with ANSI colour, and the Terminal and Conversation toggle at top right.">
+  <figcaption><b>Real ConPTY, real colour, real Git.</b> The <b>Terminal · Conversation</b>
+  toggle on the right reads the same session two different ways.</figcaption>
+</figure>
+
+<h2>Tabs, and what a tab is</h2>
+
+<p>The <code>+</code> beside the tab strip offers a plain <strong>Shell</strong> and every agent
+the environment scan found. A provider that is not on your <code>PATH</code> is not offered.</p>
+
+<p>Each tab is one session, and a session is one
+<a href="page:session-log">append-only event log</a>. Closing the tab does not necessarily kill
+the process, and the log outlives both — which is why a session you closed months ago can be
+reopened from <a href="page:history">History</a>.</p>
+
+<h3>Processes cannot outlive the app</h3>
+
+<p>Agent processes are contained in Windows job objects. Quitting J.A.R.V.I.S. takes its agents
+with it, so you never end up with an orphaned CLI holding a file lock or spending tokens where
+nothing is reading the output.</p>
+
+<h2>Splitting</h2>
+
+<p>Up to four terminals at once, in three layouts: <strong>side by side</strong>,
+<strong>stacked</strong>, and <strong>grid</strong>.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Splitting changes CSS boxes, never the tree</span>
+  <p>A terminal is <strong>never re-parented</strong> when you split. A remounted terminal has
+  lost its scrollback, and losing an agent's scrollback because you wanted to see two of them is
+  not a trade anyone would accept. Each pane's box changes; no terminal moves.</p>
+</div>
+
+<p>Presets rather than a drag-resizable tree, and four rather than unlimited. Both are deliberate:
+a fifth pane at this window size is narrower than the prompt most agent CLIs draw, so it would be
+an option that produces an unusable terminal.</p>
+
+<p>Closing a pane closes the pane. <em>The session keeps running</em> — the label on the button
+says so.</p>
+
+<h2>Searching the scrollback</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span> opens a panel <em>over the terminal</em>
+rather than a dialog over the app: you are searching this terminal, so the search belongs to it.
+Match-case, a live counter, previous and next.</p>
+
+<p>An overview ruler appears down the side while you are searching and is absent the rest of the
+time, so there is no empty gutter sitting there permanently. Matches are drawn in blue, never
+amber — amber means agent work in this product, and a search hit is not agent work.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The bug that made this hard</span>
+  <p><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span> fell through to <strong>WebView2's own
+  find-in-page</strong> whenever the terminal did not literally hold DOM focus. It is now
+  resolved in the capture phase, and <kbd>Shift</kbd> is excluded outright so
+  <span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span> can stay
+  <a href="page:search">Global Search</a>. It also lowercases the key, because
+  <code>event.key</code> is <code>"F"</code> whenever CapsLock is on.</p>
+</div>
+
+<h2>Pasting an image</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>V</kbd></span> with an image on the clipboard writes it
+into <strong>the session's own directory</strong> — never your repository — and types the quoted
+path at the prompt, <em>unsubmitted</em>. A chip says an image is attached; hovering it shows the
+actual picture rather than a filename.</p>
+
+<p>Writing into the session directory rather than the working tree is the same rule the
+<a href="page:brain">Brain brief</a> follows: nothing this product generates should appear in
+your <code>git status</code>.</p>
+
+<div class="callout">
+  <span class="callout__title">The webview cannot see a pasted image at all</span>
+  <p>WebView2 raises no <code>paste</code> event for clipboard image data — only for text. The
+  Rust core reads the clipboard directly. This was found by instrumenting the running app after
+  two DOM-shaped attempts produced nothing at all, which is a good reminder that a feature that
+  "should work" and produces no event is not a bug in your handler.</p>
+</div>
+
+<h2>Copying</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>C</kbd></span> copies when there is a selection, and
+sends <code>^C</code> when there is not — the behaviour every terminal user already has in their
+fingers. If the clipboard write is denied by the host, the selection is kept so you can retry
+rather than being cleared.</p>
+
+<h2>Preferences apply in place</h2>
+
+<p>Changing the terminal's type size or scrollback in <strong>Settings → Terminal</strong> never
+rebuilds the terminal. A rebuild kills the process and throws away the scrollback. Changing the
+size also refits and tells the PTY its new dimensions, or the shell keeps wrapping at the old
+width.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified in a real build</span>
+  <p>The type size was changed while a shell was running: it grew, kept its scrollback, and ran
+  the next command. The preference survived a restart, and Reset returned it to 13 with the
+  label going back to <em>Default</em>.</p>
+</div>
+
+<h2>Dictating into it</h2>
+
+<p>The microphone button beside the tabs starts <a href="page:voice">voice dictation</a>. It
+transcribes locally, primes itself with your project's own vocabulary, and types into the prompt
+<strong>without submitting</strong> — the same rule the image paste follows. Pressing Enter stays
+yours.</p>
+
+<div class="cards">
+  <a class="card" href="page:conversation">
+    <strong>Conversation</strong>
+    <span>The same session, read as structured turns with official token counts.</span>
+  </a>
+  <a class="card" href="page:guide-terminal">
+    <strong>Get the most from it</strong>
+    <span>Four agents side by side, search that does not fight the browser, and images in a
+    prompt.</span>
+  </a>
+</div>

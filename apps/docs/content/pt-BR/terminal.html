@@ -1,1 +1,125 @@
-<p>TODO</p>
+<p>Esta é a superfície principal. Todo agente roda aqui, e é um pseudo-terminal de verdade — a
+mesma CLI, as mesmas teclas, a mesma TUI que ela desenha para você fora deste produto.</p>
+
+<figure class="fig">
+  <img src="../img/terminal.png" alt="Uma sessão de terminal em um projeto, mostrando saída de git status, git log e git diff com cor ANSI, e a chave Terminal e Conversa no canto superior direito.">
+  <figcaption><b>ConPTY real, cor real, Git real.</b> A chave <b>Terminal · Conversa</b> à direita
+  lê a mesma sessão de dois jeitos diferentes.</figcaption>
+</figure>
+
+<h2>Abas, e o que é uma aba</h2>
+
+<p>O <code>+</code> ao lado da faixa de abas oferece um <strong>Shell</strong> simples e todo
+agente que a varredura de ambiente encontrou. Um provedor que não está no seu <code>PATH</code>
+não é oferecido.</p>
+
+<p>Cada aba é uma sessão, e uma sessão é um
+<a href="page:session-log">log de eventos append-only</a>. Fechar a aba não necessariamente mata
+o processo, e o log sobrevive aos dois — que é por que uma sessão que você fechou meses atrás
+pode ser reaberta pelo <a href="page:history">Histórico</a>.</p>
+
+<h3>Processos não conseguem sobreviver ao app</h3>
+
+<p>Processos de agente são contidos em job objects do Windows. Sair do J.A.R.V.I.S. leva os
+agentes dele junto, então você nunca acaba com uma CLI órfã segurando um lock de arquivo ou
+gastando tokens onde ninguém está lendo a saída.</p>
+
+<h2>Dividindo</h2>
+
+<p>Até quatro terminais ao mesmo tempo, em três layouts: <strong>lado a lado</strong>,
+<strong>empilhados</strong> e <strong>grade</strong>.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Dividir muda caixas de CSS, nunca a árvore</span>
+  <p>Um terminal <strong>nunca é reparentado</strong> quando você divide. Um terminal remontado
+  perdeu o histórico, e perder o histórico de um agente porque você quis ver dois deles não é uma
+  troca que alguém aceitaria. A caixa de cada painel muda; nenhum terminal se move.</p>
+</div>
+
+<p>Presets em vez de uma árvore redimensionável, e quatro em vez de ilimitado. Os dois são
+deliberados: um quinto painel neste tamanho de janela é mais estreito do que o prompt que a
+maioria das CLIs de agente desenha, então seria uma opção que produz um terminal inutilizável.</p>
+
+<p>Fechar um painel fecha o painel. <em>A sessão continua rodando</em> — o rótulo do botão diz
+isso.</p>
+
+<h2>Buscando no histórico</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span> abre um painel <em>sobre o terminal</em>
+em vez de um diálogo sobre o app: você está buscando neste terminal, então a busca pertence a
+ele. Diferenciar maiúsculas, um contador ao vivo, anterior e próximo.</p>
+
+<p>Uma régua panorâmica aparece na lateral enquanto você busca e some no resto do tempo, então não
+existe uma calha vazia parada ali permanentemente. Os resultados são desenhados em azul, nunca em
+âmbar — âmbar significa trabalho de agente neste produto, e um resultado de busca não é trabalho
+de agente.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">O bug que deixou isso difícil</span>
+  <p><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span> vazava para a <strong>busca-na-página
+  do próprio WebView2</strong> sempre que o terminal não tinha literalmente o foco do DOM. Agora
+  ele é resolvido na fase de captura, e o <kbd>Shift</kbd> é excluído de saída para que
+  <span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span> continue sendo a
+  <a href="page:search">Busca global</a>. Ele também minúsculiza a tecla, porque
+  <code>event.key</code> é <code>"F"</code> sempre que o CapsLock está ligado.</p>
+</div>
+
+<h2>Colando uma imagem</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>V</kbd></span> com uma imagem na área de transferência
+escreve ela <strong>no diretório da própria sessão</strong> — nunca no seu repositório — e digita
+o caminho entre aspas no prompt, <em>sem enviar</em>. Um chip diz que há uma imagem anexada;
+passar o mouse mostra a figura de verdade, não um nome de arquivo.</p>
+
+<p>Escrever no diretório da sessão em vez da árvore de trabalho é a mesma regra que o
+<a href="page:brain">briefing da Memória</a> segue: nada que este produto gera deveria aparecer
+no seu <code>git status</code>.</p>
+
+<div class="callout">
+  <span class="callout__title">O webview não consegue ver uma imagem colada</span>
+  <p>O WebView2 não dispara evento <code>paste</code> nenhum para dados de imagem da área de
+  transferência — só para texto. O núcleo em Rust lê a área de transferência direto. Isso foi
+  descoberto instrumentando o app em execução depois de duas tentativas com forma de DOM não
+  produzirem absolutamente nada, o que é um bom lembrete de que um recurso que "deveria
+  funcionar" e não gera evento nenhum não é um bug no seu handler.</p>
+</div>
+
+<h2>Copiando</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>C</kbd></span> copia quando há seleção, e envia
+<code>^C</code> quando não há — o comportamento que todo usuário de terminal já tem nos dedos. Se
+a escrita na área de transferência for negada pelo sistema, a seleção é mantida para você poder
+tentar de novo em vez de ser limpa.</p>
+
+<h2>Preferências aplicam no lugar</h2>
+
+<p>Mudar o tamanho do texto ou o histórico do terminal em
+<strong>Configurações → Terminal</strong> nunca reconstrói o terminal. Uma reconstrução mata o
+processo e joga fora o histórico. Mudar o tamanho também reajusta e avisa ao PTY as dimensões
+novas, ou o shell continua quebrando linha na largura antiga.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado em uma build real</span>
+  <p>O tamanho do texto foi mudado com um shell rodando: ele cresceu, manteve o histórico, e
+  rodou o próximo comando. A preferência sobreviveu a um reinício, e Voltar ao padrão devolveu 13
+  com o rótulo voltando para <em>Padrão</em>.</p>
+</div>
+
+<h2>Ditando nele</h2>
+
+<p>O botão de microfone ao lado das abas inicia o <a href="page:voice">ditado por voz</a>. Ele
+transcreve localmente, se prepara com o vocabulário do seu próprio projeto, e digita no prompt
+<strong>sem enviar</strong> — a mesma regra que a colagem de imagem segue. Apertar Enter continua
+sendo seu.</p>
+
+<div class="cards">
+  <a class="card" href="page:conversation">
+    <strong>Conversa</strong>
+    <span>A mesma sessão, lida como turnos estruturados com contagens oficiais de token.</span>
+  </a>
+  <a class="card" href="page:guide-terminal">
+    <strong>Aproveitar ao máximo</strong>
+    <span>Quatro agentes lado a lado, busca que não briga com o navegador, e imagens em um
+    prompt.</span>
+  </a>
+</div>

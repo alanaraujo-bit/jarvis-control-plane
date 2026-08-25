@@ -1,1 +1,101 @@
-<p>TODO</p>
+<p>A project is a real folder on your disk. Opening one does not copy it, index it, or write
+anything into it — J.A.R.V.I.S. asks Git what it is and remembers where it is.</p>
+
+<figure class="fig">
+  <img src="../img/projects.png" alt="The Projects screen listing two projects, each with its branch and full path on disk.">
+  <figcaption><b>The branch comes from Git, and so does the answer to "is this a repository?".</b>
+  A folder that is not a repository still opens; it simply has no branch to show.</figcaption>
+</figure>
+
+<h2>The workspace: seven areas over one folder</h2>
+
+<figure class="fig">
+  <img src="../img/project-areas.png" alt="A project header showing the project name, its branch, and seven area tabs: Sessions, Files, Review, Preview, Worktrees, Brain and Settings.">
+  <figcaption>The project header carries the areas. Visually distinct from the
+  Terminal/Conversation pill inside Sessions, so two segmented controls never stack.</figcaption>
+</figure>
+
+<div class="cards">
+  <a class="card" href="page:terminal">
+    <strong>Sessions</strong>
+    <span>Terminals and agents. The hero surface, and where the work happens.</span>
+  </a>
+  <a class="card" href="page:files-editor">
+    <strong>Files</strong>
+    <span>The tree, with Git-ignored entries dimmed, and Monaco behind it.</span>
+  </a>
+  <a class="card" href="page:review">
+    <strong>Review</strong>
+    <span>What changed, attributed to the session that changed it.</span>
+  </a>
+  <a class="card" href="page:preview">
+    <strong>Preview</strong>
+    <span>The dev server an agent just started, opened from the address it printed.</span>
+  </a>
+  <a class="card" href="page:worktrees">
+    <strong>Worktrees</strong>
+    <span>Give an agent its own checkout. A worktree is a project.</span>
+  </a>
+  <a class="card" href="page:brain">
+    <strong>Brain</strong>
+    <span>What every agent starting here is told before it reads a file.</span>
+  </a>
+  <a class="card" href="page:settings">
+    <strong>Settings</strong>
+    <span>This project's own autonomy and guardrail rules.</span>
+  </a>
+</div>
+
+<h2>Why these are not on the rail</h2>
+
+<p>Files, the editor, Review, Preview and Worktrees are <strong>project-scoped tools</strong>.
+Putting them on the rail would mean the rail either grows every time one ships, or has to answer
+"which project?" on every click.</p>
+
+<p>So the rail stays six destinations and Settings, and the project header carries the rest. It
+is a rule about scanability more than about hierarchy: a navigation surface you cannot take in
+at a glance has stopped being navigation.</p>
+
+<h2>Path confinement is the security boundary</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">How file access is constrained</span>
+  <p>The webview only ever names paths <strong>relative to the project root</strong>, and the
+  root itself is read from the database rather than accepted from the caller. Two independent
+  checks follow: the request must contain no <code>..</code>, root or drive components, and then
+  the <em>resolved</em> path is re-checked against the filesystem — so a symlink pointing out of
+  the project is caught even though the request looked innocent.</p>
+</div>
+
+<p>Tested against a real temporary directory, including Windows verbatim (<code>\\?\</code>)
+paths and case folding, because those are exactly where a naive prefix check quietly passes
+something it should not.</p>
+
+<h2>Recents, and archiving</h2>
+
+<p>Projects you have opened stay in the list with their path and branch. Archiving one takes it
+out of the way without deleting anything — the sessions, missions and history that belong to it
+are all still there, and everything that links to it still resolves.</p>
+
+<h2>A worktree is a project</h2>
+
+<p>Opening a <a href="page:worktrees">worktree</a> opens it as a project, everywhere. Review
+inside a worktree compares against that worktree's branch, Files browses that checkout, and the
+Brain is the one that belongs to it. There is no worktree-specific code anywhere in the file,
+editor, Review or Git surfaces — which is the test of whether that decision was the right
+shape.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A bug that hid in this structure</span>
+  <p>Every project area was showing <strong>stale data</strong>. Areas are mounted once and
+  hidden with CSS, so an effect keyed on the project id never fires again after the first
+  project. Review's own comment claimed it re-read on every visit; it did not. Worth knowing if
+  you are reading this code: mounted-and-hidden is not unmounted.</p>
+</div>
+
+<h2>A session starts where it says it starts</h2>
+
+<p>If a project's folder has been moved or deleted, starting a session in it is
+<strong>refused</strong>. This was found by continuing a session into a deleted folder and
+watching a real agent open in the user's home directory instead — which is worse than an error,
+because the agent then happily works on the wrong files.</p>

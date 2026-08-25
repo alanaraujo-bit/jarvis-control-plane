@@ -1,1 +1,97 @@
-<p>TODO</p>
+<p>The home screen. It answers one question — <em>what needs me?</em> — and then gets out of the
+way.</p>
+
+<h2>Four sections, in the order that matters</h2>
+
+<div class="defs">
+  <div>
+    <dt>Needs attention</dt>
+    <dd>Missions blocked or waiting, agents that stopped to ask something, guardrail decisions
+    nobody has answered. First, because it is the only section that is urgent.</dd>
+  </div>
+  <div>
+    <dt>Working now</dt>
+    <dd>Agents actually running, and the missions they are running against. This is the
+    reassurance section: it tells you that something is happening without you having to open
+    anything.</dd>
+  </div>
+  <div>
+    <dt>Recently completed</dt>
+    <dd>What finished, with the mission it finished. Recent enough to still be interesting.</dd>
+  </div>
+  <div>
+    <dt>Active projects</dt>
+    <dd>Where you have been working, with the branch each one is on. The way back in.</dd>
+  </div>
+</div>
+
+<h2>An empty section vanishes</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The rule this screen is built on</span>
+  <p>A section with nothing in it is <strong>not rendered at all</strong> — not as a heading with
+  an empty state under it, not as a greyed-out placeholder. It is gone.</p>
+</div>
+
+<p>The reason is that this screen's whole job is to make the important thing obvious. A
+<em>Needs attention</em> heading followed by <em>Nothing here</em> teaches you to skip past that
+heading, so the day something genuinely is waiting, your eye has already learned not to stop
+there. Four empty sections is a screen that says nothing loudly.</p>
+
+<p>When everything is empty, the screen says so once — <em>Nothing is running</em> — and offers
+the one useful action: open a project.</p>
+
+<h2>Reading a row</h2>
+
+<p>A mission row carries its status, its project, and the specific thing that is unresolved —
+<em>1 unverified</em> rather than a generic warning. Clicking it goes to the mission, not to a
+list containing the mission.</p>
+
+<p>An agent row goes to the session it names. If that project is already open, it still works:
+re-opening the same project is not a remount, and a notification that pointed at an already-open
+project used to do nothing at all until that was fixed.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A row for an archived project</span>
+  <p>Clicking a row whose project has been archived used to silently do nothing — a
+  fall-through that had been there since Global Search was built. It now says what happened
+  rather than swallowing the click.</p>
+</div>
+
+<h2>The status bar underneath</h2>
+
+<p>Two things live down there permanently, because they are the answers to questions you ask
+while doing something else:</p>
+
+<ul>
+  <li><strong>Environment state</strong> — whether the tools this product needs were found.</li>
+  <li><strong>Quota chips</strong> — each provider's remaining allowance and when it resets.
+  See <a href="page:accounts">Accounts and quota</a>.</li>
+</ul>
+
+<figure class="fig">
+  <img src="../img/quota-chips.png" alt="The status bar showing Claude Code at 67 percent resetting in 4 days 11 hours, and Codex at 100 percent.">
+  <figcaption><b>The answer where the question gets asked.</b> You wonder about quota when you
+  are about to start something, not when you are on the Accounts screen.</figcaption>
+</figure>
+
+<h2>The rail</h2>
+
+<p>Six destinations and Settings, and it does not grow. Mission Control, Projects, Missions,
+Activity, History, Analytics — then Settings, pinned to the bottom.</p>
+
+<p>Everything that is scoped to a project lives <em>inside</em> the project instead: Files, the
+editor, Review, Preview, Worktrees, Brain and that project's own Settings. A rail that grows
+every time a feature ships is a rail nobody can scan.</p>
+
+<div class="cards">
+  <a class="card" href="page:missions">
+    <strong>Missions</strong>
+    <span>What the rows on this screen are made of, and why completion can be revoked.</span>
+  </a>
+  <a class="card" href="page:notifications">
+    <strong>Notifications</strong>
+    <span>How <em>needs attention</em> reaches you when this screen is not the one you are
+    looking at.</span>
+  </a>
+</div>
