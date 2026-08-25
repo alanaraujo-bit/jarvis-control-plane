@@ -12,6 +12,13 @@
   path of its owning executable, because this machine carries an unrelated
   jarvis.exe that window-title and process-name matching both hit.
 
+  NEVER send {ENTER} straight after a click. The clicked button still holds
+  focus, so Enter re-fires it. A capture run that clicked "New note" and then
+  typed a multi-line note created 48 empty notes in the real notebook before
+  anyone noticed — the newlines in the note were each activating the button
+  again. Click into the field you mean to type in first, and check what has
+  focus before sending a key that activates things.
+
 .EXAMPLE
   .\tools\shoot.ps1 -Name accounts -Steps "click:26,278|sleep:1400"
 #>
