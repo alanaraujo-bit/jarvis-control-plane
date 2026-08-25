@@ -1,1 +1,145 @@
-<p>TODO</p>
+<p>How a command gets stopped before it runs, and why the mechanism is shaped the way it is.
+Behavioural detail is on <a href="page:guardrails">Guardrails</a>; this page is the machinery.</p>
+
+<h2>The pipeline</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 292" role="img" aria-labelledby="d-g">
+  <title id="d-g">The app writes a policy snapshot and hook settings; the provider launches with
+  them; before each tool call the guard process reads the snapshot, classifies the command and
+  answers; its decision is appended to a file the session runtime tails.</title>
+
+  <rect class="d-fill-surface d-stroke" x="200" y="4" width="300" height="34" rx="7"/>
+  <text class="d-text" x="350" y="26" text-anchor="middle">a session starts</text>
+
+  <path class="d-line" d="M280 38 V64 H150 V78" marker-end="url(#a3)"/>
+  <path class="d-line" d="M420 38 V64 H550 V78" marker-end="url(#a3)"/>
+
+  <rect class="d-fill-surface d-stroke" x="30" y="80" width="240" height="42" rx="7"/>
+  <text class="d-text-mono" x="150" y="98" text-anchor="middle">guardrail-policy.json</text>
+  <text class="d-text-sm" x="150" y="114" text-anchor="middle">resolved rules · attended?</text>
+
+  <rect class="d-fill-surface d-stroke" x="430" y="80" width="240" height="42" rx="7"/>
+  <text class="d-text-mono" x="550" y="98" text-anchor="middle">hook settings</text>
+  <text class="d-text-sm" x="550" y="114" text-anchor="middle">the provider launches with it</text>
+
+  <path class="d-line" d="M550 122 V150 H350 V166" marker-end="url(#a3)"/>
+  <text class="d-text-sm" x="470" y="144" text-anchor="middle">a tool call is about to run</text>
+
+  <rect x="150" y="168" width="400" height="54" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text-mono" x="350" y="188" text-anchor="middle">jarvis-desktop.exe --jarvis-guardrail-hook</text>
+  <text class="d-text-sm" x="350" y="206" text-anchor="middle">reads the snapshot · classifies · answers on stdout</text>
+  <path class="d-line" d="M150 100 V190 H146" marker-end="url(#a3)"/>
+
+  <path class="d-line" d="M350 222 V244" marker-end="url(#a3)"/>
+  <rect class="d-fill-surface d-stroke" x="200" y="246" width="300" height="38" rx="7"/>
+  <text class="d-text-mono" x="350" y="264" text-anchor="middle">guardrail-decisions.jsonl</text>
+  <text class="d-text-sm" x="350" y="278" text-anchor="middle">tailed by the session runtime → Approval frames</text>
+
+  <defs>
+    <marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<h2>Why the guard is a separate process</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Because a session has exactly one writer</span>
+  <p>The guard runs as its own process and <strong>can never be the log's writer</strong>. It hands
+  its decisions over the same way a provider hands over its transcript: by appending to a file that
+  the single writer follows and turns into <code>Approval</code> frames.</p>
+  <p>This is the same two-process shape the whole <a href="page:architecture">architecture</a>
+  uses, and it is what keeps the ordering in the log a fact rather than an agreement between
+  concurrent writers.</p>
+</div>
+
+<p>The provider invokes it — the same executable, with a flag — before every classified tool call.
+It reads the snapshot, classifies the command, and answers on stdout.</p>
+
+<h2>Why it is a snapshot, not a live read</h2>
+
+<p><code>guardrail-policy.json</code> is written when the session starts, carrying the rules
+already resolved down the <a href="page:autonomy">project → global → default</a> chain and whether
+anybody is attended.</p>
+
+<p>Changing a rule in Settings mid-session should not change what a running agent was told. A
+session that started under one policy finishes under it, which is also what makes the record
+readable afterwards: the decisions in the log are decisions under a policy you can inspect.</p>
+
+<h2>Why it fails open</h2>
+
+<p>No snapshot, malformed JSON, or a version it does not understand: it stays silent and the tool
+call proceeds.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Count the blast radius</span>
+  <p>This process runs <strong>before every tool call in every agent session</strong>. A guard that
+  failed <em>closed</em> would turn any bug in itself — a missing file, a parse error, a version
+  skew after an update — into an agent that cannot do anything at all, in every project, until
+  somebody diagnoses it.</p>
+  <p>Failing open means a bug costs you the guardrail. Failing closed means a bug costs you the
+  product.</p>
+</div>
+
+<h2>The classifier</h2>
+
+<p>Heuristic matching over command text. It tokenises, respects quoting, and reads each program
+with its arguments. It is <strong>not</strong> a shell parser and does not pretend to be — a real
+shell parser would have to handle every expansion, substitution and alias, and would be a much
+larger surface to get subtly wrong.</p>
+
+<h3>The negative cases are the load-bearing ones</h3>
+
+<p>If the classifier flags things it should not, it becomes the first thing anyone switches off —
+and then it protects nothing. So these are pinned by tests:</p>
+
+<pre><code><span class="g">✓ no match</span>  git push --force-with-lease origin main
+<span class="c">             refuses on its own when the remote moved — the safe spelling</span>
+<span class="g">✓ no match</span>  echo "rm -rf /tmp/x"
+<span class="c">             a string being printed, not a directory being deleted</span>
+<span class="g">✓ no match</span>  npm publish --dry-run
+<span class="g">✓ no match</span>  cat .env.example
+<span class="g">✓ no match</span>  git switch main
+<span class="c">             but `git switch --discard-changes main` does match</span>
+
+<span class="r">✗ matches</span>   pnpm build &amp;&amp; git push --force &amp;&amp; npm publish
+<span class="c">             each part of a chain is classified separately</span></code></pre>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Not flagged is not proven safe</span>
+  <p>A command the classifier does not flag <strong>failed to match a pattern</strong>. That is a
+  different claim from <em>this is harmless</em>, and only one of them is true.</p>
+</div>
+
+<h3>The identifiers are stable and never prose</h3>
+
+<p>The nine operations have fixed string identifiers — <code>git.force-push</code>,
+<code>fs.recursive-delete</code>, <code>secrets.access</code> and so on. They are used in storage,
+in the policy snapshot, and as the key suffix for the translated name. A name a user reads is
+never the thing a database stores.</p>
+
+<h2>Enforcement differs by provider, and the model says so</h2>
+
+<p>Claude Code runs the hook and a refusal genuinely stops the command. Codex has the same hook
+mechanism but will not run it until you have trusted it in Codex's own interface, so it is
+reported as <code>PreExecutionWhenTrusted</code> — observed, not guarded, until you do.
+See <a href="page:provider-matrix">the provider matrix</a>.</p>
+
+<h2>Where the gate is not a classifier at all</h2>
+
+<p>Inside <a href="page:review">Review</a>, a discard <em>names</em> its operation directly rather
+than building a command string and asking the classifier what it just decided to do. It also
+writes no pending row: you are at the screen, so the question is asked and answered there rather
+than becoming something to resolve later.</p>
+
+<p>Classifying a string you just constructed yourself is a round trip through a heuristic to
+recover information you already had.</p>
+
+<h2>Under Unattended</h2>
+
+<p>The snapshot carries whether the session is <em>driven</em>. A driven session with a rule set to
+<em>ask</em> gets a <strong>refusal</strong>, because parking the agent on a prompt nobody will
+answer wastes the whole run. The mission moves to Waiting with a reason.</p>

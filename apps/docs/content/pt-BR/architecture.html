@@ -1,1 +1,165 @@
-<p>TODO</p>
+<p>Um aplicativo de desktop em Tauri: um núcleo em Rust que é dono dos processos, dos arquivos, do
+Git e do banco de dados, e uma interface em React que não é dona de nada além do desenho.</p>
+
+<h2>A stack</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Camada</th><th>Escolha</th><th>Porque</th></tr></thead>
+  <tbody>
+    <tr><td>Casca do desktop</td><td>Tauri v2 — núcleo Rust + WebView2</td><td>Um núcleo nativo de verdade com interface web, sem embarcar um navegador.</td></tr>
+    <tr><td>Linguagem do núcleo</td><td>Rust</td><td>PTYs, observação de arquivos, Git, SQLite, um processo de guarda separado — tudo isso é trabalho de sistemas.</td></tr>
+    <tr><td>Interface</td><td>React 19 + TypeScript + Vite</td><td>—</td></tr>
+    <tr><td>Estilo</td><td>Tokens de propriedade customizada + CSS puro</td><td>Sem runtime, sem build de estilos, e um tema que são genuinamente duas paletas criadas.</td></tr>
+    <tr><td>Terminal</td><td>xterm.js + <code>portable-pty</code></td><td>Um pseudo-terminal de verdade, não uma emulação de um.</td></tr>
+    <tr><td>Editor</td><td>Monaco, atrás de uma fronteira de pacote</td><td>Para poder ser carregado sob demanda e trocado sem encostar nas superfícies.</td></tr>
+    <tr><td>Persistência</td><td>SQLite (WAL) + logs de sessão em disco</td><td>A separação que <a href="page:session-log">o log</a> existe para fazer.</td></tr>
+    <tr><td>i18n</td><td>Um catálogo escrito à mão, en + pt-BR</td><td>Ligado desde a primeira string, e não adaptado depois.</td></tr>
+    <tr><td>Nuvem</td><td>Next.js na Vercel, três endpoints</td><td>Só o relay do celular. Desligado até você parear.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Onde o código está</h2>
+
+<pre><code>apps/desktop/src-tauri/src/
+  <b>session/</b>     log de eventos, codec de quadros, projeções   <span class="a">← o núcleo</span>
+  history/     toda sessão já rodada — busca, renomear, apagar
+  pty/         pseudo-terminais, contenção por job object do Windows
+  providers/   trait de adaptador + claude/ + codex/
+  db/          esquema SQLite e migrações só para frente
+  git/         integração com Git
+  mission/     motor de missões, verificação, evidência
+  autopilot/   plan (puro) + driver (toca o mundo)
+  guardrail/   classificador, política, o processo de guarda separado
+  brain/       conhecimento do projeto e o briefing
+  accounts/    o registro, o modelo de cota, sondagens ao vivo
+  notify/      detecção, renderização, o barramento
+  search/      índice FTS5 e o preenchimento único
+  notebook/    pastas e notas
+  envscan/     detecção de ambiente
+  voice/       transcrição local
+  relay/       a metade do celular
+  preview/     detecção de servidor de desenvolvimento
+
+apps/desktop/src/
+  design/      tokens, primitivos
+  shell/       barra lateral, barra de título, paleta, busca, notificações
+  surfaces/    mission-control, project, terminal, conversation, …
+
+packages/
+  protocol/    tipos TypeScript compartilhados espelhando os contratos de IPC em Rust
+  i18n/        catálogos en + pt-BR
+  editor/      a fronteira do Monaco</code></pre>
+
+<h2>Quatro fronteiras que sustentam o desenho</h2>
+
+<h3>1. O log da sessão é o único depósito de registro</h3>
+
+<p>Tudo depois dele é uma <a href="page:session-log">projeção</a>. Não existe um segundo depósito
+que possa discordar do primeiro, e qualquer coisa que precise contribuir entrega a contribuição ao
+escritor único em vez de escrever ao lado dele.</p>
+
+<h3>2. Capacidades são dados</h3>
+
+<p>Um <a href="page:providers">adaptador de provedor</a> se descreve com uma struct, e as
+superfícies renderizam a partir dela. Adicionar um provedor não pode exigir encostar em um
+componente — e se exigisse, a abstração já teria falhado. Um teste falha se dois adaptadores algum
+dia se descreverem de forma idêntica.</p>
+
+<h3>3. O Git decide o que o Git sabe</h3>
+
+<p>Status, diffs, branches, worktrees: a gente roda o binário <code>git</code> e analisa. A gente
+nunca calcula um diff por conta própria torcendo para ele concordar com o <code>git</code> do
+usuário. O único lugar em que isso quase deu errado é instrutivo — o <code>git restore</code>
+simples restaura a partir do <em>índice</em>, então um descarte construído em cima dele mantém
+conteúdo staged em silêncio.</p>
+
+<h3>4. O webview nomeia caminhos, o núcleo resolve</h3>
+
+<p>Toda requisição de arquivo é <a href="page:projects">relativa a uma raiz de projeto lida do
+banco</a>, nunca um caminho que quem chamou forneceu. Duas checagens independentes vêm depois, e a
+segunda reconfere o caminho <em>resolvido</em> contra o sistema de arquivos para pegar um symlink
+apontando para fora do projeto.</p>
+
+<h2>O padrão de dois processos</h2>
+
+<p>Duas vezes neste produto, alguma coisa precisa participar de uma sessão sem conseguir
+corrompê-la. As duas usam o mesmo formato:</p>
+
+<div class="diagram">
+<svg viewBox="0 0 700 176" role="img" aria-labelledby="d-2p">
+  <title id="d-2p">Um processo separado anexa decisões a um arquivo, e o runtime da sessão — o
+  escritor único — acompanha esse arquivo e transforma cada decisão em um quadro.</title>
+
+  <rect class="d-fill-surface d-stroke" x="4" y="16" width="190" height="46" rx="7"/>
+  <text class="d-text" x="99" y="36" text-anchor="middle">Processo separado</text>
+  <text class="d-text-sm" x="99" y="52" text-anchor="middle">guarda · provedor</text>
+
+  <path class="d-line" d="M194 39 H262" marker-end="url(#a2)"/>
+  <text class="d-text-sm" x="228" y="30" text-anchor="middle">anexa</text>
+
+  <rect class="d-fill-surface d-stroke" x="264" y="16" width="180" height="46" rx="7"/>
+  <text class="d-text-mono" x="354" y="36" text-anchor="middle">um arquivo em disco</text>
+  <text class="d-text-sm" x="354" y="52" text-anchor="middle">jsonl · transcrição</text>
+
+  <path class="d-line" d="M444 39 H512" marker-end="url(#a2)"/>
+  <text class="d-text-sm" x="478" y="30" text-anchor="middle">acompanha</text>
+
+  <rect x="514" y="16" width="182" height="46" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="605" y="36" text-anchor="middle">Runtime da sessão</text>
+  <text class="d-text-sm" x="605" y="52" text-anchor="middle">o escritor único</text>
+
+  <path class="d-line" d="M605 62 V104" marker-end="url(#a2)"/>
+  <rect class="d-fill-accent d-stroke-accent" x="514" y="106" width="182" height="40" rx="7"/>
+  <text class="d-text" x="605" y="131" text-anchor="middle">um log ordenado</text>
+
+  <text class="d-text-sm" x="14" y="128">A guarda nunca pode ser a escritora do log. Um provedor</text>
+  <text class="d-text-sm" x="14" y="146">também não. Uma sessão tem exatamente uma, e é isso que</text>
+  <text class="d-text-sm" x="14" y="164">faz da ordem um fato em vez de um acordo.</text>
+
+  <defs>
+    <marker id="a2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<p>Um <a href="page:providers">provedor</a> entrega a transcrição dele assim. A
+<a href="page:internals-guardrail">proteção</a> entrega as decisões dela do mesmo jeito. Nenhum dos
+dois consegue reordenar o log, descartar um quadro ou competir com o escritor, porque nenhum dos
+dois é o escritor.</p>
+
+<h2>A interface não é dona de nada</h2>
+
+<p>Toda decisão relevante mora em Rust: quais caminhos são alcançáveis, se um valor está na faixa,
+se uma operação é protegida, quando um turno acabou, o que um provedor consegue fazer.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Por que os limites são reconferidos no núcleo</span>
+  <p>A superfície desenha um controle deslizante, então um valor fora da faixa <em>deveria</em> ser
+  impossível — que é exatamente por que ele não é confiado. Um comando alcançável pelo webview é
+  alcançável por qualquer bug dentro do webview. Fora da faixa na entrada é recusado; fora da faixa
+  na saída é limitado.</p>
+</div>
+
+<h2>Para onde isso vai</h2>
+
+<p>Duas fronteiras foram deixadas deliberadamente abertas. Um cliente de <strong>language
+server</strong>, porque o <a href="page:files-editor">Monaco vem sem os serviços de linguagem
+dele</a> e diagnósticos de verdade precisam de contexto de projeto. E um <strong>terceiro
+provedor</strong>, porque o modelo de capacidades existe justamente para que adicionar um seja um
+adaptador e não uma refatoração.</p>
+
+<div class="cards">
+  <a class="card" href="page:internals-guardrail">
+    <strong>Dentro da proteção</strong>
+    <span>Um processo separado, um snapshot, um classificador que tokeniza, e uma decisão anexada a
+    um arquivo.</span>
+  </a>
+  <a class="card" href="page:internals-autopilot">
+    <strong>Dentro do piloto automático</strong>
+    <span>Um planejador puro e um driver que toca o mundo.</span>
+  </a>
+</div>

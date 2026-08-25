@@ -1,1 +1,177 @@
-<p>TODO</p>
+<p>O piloto automático assume a cadeira da pessoa durante uma
+<a href="page:guide-unattended">execução sem supervisão</a>. Esta página é como ele é construído; o
+guia é como usar.</p>
+
+<h2>Duas metades, separadas por uma linha</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Módulo</th><th>É</th><th>Toca</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>autopilot::plan</code></td>
+      <td>Uma <strong>função pura</strong> do estado da missão</td>
+      <td>Nada. Nenhum processo, nenhum banco, nenhum relógio.</td>
+    </tr>
+    <tr>
+      <td><code>autopilot::driver</code></td>
+      <td>A parte que age</td>
+      <td>Processos, o banco, o relógio.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Por que a divisão é exatamente ali</span>
+  <p><strong>O que dizer e quando parar é a parte que nunca pode estar sutilmente errada.</strong>
+  Um planejador que decide continuar quando deveria parar queima os seus tokens; um que para quando
+  deveria continuar desperdiça a execução. Então essa decisão é uma função pura, testável
+  isoladamente, contra estados de missão construídos e não contra um agente ao vivo.</p>
+  <p>Tudo que pode falhar por razões de ambiente mora do outro lado da linha.</p>
+</div>
+
+<h2>O ciclo</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 268" role="img" aria-labelledby="d-ap">
+  <title id="d-ap">Uma sessão dirigida manda uma instrução de abertura, espera o provedor informar
+  que o turno acabou, verifica a missão, e então ou conclui, ou espera, ou falha, ou manda a
+  próxima instrução.</title>
+
+  <rect class="d-fill-surface d-stroke" x="188" y="4" width="324" height="36" rx="7"/>
+  <text class="d-text" x="350" y="27" text-anchor="middle">sessão iniciada · driven: true</text>
+
+  <path class="d-line" d="M350 40 V64" marker-end="url(#a4)"/>
+  <rect class="d-fill-surface d-stroke" x="188" y="66" width="324" height="36" rx="7"/>
+  <text class="d-text" x="350" y="89" text-anchor="middle">instrução, digitada em blocos ritmados</text>
+
+  <path class="d-line" d="M350 102 V126" marker-end="url(#a4)"/>
+  <rect x="188" y="128" width="324" height="40" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="350" y="146" text-anchor="middle">o provedor diz que o turno acabou</text>
+  <text class="d-text-sm" x="350" y="162" text-anchor="middle">nunca inferido de um terminal quieto</text>
+
+  <path class="d-line" d="M350 168 V192" marker-end="url(#a4)"/>
+  <rect class="d-fill-surface d-stroke" x="188" y="194" width="324" height="36" rx="7"/>
+  <text class="d-text" x="350" y="217" text-anchor="middle">verifica a missão — checagens reais</text>
+
+  <path class="d-line" d="M188 212 H96 V88 H186" marker-end="url(#a4)"/>
+  <text class="d-text-sm" x="98" y="150">ainda não,</text>
+  <text class="d-text-sm" x="98" y="166">e ainda tem</text>
+  <text class="d-text-sm" x="98" y="182">orçamento</text>
+
+  <path class="d-line" d="M512 212 H604 V248" marker-end="url(#a4)"/>
+  <rect x="518" y="250" width="176" height="16" rx="4" fill="var(--state-success-bg)"/>
+  <text class="d-text-sm" x="606" y="262" text-anchor="middle" fill="var(--state-success)">Concluída · Esperando · Falhou</text>
+
+  <defs>
+    <marker id="a4" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<h2>A condição de parada vem do provedor</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Nunca de um terminal quieto</span>
+  <p>Silêncio não significa nada. O agente pode estar pensando, esperando uma chamada de rede, ou
+  prestes a imprimir mais mil linhas. Inferir o fim de um turno pelo silêncio faria o piloto
+  automático interromper um agente no meio do raciocínio, repetidamente, e queimar o orçamento em
+  trabalho pela metade.</p>
+</div>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td><strong>Claude Code</strong></td><td><code>stop_reason: "end_turn"</code> — e <code>"tool_use"</code> significa explicitamente que ele <em>ainda está trabalhando</em></td></tr>
+    <tr><td><strong>Codex</strong></td><td><code>event_msg/task_complete</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Os dois são projetados no mesmo item de conversa, então o driver nunca precisa saber qual provedor
+ele está conduzindo. Isso foi conferido em toda transcrição da máquina de desenvolvimento:
+<strong>664 fronteiras de turno, nenhuma delas um <code>tool_use</code></strong>.</p>
+
+<h2>Três finais, e nenhum quarto</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Final</th><th>Quando</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Concluída</strong></td><td>Todo critério obrigatório verificado, com evidência.</td></tr>
+    <tr><td><strong>Esperando · Bloqueada</strong></td><td>Uma proteção reteve algo, ou o agente esbarrou em algo que ele não consegue fazer. Sempre com um motivo.</td></tr>
+    <tr><td><strong>Falhou</strong></td><td>O orçamento de turnos acabou, ou os mesmos critérios continuam falhando. Sempre com um motivo.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><em>Continuar e torcer</em> é o que uma execução faz quando o modelo não dá a ela nenhum lugar
+honesto para parar. Deixar isso de fora é a razão inteira de os outros três serem confiáveis.</p>
+
+<h2>A próxima instrução nomeia o que não passa</h2>
+
+<p>Cada instrução depois da primeira é montada a partir da verificação que acabou de rodar: ela diz
+quais critérios ainda falham, e o que eles estavam conferindo. Um agente que ouve <em>continue</em>
+tem que adivinhar o que está faltando; um agente que ouve <em>estes dois comandos ainda saem com
+código diferente de zero</em> não tem.</p>
+
+<h2>O detalhe de tempo que teria sido um bug silencioso</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Os últimos quadros de um turno ainda podem estar chegando</span>
+  <p>Quando o provedor informa que o turno acabou, os quadros finais do log podem não ter aterrissado
+  todos. Então o driver assenta brevemente antes de ler, e a constante que faz isso existe
+  exatamente por esse motivo.</p>
+  <p>O mesmo risco apareceu um turno depois, na pergunta de reflexão que o agente recebe no fim de
+  uma execução concluída. A janela de resposta dela originalmente começava no cursor que o próprio
+  fim do turno de trabalho tinha deixado para trás — então um quadro atrasado do turno anterior podia
+  ser lido como parte da resposta. Corrigido rebaseando para o fim atual do log imediatamente antes
+  de a pergunta ser enviada, fixado por um teste com um atrasado plantado de propósito, e depois
+  reconfirmado contra um agente real.</p>
+</div>
+
+<h2>O que uma execução dirigida muda em outros lugares</h2>
+
+<div class="defs">
+  <div>
+    <dt>As proteções recusam em vez de perguntar</dt>
+    <dd>A sessão informa <code>driven: true</code>, então uma regra de <em>perguntar</em> vira uma
+    recusa em vez de um prompt que ninguém pode responder.
+    Veja <a href="page:internals-guardrail">Dentro da proteção</a>.</dd>
+  </div>
+  <div>
+    <dt>Turnos terminados param de notificar</dt>
+    <dd>Vinte notificações enquanto alguém está fora por escolha, e depois uma vigésima primeira que
+    é a única que a pessoa queria, no fim de uma pilha. Perguntas continuam sendo levantadas, porque
+    um agente dirigido que para para perguntar não consegue continuar.</dd>
+  </div>
+  <div>
+    <dt>Iniciar é recusado numa pasta não confiada</dt>
+    <dd>O Claude Code pergunta se você confia numa pasta na primeira vez que abre uma. Uma
+    <a href="page:worktrees">worktree</a> nova é sempre uma pasta nova, então isso ficou alcançável
+    no momento em que as worktrees foram entregues. Recusar é melhor do que travar para sempre numa
+    pergunta que ninguém está presente para responder.</dd>
+  </div>
+  <div>
+    <dt>O agente é perguntado o que aprendeu</dt>
+    <dd>Uma vez, só na conclusão. O <code>Step::Complete</code> é o único lugar em que uma execução
+    dirigida ocupa a cadeira sem mais ninguém nela — uma missão concluída manualmente nunca é
+    perguntada, porque digitar uma pergunta num terminal que alguém está assistindo é uma conversa
+    diferente de interromper. Veja <a href="page:brain">Memória do projeto</a>.</dd>
+  </div>
+</div>
+
+<h2>O orçamento</h2>
+
+<p>4 a 100 turnos, padrão 24, lido das <a href="page:settings-reference">Configurações</a>.
+<strong>Uma execução mantém o orçamento com que começou</strong> — relê-lo a cada turno deixaria uma
+mudança nas Configurações mover a linha de chegada debaixo de uma execução em andamento.</p>
+
+<h2>Parar uma execução não mata o agente</h2>
+
+<p>Quem assume normalmente quer digitar a próxima coisa com as próprias mãos, e matar o processo
+jogaria fora o contexto dele. O piloto automático se afasta e deixa uma sessão viva em um
+prompt.</p>

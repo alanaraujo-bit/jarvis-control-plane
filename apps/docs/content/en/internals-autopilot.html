@@ -1,1 +1,173 @@
-<p>TODO</p>
+<p>The autopilot takes the human's seat during an <a href="page:guide-unattended">unattended
+run</a>. This page is how it is built; the guide is how to use it.</p>
+
+<h2>Two halves, split along one line</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Module</th><th>Is</th><th>Touches</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>autopilot::plan</code></td>
+      <td>A <strong>pure function</strong> of mission state</td>
+      <td>Nothing. No processes, no database, no clock.</td>
+    </tr>
+    <tr>
+      <td><code>autopilot::driver</code></td>
+      <td>The part that acts</td>
+      <td>Processes, the database, the clock.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Why the split is exactly there</span>
+  <p><strong>What to say and when to stop is the part that must never be subtly wrong.</strong> A
+  planner that decides to keep going when it should stop burns your tokens; one that stops when it
+  should continue wastes the run. So that decision is a pure function, testable in isolation,
+  against constructed mission states rather than against a live agent.</p>
+  <p>Everything that can fail for environmental reasons lives on the other side of the line.</p>
+</div>
+
+<h2>The loop</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 268" role="img" aria-labelledby="d-ap">
+  <title id="d-ap">A driven session sends an opening instruction, waits for the provider to report
+  the turn ended, verifies the mission, and then either completes, waits, fails, or sends the next
+  instruction.</title>
+
+  <rect class="d-fill-surface d-stroke" x="188" y="4" width="324" height="36" rx="7"/>
+  <text class="d-text" x="350" y="27" text-anchor="middle">agent session started · driven: true</text>
+
+  <path class="d-line" d="M350 40 V64" marker-end="url(#a4)"/>
+  <rect class="d-fill-surface d-stroke" x="188" y="66" width="324" height="36" rx="7"/>
+  <text class="d-text" x="350" y="89" text-anchor="middle">instruction, typed in paced chunks</text>
+
+  <path class="d-line" d="M350 102 V126" marker-end="url(#a4)"/>
+  <rect x="188" y="128" width="324" height="40" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="350" y="146" text-anchor="middle">the provider says the turn ended</text>
+  <text class="d-text-sm" x="350" y="162" text-anchor="middle">never inferred from a quiet terminal</text>
+
+  <path class="d-line" d="M350 168 V192" marker-end="url(#a4)"/>
+  <rect class="d-fill-surface d-stroke" x="188" y="194" width="324" height="36" rx="7"/>
+  <text class="d-text" x="350" y="217" text-anchor="middle">verify the mission — real checks</text>
+
+  <path class="d-line" d="M188 212 H96 V88 H186" marker-end="url(#a4)"/>
+  <text class="d-text-sm" x="102" y="150">not done</text>
+  <text class="d-text-sm" x="102" y="166">yet, and</text>
+  <text class="d-text-sm" x="102" y="182">budget left</text>
+
+  <path class="d-line" d="M512 212 H604 V248" marker-end="url(#a4)"/>
+  <rect x="524" y="250" width="164" height="16" rx="4" fill="var(--state-success-bg)"/>
+  <text class="d-text-sm" x="606" y="262" text-anchor="middle" fill="var(--state-success)">Completed · Waiting · Failed</text>
+
+  <defs>
+    <marker id="a4" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<h2>The stopping condition comes from the provider</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Never from a quiet terminal</span>
+  <p>Silence means nothing. The agent might be thinking, waiting on a network call, or about to
+  print another thousand lines. Inferring the end of a turn from quiet would make the autopilot
+  interrupt an agent mid-thought, repeatedly, and burn the budget on partial work.</p>
+</div>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td><strong>Claude Code</strong></td><td><code>stop_reason: "end_turn"</code> — and <code>"tool_use"</code> explicitly means it is <em>still working</em></td></tr>
+    <tr><td><strong>Codex</strong></td><td><code>event_msg/task_complete</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Both are projected into the same conversation item, so the driver never has to know which
+provider it is steering. This was checked across every transcript on the development machine:
+<strong>664 turn boundaries, none of them a <code>tool_use</code></strong>.</p>
+
+<h2>Three endings, and no fourth</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Ending</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Completed</strong></td><td>Every required criterion verified, with evidence.</td></tr>
+    <tr><td><strong>Waiting · Blocked</strong></td><td>A guardrail held something, or the agent hit something it cannot do. Always with a reason.</td></tr>
+    <tr><td><strong>Failed</strong></td><td>The turn budget is spent, or the same criteria keep failing. Always with a reason.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><em>Keep going and hope</em> is what a run does when the model gives it nowhere honest to stop.
+Leaving it out is the whole reason the other three are trustworthy.</p>
+
+<h2>The next instruction names what does not pass</h2>
+
+<p>Each instruction after the first is built from the verification that just ran: it says which
+criteria still fail, and what they were checking. An agent told <em>keep going</em> has to guess
+what is missing; an agent told <em>these two commands still exit non-zero</em> does not.</p>
+
+<h2>The timing detail that would have been a silent bug</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A turn's last frames can still be arriving</span>
+  <p>When the provider reports the turn ended, the log's trailing frames may not all have landed.
+  So the driver settles briefly before reading, and the constant that does it exists for exactly
+  that reason.</p>
+  <p>The same risk appeared one turn later, in the reflection question the agent is asked at the
+  end of a completed run. Its reply window originally started at the cursor the work turn's own
+  turn-end left behind — so a straggler frame from the previous turn could be read as part of the
+  answer. Fixed by re-baselining to the log's current end immediately before the question is sent,
+  pinned by a test with a deliberately planted straggler, and then reconfirmed against a real
+  agent.</p>
+</div>
+
+<h2>What a driven run changes elsewhere</h2>
+
+<div class="defs">
+  <div>
+    <dt>Guardrails refuse instead of asking</dt>
+    <dd>The session reports <code>driven: true</code>, so an <em>ask</em> rule becomes a refusal
+    rather than a prompt nobody can answer.
+    See <a href="page:internals-guardrail">Inside the guardrail</a>.</dd>
+  </div>
+  <div>
+    <dt>Finished turns stop notifying</dt>
+    <dd>Twenty notifications while somebody is away by choice, then a twenty-first that is the only
+    one they wanted, at the bottom of a pile. Questions are still raised, because a driven agent
+    that stops to ask cannot continue.</dd>
+  </div>
+  <div>
+    <dt>Starting is refused in an untrusted folder</dt>
+    <dd>Claude Code asks whether you trust a folder the first time it opens one. A fresh
+    <a href="page:worktrees">worktree</a> is always a new folder, so this became reachable the
+    moment worktrees shipped. Refusing beats hanging forever on a question nobody is present to
+    answer.</dd>
+  </div>
+  <div>
+    <dt>The agent is asked what it learned</dt>
+    <dd>Once, at completion only. <code>Step::Complete</code> is the one place a driven run holds
+    the seat with nobody else in it — a manually completed mission is never asked, because typing a
+    question into a terminal somebody is watching is a different conversation to interrupt.
+    See <a href="page:brain">Project memory</a>.</dd>
+  </div>
+</div>
+
+<h2>The budget</h2>
+
+<p>4 to 100 turns, default 24, read from <a href="page:settings-reference">Settings</a>.
+<strong>A run keeps the budget it started with</strong> — re-reading it each turn would let a
+change in Settings move the finish line under a run already going.</p>
+
+<h2>Stopping a run does not kill the agent</h2>
+
+<p>Somebody taking over usually wants to type the next thing themselves, and killing the process
+would throw away its context. The autopilot stands down and leaves a live session at a prompt.</p>

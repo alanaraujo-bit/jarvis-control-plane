@@ -1,1 +1,147 @@
-<p>TODO</p>
+<p>Como um comando é parado antes de rodar, e por que o mecanismo tem o formato que tem. O detalhe
+de comportamento está em <a href="page:guardrails">Proteções</a>; esta página é a maquinaria.</p>
+
+<h2>O pipeline</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 292" role="img" aria-labelledby="d-g">
+  <title id="d-g">O app escreve um snapshot de política e as configurações de hook; o provedor
+  inicia com elas; antes de cada chamada de ferramenta o processo de guarda lê o snapshot,
+  classifica o comando e responde; a decisão dele é anexada a um arquivo que o runtime da sessão
+  acompanha.</title>
+
+  <rect class="d-fill-surface d-stroke" x="200" y="4" width="300" height="34" rx="7"/>
+  <text class="d-text" x="350" y="26" text-anchor="middle">uma sessão começa</text>
+
+  <path class="d-line" d="M280 38 V64 H150 V78" marker-end="url(#a3)"/>
+  <path class="d-line" d="M420 38 V64 H550 V78" marker-end="url(#a3)"/>
+
+  <rect class="d-fill-surface d-stroke" x="30" y="80" width="240" height="42" rx="7"/>
+  <text class="d-text-mono" x="150" y="98" text-anchor="middle">guardrail-policy.json</text>
+  <text class="d-text-sm" x="150" y="114" text-anchor="middle">regras resolvidas · tem alguém?</text>
+
+  <rect class="d-fill-surface d-stroke" x="430" y="80" width="240" height="42" rx="7"/>
+  <text class="d-text-mono" x="550" y="98" text-anchor="middle">configuração de hook</text>
+  <text class="d-text-sm" x="550" y="114" text-anchor="middle">o provedor inicia com ela</text>
+
+  <path class="d-line" d="M550 122 V150 H350 V166" marker-end="url(#a3)"/>
+  <text class="d-text-sm" x="470" y="144" text-anchor="middle">uma ferramenta vai rodar</text>
+
+  <rect x="150" y="168" width="400" height="54" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text-mono" x="350" y="188" text-anchor="middle">jarvis-desktop.exe --jarvis-guardrail-hook</text>
+  <text class="d-text-sm" x="350" y="206" text-anchor="middle">lê o snapshot · classifica · responde na saída padrão</text>
+  <path class="d-line" d="M150 100 V190 H146" marker-end="url(#a3)"/>
+
+  <path class="d-line" d="M350 222 V244" marker-end="url(#a3)"/>
+  <rect class="d-fill-surface d-stroke" x="200" y="246" width="300" height="38" rx="7"/>
+  <text class="d-text-mono" x="350" y="264" text-anchor="middle">guardrail-decisions.jsonl</text>
+  <text class="d-text-sm" x="350" y="278" text-anchor="middle">acompanhado pelo runtime → quadros Approval</text>
+
+  <defs>
+    <marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<h2>Por que a guarda é um processo separado</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Porque uma sessão tem exatamente um escritor</span>
+  <p>A guarda roda como processo próprio e <strong>nunca pode ser a escritora do log</strong>. Ela
+  entrega as decisões dela do mesmo jeito que um provedor entrega a transcrição: anexando a um
+  arquivo que o escritor único acompanha e transforma em quadros <code>Approval</code>.</p>
+  <p>Este é o mesmo formato de dois processos que toda a
+  <a href="page:architecture">arquitetura</a> usa, e é o que mantém a ordem no log como um fato em
+  vez de um acordo entre escritores concorrentes.</p>
+</div>
+
+<p>O provedor invoca ela — o mesmo executável, com uma flag — antes de toda chamada de ferramenta
+classificada. Ela lê o snapshot, classifica o comando, e responde na saída padrão.</p>
+
+<h2>Por que é um snapshot, e não uma leitura ao vivo</h2>
+
+<p>O <code>guardrail-policy.json</code> é escrito quando a sessão começa, carregando as regras já
+resolvidas pela cadeia <a href="page:autonomy">projeto → global → padrão</a> e se alguém está
+presente.</p>
+
+<p>Mudar uma regra nas Configurações no meio da sessão não deveria mudar o que um agente em
+execução recebeu. Uma sessão que começou sob uma política termina sob ela, o que também é o que
+torna o registro legível depois: as decisões no log são decisões sob uma política que você consegue
+inspecionar.</p>
+
+<h2>Por que ela falha aberta</h2>
+
+<p>Sem snapshot, JSON malformado, ou uma versão que ela não entende: ela fica em silêncio e a
+chamada de ferramenta prossegue.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Faça a conta do raio de alcance</span>
+  <p>Este processo roda <strong>antes de toda chamada de ferramenta em toda sessão de
+  agente</strong>. Uma guarda que falhasse <em>fechada</em> transformaria qualquer bug nela mesma —
+  um arquivo faltando, um erro de parse, uma diferença de versão depois de uma atualização — em um
+  agente que não consegue fazer absolutamente nada, em todo projeto, até alguém diagnosticar.</p>
+  <p>Falhar aberta faz um bug te custar a proteção. Falhar fechada faz um bug te custar o
+  produto.</p>
+</div>
+
+<h2>O classificador</h2>
+
+<p>Casamento heurístico sobre o texto do comando. Ele tokeniza, respeita aspas, e lê cada programa
+com os argumentos dele. Ele <strong>não</strong> é um parser de shell e não finge ser — um parser
+de shell de verdade teria que lidar com toda expansão, substituição e alias, e seria uma superfície
+bem maior para errar sutilmente.</p>
+
+<h3>Os casos negativos são os que sustentam tudo</h3>
+
+<p>Se o classificador sinaliza coisas que não deveria, ele vira a primeira coisa que qualquer um
+desliga — e aí ele não protege nada. Então estes são fixados por testes:</p>
+
+<pre><code><span class="g">✓ não casa</span>  git push --force-with-lease origin main
+<span class="c">            se recusa sozinho quando o remoto mudou — a grafia segura</span>
+<span class="g">✓ não casa</span>  echo "rm -rf /tmp/x"
+<span class="c">            uma string sendo impressa, não um diretório sendo apagado</span>
+<span class="g">✓ não casa</span>  npm publish --dry-run
+<span class="g">✓ não casa</span>  cat .env.example
+<span class="g">✓ não casa</span>  git switch main
+<span class="c">            mas `git switch --discard-changes main` casa</span>
+
+<span class="r">✗ casa</span>      pnpm build &amp;&amp; git push --force &amp;&amp; npm publish
+<span class="c">            cada parte de uma cadeia é classificada separadamente</span></code></pre>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Não sinalizado não é provado seguro</span>
+  <p>Um comando que o classificador não sinaliza <strong>falhou em casar com um padrão</strong>.
+  Essa é uma afirmação diferente de <em>isto é inofensivo</em>, e só uma delas é verdadeira.</p>
+</div>
+
+<h3>Os identificadores são estáveis e nunca são prosa</h3>
+
+<p>As nove operações têm identificadores fixos em string — <code>git.force-push</code>,
+<code>fs.recursive-delete</code>, <code>secrets.access</code> e assim por diante. Eles são usados no
+armazenamento, no snapshot de política, e como sufixo de chave para o nome traduzido. Um nome que um
+usuário lê nunca é a coisa que um banco de dados guarda.</p>
+
+<h2>A aplicação difere por provedor, e o modelo diz isso</h2>
+
+<p>O Claude Code executa o hook e uma recusa realmente para o comando. O Codex tem o mesmo mecanismo
+de hook mas não executa ele até você ter confiado na interface do próprio Codex, então ele é
+informado como <code>PreExecutionWhenTrusted</code> — observado, não protegido, até você fazer isso.
+Veja <a href="page:provider-matrix">a matriz de provedores</a>.</p>
+
+<h2>Onde a trava não é um classificador</h2>
+
+<p>Dentro da <a href="page:review">Revisão</a>, um descarte <em>nomeia</em> a operação dele
+diretamente em vez de montar uma string de comando e perguntar ao classificador o que ele acabou de
+decidir fazer. Ele também não escreve linha pendente nenhuma: você está na tela, então a pergunta é
+feita e respondida ali em vez de virar algo para resolver depois.</p>
+
+<p>Classificar uma string que você mesmo acabou de construir é uma ida e volta por uma heurística
+para recuperar informação que você já tinha.</p>
+
+<h2>Em Sem supervisão</h2>
+
+<p>O snapshot carrega se a sessão é <em>dirigida</em>. Uma sessão dirigida com uma regra em
+<em>perguntar</em> recebe uma <strong>recusa</strong>, porque estacionar o agente num prompt que
+ninguém vai responder desperdiça a execução inteira. A missão vai para Esperando com um motivo.</p>

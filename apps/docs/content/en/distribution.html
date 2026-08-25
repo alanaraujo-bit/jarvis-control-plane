@@ -1,1 +1,138 @@
-<p>TODO</p>
+<p>How the product reaches your machine, how it updates itself, and why neither operation can
+touch your data.</p>
+
+<h2>The installer</h2>
+
+<p>An NSIS installer built by Tauri, carrying its own identity: generated header and sidebar
+artwork drawn from <strong>the same signed-distance geometry as the application icon</strong>, and
+an English/Portuguese language selector matching the app's own locales, auto-selected from your OS
+language.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Per-user install</span>
+  <p>No administrator prompt, ever. Nothing is written outside your own profile, which is also why
+  first run needs no elevation and why an update does not either.</p>
+</div>
+
+<p>Install footprint is <strong>7.3 MB</strong>, measured on the real installer rather than
+estimated. <a href="page:files-editor">Monaco</a> accounts for 1.04 MB of that and is loaded on
+demand rather than at startup.</p>
+
+<h2>Single instance</h2>
+
+<p>Exactly one process owns the database and the session logs. A second launch hands off to the
+running window rather than opening beside it.</p>
+
+<p>This is also why <code>pnpm dev</code> is silently swallowed while the installed copy is
+running — close the installed app first if you are working on the source.</p>
+
+<h2>Updating</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 150" role="img" aria-labelledby="d-up">
+  <title id="d-up">The updater checks an endpoint, downloads in the background, verifies the
+  download against a compiled-in public key, and only then installs.</title>
+
+  <rect class="d-fill-surface d-stroke" x="4" y="20" width="150" height="42" rx="7"/>
+  <text class="d-text" x="79" y="38" text-anchor="middle">check</text>
+  <text class="d-text-sm" x="79" y="54" text-anchor="middle">latest.json</text>
+  <path class="d-line" d="M154 41 H188" marker-end="url(#a5)"/>
+
+  <rect class="d-fill-surface d-stroke" x="190" y="20" width="150" height="42" rx="7"/>
+  <text class="d-text" x="265" y="38" text-anchor="middle">download</text>
+  <text class="d-text-sm" x="265" y="54" text-anchor="middle">in the background</text>
+  <path class="d-line" d="M340 41 H374" marker-end="url(#a5)"/>
+
+  <rect x="376" y="20" width="150" height="42" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="451" y="38" text-anchor="middle">verify</text>
+  <text class="d-text-sm" x="451" y="54" text-anchor="middle">minisign, compiled in</text>
+
+  <path class="d-line" d="M526 41 H560" marker-end="url(#a5)"/>
+  <rect x="562" y="20" width="134" height="42" rx="7" fill="var(--state-success-bg)" stroke="var(--state-success)" stroke-opacity="0.4"/>
+  <text class="d-text" x="629" y="46" text-anchor="middle" fill="var(--state-success)">install</text>
+
+  <path class="d-line" d="M451 62 V96" marker-end="url(#a5)"/>
+  <rect x="376" y="98" width="150" height="34" rx="7" fill="var(--state-danger-bg)" stroke="var(--state-danger)" stroke-opacity="0.4"/>
+  <text class="d-text" x="451" y="120" text-anchor="middle" fill="var(--state-danger)">refused</text>
+  <text class="d-text-sm" x="536" y="120">verification failed</text>
+
+  <defs>
+    <marker id="a5" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<p>The public key is <strong>compiled into the binary</strong>, not fetched. An update that fails
+verification is <strong>refused rather than applied</strong> — there is no path where an
+unverified artifact reaches your machine because a check timed out or a server said it was fine.</p>
+
+<h2>Two signing concerns, constantly confused</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th></th><th>Purpose</th><th>State</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>minisign keypair</strong></td>
+      <td>Proves an update came from us</td>
+      <td><span class="badge" data-t="official">Working</span> Generated locally, verifying today.</td>
+    </tr>
+    <tr>
+      <td><strong>Authenticode certificate</strong></td>
+      <td>Stops Windows warning about an unknown publisher</td>
+      <td><span class="badge" data-t="danger">Blocked</span> Needs a purchase. See <a href="page:blockers">Known blockers</a>.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>So: <strong>updates are cryptographically verified even though the installer is
+unsigned.</strong> Those are genuinely different guarantees, and conflating them is how people
+conclude either that the SmartScreen warning means updates are unsafe, or that a signed installer
+would make them safe.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">For anyone building from source</span>
+  <p>The private minisign key lives in <code>.keys/</code> and is gitignored. It must never be
+  committed, and <strong>losing it means no existing installation can ever be updated
+  again</strong>. Back it up somewhere that is not the machine that builds.</p>
+</div>
+
+<h2>Your data cannot be touched by any of this</h2>
+
+<p>User data lives in <code>%APPDATA%\dev.jarvis.desktop</code> — the SQLite database and the
+per-session logs — <strong>entirely outside the installation directory</strong>.</p>
+
+<ul>
+  <li>An <strong>update</strong> replaces program files. It cannot reach projects, sessions,
+  missions or history.</li>
+  <li>An <strong>uninstall</strong> removes the program and preserves the data. Reinstalling picks
+  up exactly where you left off.</li>
+  <li>Removing it for real means deleting that folder yourself. See
+  <a href="page:data">Where your data lives</a>.</li>
+</ul>
+
+<h3>Schema changes are forward-only</h3>
+
+<p>Migrations are additive and never destructive, and <strong>a database written by a newer build
+is refused rather than opened</strong>. Rolling back a version cannot quietly corrupt history that
+the older build does not understand — it says it cannot read it, which is the recoverable
+failure.</p>
+
+<h2>What update checks do today</h2>
+
+<p>They report a failure, honestly. The updater is configured against a release location that is
+not yet published, so the check cannot succeed. That is
+<a href="page:blockers">a tracked blocker about where to publish</a> rather than a bug in the
+updater — and reporting the failure is better than pretending to be up to date, which would leave
+you believing you had the latest build forever.</p>
+
+<h2>Platforms</h2>
+
+<p>Windows only, today. The core is Rust and the interface is a webview, so nothing in the
+architecture is Windows-specific — but the PTY host, the job-object containment, the toast
+integration and the installer all are, and none of those has been built or verified anywhere
+else. Claiming cross-platform support before that work exists would be the kind of claim this
+product's <a href="page:confidence">whole confidence model</a> is against.</p>

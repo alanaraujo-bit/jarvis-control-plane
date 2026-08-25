@@ -1,1 +1,139 @@
-<p>TODO</p>
+<p>Como o produto chega na sua máquina, como ele se atualiza, e por que nenhuma das duas operações
+consegue encostar nos seus dados.</p>
+
+<h2>O instalador</h2>
+
+<p>Um instalador NSIS construído pelo Tauri, carregando identidade própria: arte de cabeçalho e
+barra lateral geradas a partir da <strong>mesma geometria de campo de distância do ícone do
+aplicativo</strong>, e um seletor de idioma inglês/português batendo com os idiomas do próprio app,
+selecionado automaticamente pelo idioma do seu sistema.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Instalação por usuário</span>
+  <p>Nenhum pedido de administrador, jamais. Nada é escrito fora do seu próprio perfil, que é
+  também por que a primeira execução não precisa de elevação e uma atualização também não.</p>
+</div>
+
+<p>A pegada de instalação é de <strong>7,3 MB</strong>, medida no instalador real e não estimada. O
+<a href="page:files-editor">Monaco</a> responde por 1,04 MB disso e é carregado sob demanda, não na
+inicialização.</p>
+
+<h2>Instância única</h2>
+
+<p>Exatamente um processo é dono do banco de dados e dos logs de sessão. Um segundo lançamento
+entrega para a janela em execução em vez de abrir ao lado dela.</p>
+
+<p>É também por isso que o <code>pnpm dev</code> é engolido em silêncio enquanto a cópia instalada
+está rodando — feche o app instalado primeiro se você estiver trabalhando no código.</p>
+
+<h2>Atualizando</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 700 150" role="img" aria-labelledby="d-up">
+  <title id="d-up">O atualizador consulta um endpoint, baixa em segundo plano, verifica o download
+  contra uma chave pública compilada, e só então instala.</title>
+
+  <rect class="d-fill-surface d-stroke" x="4" y="20" width="150" height="42" rx="7"/>
+  <text class="d-text" x="79" y="38" text-anchor="middle">consulta</text>
+  <text class="d-text-sm" x="79" y="54" text-anchor="middle">latest.json</text>
+  <path class="d-line" d="M154 41 H188" marker-end="url(#a5)"/>
+
+  <rect class="d-fill-surface d-stroke" x="190" y="20" width="150" height="42" rx="7"/>
+  <text class="d-text" x="265" y="38" text-anchor="middle">baixa</text>
+  <text class="d-text-sm" x="265" y="54" text-anchor="middle">em segundo plano</text>
+  <path class="d-line" d="M340 41 H374" marker-end="url(#a5)"/>
+
+  <rect x="376" y="20" width="150" height="42" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="451" y="38" text-anchor="middle">verifica</text>
+  <text class="d-text-sm" x="451" y="54" text-anchor="middle">minisign, compilada</text>
+
+  <path class="d-line" d="M526 41 H560" marker-end="url(#a5)"/>
+  <rect x="562" y="20" width="134" height="42" rx="7" fill="var(--state-success-bg)" stroke="var(--state-success)" stroke-opacity="0.4"/>
+  <text class="d-text" x="629" y="46" text-anchor="middle" fill="var(--state-success)">instala</text>
+
+  <path class="d-line" d="M451 62 V96" marker-end="url(#a5)"/>
+  <rect x="376" y="98" width="150" height="34" rx="7" fill="var(--state-danger-bg)" stroke="var(--state-danger)" stroke-opacity="0.4"/>
+  <text class="d-text" x="451" y="120" text-anchor="middle" fill="var(--state-danger)">recusada</text>
+  <text class="d-text-sm" x="536" y="120">verificação falhou</text>
+
+  <defs>
+    <marker id="a5" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<p>A chave pública é <strong>compilada dentro do binário</strong>, não buscada. Uma atualização que
+falha na verificação é <strong>recusada em vez de aplicada</strong> — não existe caminho em que um
+artefato não verificado chegue na sua máquina porque uma checagem deu timeout ou um servidor disse
+que estava tudo bem.</p>
+
+<h2>Duas questões de assinatura, constantemente confundidas</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th></th><th>Serve para</th><th>Estado</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>par de chaves minisign</strong></td>
+      <td>Provar que uma atualização veio de nós</td>
+      <td><span class="badge" data-t="official">Funcionando</span> Gerado localmente, verificando hoje.</td>
+    </tr>
+    <tr>
+      <td><strong>certificado Authenticode</strong></td>
+      <td>Impedir o aviso do Windows sobre publicador desconhecido</td>
+      <td><span class="badge" data-t="danger">Bloqueado</span> Precisa de uma compra. Veja <a href="page:blockers">Bloqueios conhecidos</a>.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Ou seja: <strong>atualizações são verificadas criptograficamente mesmo com o instalador sem
+assinatura.</strong> São garantias genuinamente diferentes, e confundir as duas é como as pessoas
+concluem ou que o aviso do SmartScreen significa que as atualizações são inseguras, ou que um
+instalador assinado as tornaria seguras.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Para quem compila do código</span>
+  <p>A chave privada minisign fica em <code>.keys/</code> e é ignorada pelo Git. Ela nunca pode ser
+  commitada, e <strong>perdê-la significa que nenhuma instalação existente poderá jamais ser
+  atualizada</strong>. Guarde uma cópia em algum lugar que não seja a máquina que compila.</p>
+</div>
+
+<h2>Seus dados não podem ser tocados por nada disso</h2>
+
+<p>Dados de usuário ficam em <code>%APPDATA%\dev.jarvis.desktop</code> — o banco SQLite e os logs
+por sessão — <strong>inteiramente fora do diretório de instalação</strong>.</p>
+
+<ul>
+  <li>Uma <strong>atualização</strong> substitui arquivos de programa. Ela não consegue alcançar
+  projetos, sessões, missões ou histórico.</li>
+  <li>Uma <strong>desinstalação</strong> remove o programa e preserva os dados. Reinstalar retoma
+  exatamente de onde você parou.</li>
+  <li>Remover de verdade significa apagar aquela pasta você mesmo. Veja
+  <a href="page:data">Onde ficam os seus dados</a>.</li>
+</ul>
+
+<h3>Mudanças de esquema são só para frente</h3>
+
+<p>As migrações são aditivas e nunca destrutivas, e <strong>um banco escrito por uma versão mais
+nova é recusado em vez de aberto</strong>. Voltar uma versão não consegue corromper em silêncio um
+histórico que a versão antiga não entende — ela diz que não consegue ler, que é a falha
+recuperável.</p>
+
+<h2>O que as checagens de atualização fazem hoje</h2>
+
+<p>Elas informam uma falha, honestamente. O atualizador está configurado contra um local de release
+que ainda não foi publicado, então a checagem não pode dar certo. Isso é
+<a href="page:blockers">um bloqueio rastreado sobre onde publicar</a>, e não um bug no atualizador —
+e informar a falha é melhor do que fingir estar em dia, o que te deixaria acreditando ter a versão
+mais nova para sempre.</p>
+
+<h2>Plataformas</h2>
+
+<p>Só Windows, hoje. O núcleo é Rust e a interface é um webview, então nada na arquitetura é
+específico do Windows — mas o host de PTY, a contenção por job object, a integração com as
+notificações e o instalador todos são, e nenhum deles foi construído ou verificado em outro lugar.
+Alegar suporte multiplataforma antes de esse trabalho existir seria exatamente o tipo de alegação
+contra a qual <a href="page:confidence">todo o modelo de confiança</a> deste produto existe.</p>

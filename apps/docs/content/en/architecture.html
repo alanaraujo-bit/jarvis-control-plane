@@ -1,1 +1,162 @@
-<p>TODO</p>
+<p>A Tauri desktop application: a Rust core that owns processes, files, Git and the database, and
+a React interface that owns nothing but the drawing.</p>
+
+<h2>The stack</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Layer</th><th>Choice</th><th>Because</th></tr></thead>
+  <tbody>
+    <tr><td>Desktop shell</td><td>Tauri v2 — Rust core + WebView2</td><td>A real native core with a web interface, without shipping a browser.</td></tr>
+    <tr><td>Core language</td><td>Rust</td><td>PTYs, file watching, Git, SQLite, a separate guard process — all of it is systems work.</td></tr>
+    <tr><td>Interface</td><td>React 19 + TypeScript + Vite</td><td>—</td></tr>
+    <tr><td>Styling</td><td>CSS custom-property tokens + plain CSS</td><td>No runtime, no build step for styles, and a theme that is genuinely two authored palettes.</td></tr>
+    <tr><td>Terminal</td><td>xterm.js + <code>portable-pty</code></td><td>A real pseudo-terminal, not an emulation of one.</td></tr>
+    <tr><td>Editor</td><td>Monaco, behind a package boundary</td><td>So it can be loaded on demand and swapped without touching surfaces.</td></tr>
+    <tr><td>Persistence</td><td>SQLite (WAL) + on-disk session logs</td><td>The split <a href="page:session-log">the log</a> exists to make.</td></tr>
+    <tr><td>i18n</td><td>A hand-written catalogue, en + pt-BR</td><td>Wired from the first string rather than retrofitted.</td></tr>
+    <tr><td>Cloud</td><td>Next.js on Vercel, three endpoints</td><td>Only the phone relay. Off unless you pair.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Where the code is</h2>
+
+<pre><code>apps/desktop/src-tauri/src/
+  <b>session/</b>     event log, frame codec, projections   <span class="a">← the core</span>
+  history/     every session ever run — search, rename, delete
+  pty/         pseudo-terminals, Windows job containment
+  providers/   adapter trait + claude/ + codex/
+  db/          SQLite schema and forward-only migrations
+  git/         Git integration
+  mission/     mission engine, verification, evidence
+  autopilot/   plan (pure) + driver (touches the world)
+  guardrail/   classifier, policy, the separate guard process
+  brain/       project knowledge and the brief
+  accounts/    the registry, the quota model, live probes
+  notify/      detection, rendering, the bus
+  search/      FTS5 index and the one-time backfill
+  notebook/    folders and notes
+  envscan/     environment detection
+  voice/       local transcription
+  relay/       the phone half
+  preview/     dev-server detection
+
+apps/desktop/src/
+  design/      tokens, primitives
+  shell/       rail, titlebar, palette, search, notifications
+  surfaces/    mission-control, project, terminal, conversation, …
+
+packages/
+  protocol/    shared TypeScript types mirroring the Rust IPC contracts
+  i18n/        en + pt-BR catalogues
+  editor/      the Monaco boundary</code></pre>
+
+<h2>Four boundaries that carry the design</h2>
+
+<h3>1. The session log is the only store of record</h3>
+
+<p>Everything downstream is a <a href="page:session-log">projection</a>. There is no second store
+that can disagree with the first one, and anything that needs to contribute hands its
+contribution to the single writer rather than writing alongside it.</p>
+
+<h3>2. Capabilities are data</h3>
+
+<p>A <a href="page:providers">provider adapter</a> describes itself with a struct, and surfaces
+render from it. Adding a provider must never require touching a component — and if it did, the
+abstraction would already have failed. A test fails if two adapters ever describe themselves
+identically.</p>
+
+<h3>3. Git decides what Git knows</h3>
+
+<p>Status, diffs, branches, worktrees: we run the <code>git</code> binary and parse it. We never
+compute a diff ourselves and hope it agrees with the user's own <code>git</code>. The one place
+this was nearly got wrong is instructive — plain <code>git restore</code> restores from the
+<em>index</em>, so a discard built on it silently keeps staged content.</p>
+
+<h3>4. The webview names paths, the core resolves them</h3>
+
+<p>Every file request is <a href="page:projects">relative to a project root read from the
+database</a>, never a path the caller supplies. Two independent checks follow, and the second one
+re-checks the <em>resolved</em> path against the filesystem so a symlink pointing out of the
+project is caught.</p>
+
+<h2>The two-process pattern</h2>
+
+<p>Twice in this product, something needs to participate in a session without being able to
+corrupt it. Both use the same shape:</p>
+
+<div class="diagram">
+<svg viewBox="0 0 700 176" role="img" aria-labelledby="d-2p">
+  <title id="d-2p">A separate process appends decisions to a file, and the session runtime — the
+  single writer — tails that file and turns each decision into a frame.</title>
+
+  <rect class="d-fill-surface d-stroke" x="4" y="16" width="190" height="46" rx="7"/>
+  <text class="d-text" x="99" y="36" text-anchor="middle">Separate process</text>
+  <text class="d-text-sm" x="99" y="52" text-anchor="middle">guard · provider</text>
+
+  <path class="d-line" d="M194 39 H262" marker-end="url(#a2)"/>
+  <text class="d-text-sm" x="228" y="30" text-anchor="middle">appends</text>
+
+  <rect class="d-fill-surface d-stroke" x="264" y="16" width="180" height="46" rx="7"/>
+  <text class="d-text-mono" x="354" y="36" text-anchor="middle">a file on disk</text>
+  <text class="d-text-sm" x="354" y="52" text-anchor="middle">jsonl · transcript</text>
+
+  <path class="d-line" d="M444 39 H512" marker-end="url(#a2)"/>
+  <text class="d-text-sm" x="478" y="30" text-anchor="middle">tails</text>
+
+  <rect x="514" y="16" width="182" height="46" rx="7" fill="var(--state-working-bg)" stroke="var(--accent-border)"/>
+  <text class="d-text" x="605" y="36" text-anchor="middle">Session runtime</text>
+  <text class="d-text-sm" x="605" y="52" text-anchor="middle">the single writer</text>
+
+  <path class="d-line" d="M605 62 V104" marker-end="url(#a2)"/>
+  <rect class="d-fill-accent d-stroke-accent" x="514" y="106" width="182" height="40" rx="7"/>
+  <text class="d-text" x="605" y="131" text-anchor="middle">one ordered log</text>
+
+  <text class="d-text-sm" x="14" y="128">The guard can never be the log's writer. Neither can a</text>
+  <text class="d-text-sm" x="14" y="146">provider. A session has exactly one, and that is what</text>
+  <text class="d-text-sm" x="14" y="164">makes the ordering a fact rather than an agreement.</text>
+
+  <defs>
+    <marker id="a2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<p>A <a href="page:providers">provider</a> hands over its transcript this way. The
+<a href="page:internals-guardrail">guardrail</a> hands over its decisions the same way. Neither
+can reorder the log, drop a frame, or race the writer, because neither is the writer.</p>
+
+<h2>The interface owns nothing</h2>
+
+<p>Every meaningful decision lives in Rust: which paths are reachable, whether a value is in
+range, whether an operation is guarded, when a turn ended, what a provider can do.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Why bounds are re-checked in the core</span>
+  <p>The surface renders a slider, so an out-of-range value <em>should</em> be impossible — which
+  is exactly why it is not trusted. A command reachable from the webview is reachable from any bug
+  in the webview. Out of range on the way in is refused; out of range on the way out is
+  clamped.</p>
+</div>
+
+<h2>Where it is going</h2>
+
+<p>Two boundaries were left deliberately open. A <strong>language server</strong> client, because
+<a href="page:files-editor">Monaco ships without its own language services</a> and real
+diagnostics need project context. And a <strong>third provider</strong>, because the capability
+model exists precisely so that adding one is an adapter rather than a refactor.</p>
+
+<div class="cards">
+  <a class="card" href="page:internals-guardrail">
+    <strong>Inside the guardrail</strong>
+    <span>A separate process, a snapshot, a tokenising classifier, and a decision appended to a
+    file.</span>
+  </a>
+  <a class="card" href="page:internals-autopilot">
+    <strong>Inside the autopilot</strong>
+    <span>A pure planner and a driver that touches the world.</span>
+  </a>
+</div>
