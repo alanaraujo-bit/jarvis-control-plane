@@ -1,1 +1,149 @@
-<p>TODO</p>
+<p>An agent that starts in your project knows nothing about it. Not the port your dev server
+actually listens on, not the rule that invoices are never edited, not what your team means by
+<em>tenant</em>. It will read files and infer some of it, badly, every single time.</p>
+
+<p>J.A.R.V.I.S. has three stores for this, and the reason there are three is that they answer
+three different questions.</p>
+
+<div class="cards">
+  <a class="card" href="page:brain">
+    <strong>Knowledge</strong>
+    <span>Facts that stay true about a project. <b>Briefed to every agent that starts here.</b></span>
+  </a>
+  <a class="card" href="page:brain">
+    <strong>Notes</strong>
+    <span>Your working memory for this project. <b>Never sent anywhere.</b></span>
+  </a>
+  <a class="card" href="page:notebook">
+    <strong>The Notebook</strong>
+    <span>Your prompt library, global. <b>Sent only when you press the button.</b></span>
+  </a>
+</div>
+
+<h2>One question decides which is which</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The rule</span>
+  <p><strong>Knowledge is briefed; a note is not.</strong> That is the whole distinction, and it
+  is structural: the function that composes a brief takes only knowledge, so a note cannot
+  arrive through it even by accident. There is no per-item switch to forget to set.</p>
+</div>
+
+<p>If you find yourself wondering which one something is, ask whether you would want the next
+agent to be told it before it reads a line of code. Yes is knowledge. No is a note.</p>
+
+<h2>Knowledge, and its four kinds</h2>
+
+<figure class="fig">
+  <img src="../img/brain.png" alt="The Brain area of a project, showing four knowledge entries grouped under What this project is, How work is done here, Things that will bite you, and What words mean here.">
+  <figcaption><b>Grouped by kind, with the brief's size stated above.</b> The counter is the
+  actual number of characters an agent will receive, not an estimate — you can open the brief
+  and read exactly what gets sent.</figcaption>
+</figure>
+
+<div class="defs">
+  <div>
+    <dt>What this project is</dt>
+    <dd>The one-paragraph orientation. <em>Aurora is the billing service: invoices, credit notes
+    and the reconciliation job that runs every night at 02:00 UTC.</em></dd>
+  </div>
+  <div>
+    <dt>How work is done here</dt>
+    <dd>Conventions an agent would otherwise violate. <em>An invoice is immutable once issued.
+    Corrections are credit notes, never edits.</em></dd>
+  </div>
+  <div>
+    <dt>Things that will bite you</dt>
+    <dd>The non-obvious traps. <em>The dev server listens on 4173, not 3000 — port 3000 on this
+    machine is held by an unrelated service.</em></dd>
+  </div>
+  <div>
+    <dt>What words mean here</dt>
+    <dd>Your vocabulary, where it differs from the general one. <em>A tenant here is a billing
+    account, not a user.</em></dd>
+  </div>
+</div>
+
+<h3>Stated and derived are separate tabs</h3>
+
+<p>Knowledge you wrote carries who said it. Facts the product <em>derived</em> — the branch, the
+languages, what changed recently — are recomputed on every read and never stored. They live on
+their own tab, which makes <a href="page:confidence">the confidence rule</a> structural rather
+than a caption somebody has to notice.</p>
+
+<h3>Retiring, not deleting</h3>
+
+<p>Knowledge that stops being true is <strong>retired</strong>: it stops being briefed and the
+record stays. A fact that was true for six months is part of the project's story even after it
+stops being true.</p>
+
+<h2>How the brief reaches the agent</h2>
+
+<p>Out of band, and this matters more than it sounds.</p>
+
+<p>The brief is written beside the guardrail snapshot in J.A.R.V.I.S.'s own data directory and
+passed to Claude Code with <code>--append-system-prompt-file</code>. <strong>Nothing is written
+into your repository.</strong> A context file dropped into a working tree would show up in the
+<a href="page:review">Review</a> surface this same product ships, in your
+<code>git status</code>, and eventually in a commit.</p>
+
+<p>Codex has no equivalent flag on 0.147.0, so it is reported as
+<code>OpeningMessage</code> — it would have to arrive as the session's first message, visible
+and costing a turn. The <a href="page:providers">capability model</a> states this rather than
+handing Codex a file it would never read.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified, end to end</span>
+  <p>Four facts were written into a scratch project's Brain. Claude Code was started from the
+  app and asked what it knew <em>without reading files</em>. It answered with all four, grouped
+  under the brief's own headings, in a folder it had never seen — and said plainly it had no
+  other context without reading the repo. The brief file was 484 bytes in J.A.R.V.I.S.'s own
+  data directory, matching the size the panel reported, and <code>git status</code> in the
+  project was empty.</p>
+</div>
+
+<h2>An agent can write here too</h2>
+
+<p>At the end of a successful <a href="page:guide-unattended">unattended run</a> — once, and
+only there — the agent is asked one narrow question: what would still matter <em>next
+time</em>? Not a summary of the task. It is forbidden from touching anything while answering,
+because a stray edit at that moment could be why a later re-verification revokes the completion
+it just earned. And it is given a named way out, <code>NOTHING TO RECORD</code>, which is
+expected to fire most of the time.</p>
+
+<p>What it writes is marked <strong>An agent recorded this</strong>, in amber, so you always know
+which sentences came from a person and which did not.</p>
+
+<div class="callout">
+  <span class="callout__title">The real one this produced</span>
+  <p>A trivial mission ran unattended against a real Claude Code agent in a project whose README
+  stated one non-obvious fact. On completion it answered: <em>GOTCHA: The dev server runs on
+  port 4173, not the conventional 3000, because port 3000 on this machine is already held by an
+  unrelated port scanner — anyone expecting localhost:3000 will find nothing there.</em> That
+  sentence is now in the Brain, and every agent that starts there is told it.</p>
+</div>
+
+<h2>Notes, and promoting one</h2>
+
+<p>Notes are yours. Pin them, reorder them, delete them; they are never composed into a brief
+and never leave your machine. When a note turns out to be a fact the next agent should know, one
+action promotes it into knowledge — and it leaves the notes list, because it is now a different
+kind of thing.</p>
+
+<h2>Where the Notebook fits</h2>
+
+<p>The <a href="page:notebook">Notebook</a> is the third store and the odd one out: it is global
+rather than per-project, it holds prompts rather than facts, and it is the only one you hand
+over <em>deliberately</em> — one button sends a note into the agent you are watching, unsent, so
+you can still edit it before it goes.</p>
+
+<p>Everything else about memory is about what an agent is told automatically. The Notebook is
+about what you say to it on purpose.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">One gap, known</span>
+  <p><a href="page:search">Global Search</a> finds project notes but does <strong>not</strong>
+  yet find notebook notes. It is deferred rather than missed — it needs a new search kind
+  through the protocol and both catalogues, plus a navigation special case, because a notebook
+  note has no project to open. See <a href="page:not-built">What is not built</a>.</p>
+</div>

@@ -1,1 +1,152 @@
-<p>TODO</p>
+<p>Um agente que começa no seu projeto não sabe nada sobre ele. Nem a porta em que o seu servidor
+de desenvolvimento de fato escuta, nem a regra de que notas fiscais nunca são editadas, nem o
+que o seu time quer dizer com <em>tenant</em>. Ele vai ler arquivos e inferir parte disso, mal,
+toda santa vez.</p>
+
+<p>O J.A.R.V.I.S. tem três depósitos para isso, e a razão de serem três é que eles respondem
+três perguntas diferentes.</p>
+
+<div class="cards">
+  <a class="card" href="page:brain">
+    <strong>Conhecimento</strong>
+    <span>Fatos que continuam verdade sobre um projeto. <b>Entregues a todo agente que começa
+    aqui.</b></span>
+  </a>
+  <a class="card" href="page:brain">
+    <strong>Notas</strong>
+    <span>Sua memória de trabalho para este projeto. <b>Nunca enviadas a lugar nenhum.</b></span>
+  </a>
+  <a class="card" href="page:notebook">
+    <strong>O bloco de notas</strong>
+    <span>Sua biblioteca de prompts, global. <b>Enviada só quando você aperta o botão.</b></span>
+  </a>
+</div>
+
+<h2>Uma pergunta decide qual é qual</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A regra</span>
+  <p><strong>Conhecimento é entregue no briefing; uma nota não.</strong> É toda a distinção, e
+  ela é estrutural: a função que compõe um briefing recebe só conhecimento, então uma nota não
+  consegue chegar por ali nem por acidente. Não existe um interruptor por item que você possa
+  esquecer de marcar.</p>
+</div>
+
+<p>Se você ficar em dúvida sobre qual é qual, pergunte se você iria querer que o próximo agente
+soubesse aquilo antes de ler uma linha de código. Sim é conhecimento. Não é nota.</p>
+
+<h2>Conhecimento, e seus quatro tipos</h2>
+
+<figure class="fig">
+  <img src="../img/brain.png" alt="A área Memória de um projeto, mostrando quatro entradas de conhecimento agrupadas em O que este projeto é, Como se trabalha aqui, O que vai te morder, e O que as palavras significam aqui.">
+  <figcaption><b>Agrupado por tipo, com o tamanho do briefing declarado acima.</b> O contador é o
+  número real de caracteres que um agente vai receber, não uma estimativa — você pode abrir o
+  briefing e ler exatamente o que é enviado.</figcaption>
+</figure>
+
+<div class="defs">
+  <div>
+    <dt>O que este projeto é</dt>
+    <dd>A orientação de um parágrafo. <em>Aurora é o serviço de cobrança: notas fiscais, notas
+    de crédito e o job de conciliação que roda toda noite às 02:00 UTC.</em></dd>
+  </div>
+  <div>
+    <dt>Como se trabalha aqui</dt>
+    <dd>Convenções que um agente violaria sem saber. <em>Uma nota fiscal é imutável depois de
+    emitida. Correções são notas de crédito, nunca edições.</em></dd>
+  </div>
+  <div>
+    <dt>O que vai te morder</dt>
+    <dd>As armadilhas não óbvias. <em>O servidor de desenvolvimento escuta na 4173, não na 3000 —
+    a porta 3000 desta máquina está ocupada por um serviço não relacionado.</em></dd>
+  </div>
+  <div>
+    <dt>O que as palavras significam aqui</dt>
+    <dd>Seu vocabulário, onde ele difere do geral. <em>Um tenant aqui é uma conta de cobrança,
+    não um usuário.</em></dd>
+  </div>
+</div>
+
+<h3>Declarado e derivado são abas separadas</h3>
+
+<p>Conhecimento que você escreveu carrega quem disse. Fatos que o produto <em>derivou</em> — o
+branch, as linguagens, o que mudou recentemente — são recalculados a cada leitura e nunca
+guardados. Eles moram numa aba própria, o que torna <a href="page:confidence">a regra de
+confiança</a> estrutural em vez de uma legenda que alguém precisa notar.</p>
+
+<h3>Aposentar, não apagar</h3>
+
+<p>Conhecimento que deixa de ser verdade é <strong>aposentado</strong>: para de ser entregue no
+briefing e o registro fica. Um fato que foi verdade por seis meses faz parte da história do
+projeto mesmo depois de deixar de ser.</p>
+
+<h2>Como o briefing chega ao agente</h2>
+
+<p>Fora de banda, e isso importa mais do que parece.</p>
+
+<p>O briefing é escrito ao lado do snapshot da proteção, no diretório de dados do próprio
+J.A.R.V.I.S., e passado ao Claude Code com <code>--append-system-prompt-file</code>.
+<strong>Nada é escrito no seu repositório.</strong> Um arquivo de contexto largado numa árvore
+de trabalho apareceria na superfície de <a href="page:review">Revisão</a> que este mesmo produto
+entrega, no seu <code>git status</code>, e mais cedo ou mais tarde num commit.</p>
+
+<p>O Codex não tem flag equivalente na 0.147.0, então ele é informado como
+<code>OpeningMessage</code> — o briefing teria que chegar como a primeira mensagem da sessão,
+visível e custando um turno. O <a href="page:providers">modelo de capacidades</a> declara isso em
+vez de entregar ao Codex um arquivo que ele nunca leria.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado, de ponta a ponta</span>
+  <p>Quatro fatos foram escritos na Memória de um projeto de rascunho. O Claude Code foi iniciado
+  pelo app e perguntado o que ele sabia <em>sem ler arquivos</em>. Ele respondeu com os quatro,
+  agrupados sob os próprios títulos do briefing, numa pasta que ele nunca tinha visto — e disse
+  com todas as letras que não tinha outro contexto sem ler o repositório. O arquivo do briefing
+  tinha 484 bytes no diretório de dados do próprio J.A.R.V.I.S., batendo com o tamanho que o
+  painel informava, e o <code>git status</code> do projeto estava vazio.</p>
+</div>
+
+<h2>Um agente também pode escrever aqui</h2>
+
+<p>No fim de uma <a href="page:guide-unattended">execução sem supervisão</a> bem-sucedida — uma
+vez, e só ali — o agente recebe uma pergunta estreita: o que ainda importaria <em>da próxima
+vez</em>? Não um resumo da tarefa. Ele é proibido de encostar em qualquer coisa enquanto
+responde, porque uma edição perdida naquele instante poderia ser o motivo de uma reverificação
+posterior revogar a conclusão que ele acabou de ganhar. E ele recebe uma saída nomeada,
+<code>NOTHING TO RECORD</code>, que se espera que dispare na maior parte das vezes.</p>
+
+<p>O que ele escreve é marcado como <strong>Um agente registrou isto</strong>, em âmbar, para
+você sempre saber quais frases vieram de uma pessoa e quais não.</p>
+
+<div class="callout">
+  <span class="callout__title">A de verdade que isso produziu</span>
+  <p>Uma missão trivial rodou sem supervisão contra um agente Claude Code real, num projeto cujo
+  README declarava um fato não óbvio. Ao concluir, ele respondeu: <em>GOTCHA: The dev server runs
+  on port 4173, not the conventional 3000, because port 3000 on this machine is already held by
+  an unrelated port scanner — anyone expecting localhost:3000 will find nothing there.</em> Essa
+  frase está na Memória agora, e todo agente que começa ali é avisado dela.</p>
+</div>
+
+<h2>Notas, e promover uma</h2>
+
+<p>Notas são suas. Fixe, reordene, apague; elas nunca são compostas num briefing e nunca saem da
+sua máquina. Quando uma nota se revela um fato que o próximo agente deveria saber, uma ação a
+promove a conhecimento — e ela sai da lista de notas, porque agora é outro tipo de coisa.</p>
+
+<h2>Onde o bloco de notas entra</h2>
+
+<p>O <a href="page:notebook">bloco de notas</a> é o terceiro depósito e o diferente: ele é global
+em vez de por projeto, guarda prompts em vez de fatos, e é o único que você entrega
+<em>deliberadamente</em> — um botão manda uma nota para dentro do agente que você está
+assistindo, sem enviar, para você ainda poder editar antes que ela vá.</p>
+
+<p>Todo o resto da memória é sobre o que um agente é avisado automaticamente. O bloco de notas é
+sobre o que você diz a ele de propósito.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Uma lacuna, conhecida</span>
+  <p>A <a href="page:search">Busca global</a> encontra notas de projeto, mas
+  <strong>não</strong> encontra ainda notas do bloco. Isso foi adiado, não esquecido — precisa
+  de um novo tipo de busca atravessando o protocolo e os dois catálogos, mais um caso especial
+  de navegação, porque uma nota de bloco não tem projeto para abrir. Veja
+  <a href="page:not-built">O que não está pronto</a>.</p>
+</div>

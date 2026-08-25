@@ -1,1 +1,130 @@
-<p>TODO</p>
+<p>Dez minutos, um projeto real, e um agente que termina algo cujo término você consegue provar.
+Nada aqui é brinquedo: cada passo roda contra o seu próprio código.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Abra uma pasta</strong>
+    <p>Vá em <strong>Projetos</strong> na barra lateral e escolha <em>Abrir pasta</em>. Escolha um
+    repositório real. O J.A.R.V.I.S. pergunta ao Git se é um repositório e em qual branch você
+    está; ele não cria nem modifica nada.</p>
+    <figure class="fig">
+      <img src="../img/projects.png" alt="A tela de Projetos listando dois projetos com seu branch e caminho.">
+      <figcaption>Projetos que você abriu, com o branch que o Git informa e o caminho real no
+      disco.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Conte ao projeto o que ele é</strong>
+    <p>Abra o projeto, vá em <strong>Memória</strong>, e escreva três ou quatro coisas que um
+    agente erraria. A porta que o seu servidor de desenvolvimento de fato usa. A convenção que
+    ninguém escreve. A palavra que o seu time usa de outro jeito.</p>
+    <p>Estes são os dois minutos de maior alavancagem do produto. Todo agente que começar neste
+    projeto daqui para frente é avisado disso antes de ler um único arquivo, e não custa nada por
+    sessão. Veja <a href="page:memory">Memória</a>.</p>
+    <figure class="fig">
+      <img src="../img/brain.png" alt="A área Memória com quatro entradas de conhecimento agrupadas por tipo, e um contador mostrando que o briefing tem 595 caracteres.">
+      <figcaption>O contador acima é o tamanho real do que um agente recebe. Você pode abrir o
+      briefing e ler exatamente o que é enviado.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Inicie um agente</strong>
+    <p>Em <strong>Sessões</strong>, aperte <code>+</code> e escolha Claude Code ou Codex. Você
+    recebe um terminal de verdade — a mesma CLI, as mesmas teclas, o mesmo comportamento —
+    rodando no diretório do projeto.</p>
+    <p>Peça algo pequeno e real. Um teste que falha, consertado. Uma função documentada. Qualquer
+    coisa com uma checagem que você pudesse rodar depois.</p>
+    <figure class="fig">
+      <img src="../img/terminal.png" alt="Uma sessão de shell aberta na área Sessões de um projeto, rodando git status e git log, com a chave Terminal e Conversa no canto superior direito.">
+      <figcaption>Um pseudo-terminal de verdade. Repare na chave <b>Terminal · Conversa</b> à
+      direita — a mesma sessão, dois jeitos de ler.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Vire para Conversa enquanto ele trabalha</strong>
+    <p>Aperte a chave. O processo não é tocado e nada reinicia. Você recebe turnos estruturados,
+    as ferramentas que ele chamou, e as contagens de token do próprio provedor para cada turno —
+    não uma estimativa, os números que o provedor declarou.</p>
+    <p>Vire de volta quando quiser digitar. Veja <a href="page:session-log">O log de eventos da
+    sessão</a> para entender por que isso funciona.</p>
+  </li>
+
+  <li>
+    <strong>Escreva uma missão com uma checagem que pode falhar</strong>
+    <p>Vá em <strong>Missões</strong> e crie uma. Dê a ela um critério de aceitação do tipo
+    <code>Command</code> — sua suíte de testes, um lint, um build. Algo que genuinamente falha
+    hoje.</p>
+    <p>Aí tente concluir a missão. <strong>Ela vai recusar</strong>, e vai nomear o critério que
+    não se sustenta. Essa recusa é o recurso.</p>
+  </li>
+
+  <li>
+    <strong>Deixe o agente fazer o trabalho, e verifique</strong>
+    <p>De volta na sessão, peça ao agente para fazer a checagem passar. Quando ele disser que
+    terminou, rode a verificação na missão. O comando roda de verdade, o código de saída é
+    comparado com o que você esperava, e a saída real dele é guardada como evidência.</p>
+    <p>Agora a conclusão é permitida. Veja <a href="page:missions">Missões</a>.</p>
+  </li>
+
+  <li>
+    <strong>Quebre de propósito</strong>
+    <p>Desfaça a mudança — apague o arquivo, reverta o conserto. Reverifique. <strong>A conclusão
+    é revogada</strong>, porque a evidência parou de se sustentar.</p>
+    <p>É essa a diferença entre uma missão e um checkbox. Um checkbox registra que alguém um dia
+    acreditou em alguma coisa. Uma missão registra se ela é hoje verdade.</p>
+  </li>
+
+  <li>
+    <strong>Olhe o que acabou de acontecer</strong>
+    <p>A <strong>Revisão</strong> mostra o que mudou, atribuído à sessão que mudou. A
+    <strong>Atividade</strong> mostra a sequência de eventos. As <strong>Métricas</strong> mostram
+    quanto custou em tokens e no seu próprio tempo. O <strong>Histórico</strong> mostra a sessão,
+    com título, e deixa você reabri-la em modo leitura daqui a meses.</p>
+    <figure class="fig">
+      <img src="../img/review.png" alt="A área Revisão mostrando dois arquivos alterados com um diff unificado de um deles.">
+      <figcaption>O Git decide o que mudou — a gente analisa <code>status</code> e
+      <code>diff</code> em vez de calcular um diff e torcer para ele concordar com o seu próprio
+      <code>git</code>.</figcaption>
+    </figure>
+  </li>
+</ol>
+
+<h2>Três coisas para tentar em seguida</h2>
+
+<div class="cards">
+  <a class="card" href="page:guide-guardrails">
+    <strong>Parar um comando perigoso</strong>
+    <span>Defina uma regra e veja um push forçado ser recusado antes de rodar.</span>
+  </a>
+  <a class="card" href="page:guide-unattended">
+    <strong>Ir embora durante uma execução</strong>
+    <span>Coloque uma missão em Sem supervisão e deixe o piloto automático verificar a cada
+    turno.</span>
+  </a>
+  <a class="card" href="page:notebook">
+    <strong>Guardar seus prompts em algum lugar de verdade</strong>
+    <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd> de qualquer lugar, e um botão manda uma nota
+    para dentro do agente que você está assistindo.</span>
+  </a>
+</div>
+
+<h2>Duas teclas que vale aprender agora</h2>
+
+<div class="defs">
+  <div>
+    <dt><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></dt>
+    <dd>A paleta de comandos. Todo destino, toda seção de configurações, toda ação, ranqueados por
+    subsequência — digite <code>cm</code> e receba a Central de Missões.</dd>
+  </div>
+  <div>
+    <dt><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></dt>
+    <dd>A Busca global, em todos os projetos: conhecimento, notas, missões, atividade, e o que foi
+    de fato <em>dito</em> em qualquer conversa que você já teve.</dd>
+  </div>
+</div>
+
+<p>A <a href="page:shortcuts">lista completa</a> é curta, e ela diz qual tecla o produto tira do
+seu shell e por quê.</p>

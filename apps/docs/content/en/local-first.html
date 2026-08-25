@@ -1,1 +1,147 @@
-<p>TODO</p>
+<p>Local-first is easy to claim and easy to erode. This page is the specific version: what stays,
+what can leave, what leaving actually means, and how to turn it off.</p>
+
+<h2>What never leaves</h2>
+
+<div class="defs">
+  <div>
+    <dt>Your code and your Git</dt>
+    <dd>J.A.R.V.I.S. opens folders that are already on your disk. It runs the <code>git</code>
+    binary you already have. It does not clone, mirror or upload anything.</dd>
+  </div>
+  <div>
+    <dt>Your terminals</dt>
+    <dd>Real pseudo-terminals, real processes, on your machine. Every byte written by every
+    agent lands in a file under your own data directory.</dd>
+  </div>
+  <div>
+    <dt>Your credentials</dt>
+    <dd>Provider credentials are read <em>by the providers</em>, from the configuration
+    directories they already use. J.A.R.V.I.S. points a session at a directory; it never opens
+    the credential file, and it never rewrites one.</dd>
+  </div>
+  <div>
+    <dt>Your history</dt>
+    <dd>Every session ever run, its conversation, its token counts, its evidence, its activity —
+    in a SQLite database and a folder of session logs on your disk.
+    See <a href="page:data">Where your data lives</a>.</dd>
+  </div>
+  <div>
+    <dt>Your voice</dt>
+    <dd><a href="page:voice">Dictation</a> runs whisper.cpp locally. There is no cloud speech
+    API and no key to configure. The audio never leaves the machine.</dd>
+  </div>
+</div>
+
+<p>There is no account to create. Nothing is uploaded in order to use the product, and the
+product works with no network connection at all except the one the agents themselves need.</p>
+
+<h2>What the agents do on their own</h2>
+
+<p>Claude Code and Codex talk to their own providers, on their own terms, using your own
+credentials. That traffic is theirs.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Worth being precise about</span>
+  <p><strong>J.A.R.V.I.S. does not proxy an agent's traffic.</strong> It launches the CLI you
+  already have and reads the JSONL transcript that CLI writes to disk. There is no man in the
+  middle, which also means there is no place for one to be added later without you noticing a
+  new network connection.</p>
+</div>
+
+<h2>The one thing that can leave, and exactly what it is</h2>
+
+<p>The phone relay. It is <strong>off unless you pair a device</strong>, and it exists to answer
+one question from another room: <em>is anything waiting on me?</em></p>
+
+<h3>A blind mailbox, not a server that knows things</h3>
+
+<p>The relay is three endpoints. The desktop pushes a summary and collects queued commands; the
+phone reads the summary and queues an answer. The relay stores only a <strong>hash</strong> of
+each token. Turn it off and the desktop is untouched — which is the test of whether local-first
+survived the introduction of a cloud at all.</p>
+
+<h3>A summary, never a mirror</h3>
+
+<p>What is sent is what needs a person, and nothing else.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Sent</th><th>Never sent</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>That something is waiting, and what class of thing it is</td>
+      <td>File contents</td>
+    </tr>
+    <tr>
+      <td>Which project and which session, by name</td>
+      <td>Terminal output</td>
+    </tr>
+    <tr>
+      <td>What is running right now</td>
+      <td>Conversation text</td>
+    </tr>
+    <tr>
+      <td>The device name, so you know which machine you are looking at</td>
+      <td>Your code, your diffs, your credentials</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>A relay holding a copy of the work would be exactly the second store that
+<a href="page:session-log">the session log</a> exists to prevent.</p>
+
+<h3>Pairing, and why it is a six-character code</h3>
+
+<p>No account. A six-character code, <strong>single use</strong>, valid for five minutes, with
+attempts counted. Three constraints doing the work together — and one of them was found broken
+by reading: the pairing endpoint declared an attempts counter, checked it, and never incremented
+it. A limit that could not be reached.</p>
+
+<h3>Only one answer is reachable from a phone</h3>
+
+<p><a href="page:guardrails">Guardrails</a> offer four answers and three of them write a lasting
+policy — including <em>Never allow</em>. A phone has a small screen and a thumb, so it gets the
+one answer that expires with the thing it answers: <strong>allow once</strong>.</p>
+
+<p>Refusing from a phone is simply not approving. The guardrail already refuses by default, so
+the safe outcome needs no button at all.</p>
+
+<h3>Everything expires, enforced on read</h3>
+
+<p>A serverless relay has no process to sweep in and delete things. So expiry is checked
+<em>when a value is read</em>, and an expired value is never served even if nothing has cleaned
+it up. Commands expire far sooner than snapshots, because a stale approval is worse than a stale
+status.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Disconnect had to be fixed to mean disconnect</span>
+  <p>Found by running it: clearing the local pairing left the mailbox standing, and a paired
+  phone kept reading. A switch that leaves a live token working is worse than no switch at all.
+  Disconnect now revokes.</p>
+</div>
+
+<h2>Turning it off</h2>
+
+<p><strong>Settings → Phone</strong>. The section says what is sent <em>before</em> you connect,
+not afterwards. Disconnecting revokes the token; the desktop half is one background thread that
+simply stops, and every failure it ever has is logged and swallowed rather than surfacing as an
+error in a product you are using locally.</p>
+
+<div class="callout">
+  <span class="callout__title">Why Vercel</span>
+  <p>Cost, not taste. The alternative on the same account already bills monthly; this one has no
+  contract and no recorded cost. For a mailbox that holds a summary and hashes, a free path is
+  adequate, and choosing a paid one would have been a recurring bill for nothing.</p>
+</div>
+
+<h2>What an update or an uninstall can touch</h2>
+
+<p>User data lives in <code>%APPDATA%\dev.jarvis.desktop</code> — entirely outside the
+installation directory. An update replaces program files and <strong>cannot</strong> touch
+projects, sessions or history. An uninstall removes the program and preserves the data.</p>
+
+<p>Schema changes are forward-only and additive, and a database written by a newer build is
+<em>refused rather than opened</em> — so rolling back a version cannot quietly corrupt the
+history it does not understand. See <a href="page:distribution">Distribution and updates</a>.</p>

@@ -1,1 +1,150 @@
-<p>TODO</p>
+<p>Local em primeiro lugar é fácil de alegar e fácil de corroer. Esta página é a versão
+específica: o que fica, o que pode sair, o que sair de fato significa, e como desligar.</p>
+
+<h2>O que nunca sai</h2>
+
+<div class="defs">
+  <div>
+    <dt>Seu código e seu Git</dt>
+    <dd>O J.A.R.V.I.S. abre pastas que já estão no seu disco. Ele roda o binário
+    <code>git</code> que você já tem. Ele não clona, não espelha e não envia nada.</dd>
+  </div>
+  <div>
+    <dt>Seus terminais</dt>
+    <dd>Pseudo-terminais reais, processos reais, na sua máquina. Cada byte escrito por cada
+    agente cai em um arquivo dentro do seu próprio diretório de dados.</dd>
+  </div>
+  <div>
+    <dt>Suas credenciais</dt>
+    <dd>Credenciais de provedor são lidas <em>pelos provedores</em>, dos diretórios de
+    configuração que eles já usam. O J.A.R.V.I.S. aponta uma sessão para um diretório; ele nunca
+    abre o arquivo de credencial, e nunca reescreve um.</dd>
+  </div>
+  <div>
+    <dt>Seu histórico</dt>
+    <dd>Toda sessão já rodada, a conversa dela, as contagens de token, a evidência, a atividade —
+    em um banco SQLite e uma pasta de logs de sessão no seu disco.
+    Veja <a href="page:data">Onde ficam os seus dados</a>.</dd>
+  </div>
+  <div>
+    <dt>Sua voz</dt>
+    <dd>O <a href="page:voice">ditado</a> roda whisper.cpp localmente. Não existe API de fala na
+    nuvem nem chave para configurar. O áudio nunca sai da máquina.</dd>
+  </div>
+</div>
+
+<p>Não existe conta para criar. Nada é enviado para usar o produto, e o produto funciona sem
+nenhuma conexão de rede além da que os próprios agentes precisam.</p>
+
+<h2>O que os agentes fazem por conta própria</h2>
+
+<p>Claude Code e Codex falam com os provedores deles, nos termos deles, usando as suas
+credenciais. Esse tráfego é deles.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Vale ser preciso</span>
+  <p><strong>O J.A.R.V.I.S. não intermedia o tráfego de um agente.</strong> Ele inicia a CLI que
+  você já tem e lê a transcrição JSONL que essa CLI escreve em disco. Não existe intermediário, o
+  que também significa que não existe lugar para um ser adicionado depois sem você notar uma
+  conexão de rede nova.</p>
+</div>
+
+<h2>A única coisa que pode sair, e exatamente o que ela é</h2>
+
+<p>O relay do celular. Ele fica <strong>desligado até você parear um aparelho</strong>, e existe
+para responder uma pergunta de outro cômodo: <em>tem alguma coisa esperando por mim?</em></p>
+
+<h3>Uma caixa de correio cega, não um servidor que sabe coisas</h3>
+
+<p>O relay são três endpoints. O desktop empurra um resumo e recolhe comandos enfileirados; o
+celular lê o resumo e enfileira uma resposta. O relay guarda apenas um <strong>hash</strong> de
+cada token. Desligue e o desktop fica intocado — que é o teste de se o local em primeiro lugar
+sobreviveu à introdução de uma nuvem.</p>
+
+<h3>Um resumo, nunca um espelho</h3>
+
+<p>O que é enviado é o que precisa de uma pessoa, e nada mais.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Enviado</th><th>Nunca enviado</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Que alguma coisa está esperando, e de que classe é</td>
+      <td>Conteúdo de arquivo</td>
+    </tr>
+    <tr>
+      <td>Qual projeto e qual sessão, pelo nome</td>
+      <td>Saída de terminal</td>
+    </tr>
+    <tr>
+      <td>O que está rodando agora</td>
+      <td>Texto de conversa</td>
+    </tr>
+    <tr>
+      <td>O nome do aparelho, para você saber qual máquina está olhando</td>
+      <td>Seu código, seus diffs, suas credenciais</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Um relay guardando uma cópia do trabalho seria exatamente o segundo depósito que
+<a href="page:session-log">o log da sessão</a> existe para impedir.</p>
+
+<h3>Pareamento, e por que é um código de seis caracteres</h3>
+
+<p>Sem conta. Um código de seis caracteres, de <strong>uso único</strong>, válido por cinco
+minutos, com tentativas contadas. Três restrições trabalhando juntas — e uma delas foi
+encontrada quebrada por leitura: o endpoint de pareamento declarava um contador de tentativas,
+checava ele, e nunca incrementava. Um limite que não podia ser atingido.</p>
+
+<h3>Só uma resposta é alcançável de um celular</h3>
+
+<p>As <a href="page:guardrails">proteções</a> oferecem quatro respostas e três delas escrevem uma
+política duradoura — incluindo <em>Nunca permitir</em>. Um celular tem tela pequena e um polegar,
+então ele recebe a única resposta que expira junto com a coisa que ela responde:
+<strong>permitir uma vez</strong>.</p>
+
+<p>Recusar de um celular é simplesmente não aprovar. A proteção já recusa por padrão, então o
+desfecho seguro não precisa de botão nenhum.</p>
+
+<h3>Tudo expira, verificado na leitura</h3>
+
+<p>Um relay serverless não tem um processo para varrer e apagar coisas. Então a expiração é
+verificada <em>quando um valor é lido</em>, e um valor expirado nunca é servido, mesmo que nada
+tenha limpado. Comandos expiram bem antes de snapshots, porque uma aprovação velha é pior do que
+um status velho.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Desconectar teve que ser consertado para significar desconectar</span>
+  <p>Achado rodando: limpar o pareamento local deixava a caixa de correio de pé, e um celular
+  pareado continuava lendo. Um interruptor que deixa um token vivo funcionando é pior do que
+  interruptor nenhum. Desconectar agora revoga.</p>
+</div>
+
+<h2>Como desligar</h2>
+
+<p><strong>Configurações → Celular</strong>. A seção diz o que é enviado <em>antes</em> de você
+conectar, não depois. Desconectar revoga o token; a metade do desktop é uma thread de fundo que
+simplesmente para, e toda falha que ela tem é registrada e engolida, em vez de aparecer como erro
+em um produto que você está usando localmente.</p>
+
+<div class="callout">
+  <span class="callout__title">Por que Vercel</span>
+  <p>Custo, não gosto. A alternativa na mesma conta já cobra mensalmente; esta não tem contrato
+  nem custo registrado. Para uma caixa de correio que guarda um resumo e hashes, um caminho
+  gratuito é adequado, e escolher um pago teria sido uma conta recorrente por nada.</p>
+</div>
+
+<h2>O que uma atualização ou uma desinstalação pode tocar</h2>
+
+<p>Dados de usuário ficam em <code>%APPDATA%\dev.jarvis.desktop</code> — inteiramente fora do
+diretório de instalação. Uma atualização substitui arquivos de programa e <strong>não
+consegue</strong> encostar em projetos, sessões ou histórico. Uma desinstalação remove o programa
+e preserva os dados.</p>
+
+<p>Mudanças de esquema são só para frente e aditivas, e um banco escrito por uma versão mais nova
+é <em>recusado em vez de aberto</em> — então voltar uma versão não consegue corromper em silêncio
+o histórico que ela não entende. Veja
+<a href="page:distribution">Distribuição e atualizações</a>.</p>

@@ -1,1 +1,143 @@
-<p>TODO</p>
+<p>Se você paga por mais de uma assinatura, já conhece a falha: a que você está usando acaba no
+meio da tarefa, e as outras três ficam paradas porque nada te diz que elas existem nem qual
+delas tem espaço.</p>
+
+<h2>Uma conta <em>é</em> um diretório de configuração</h2>
+
+<p>Este é o modelo de identidade, e tudo decorre dele. Uma conta é um diretório de configuração
+de provedor — <code>CLAUDE_CONFIG_DIR</code> para o Claude Code, <code>CODEX_HOME</code> para o
+Codex. Registre um diretório, e as credenciais dentro dele são aquela conta.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Nada aqui jamais reescreve suas credenciais</span>
+  <p>A conta já logada nesta máquina é <strong>adotada</strong>, nunca copiada. Reescrever um
+  arquivo global de credencial te deslogaria da sessão na frente da qual você está sentado, e
+  não permitiria que uma sessão em andamento terminasse na conta antiga enquanto trabalho novo
+  começa na próxima — que é exatamente o objetivo.</p>
+</div>
+
+<p>É também por isso que uma troca é barata: apontar uma sessão nova para um diretório diferente
+é outra variável de ambiente, não um login.</p>
+
+<h2>O que o painel responde</h2>
+
+<figure class="fig">
+  <img src="../img/accounts.png" alt="Dois cartões de conta Claude, cada um com um mostrador de cota restante, uma contagem regressiva de reset e um horário de relógio, e um aviso de que duas das contas compartilham uma assinatura.">
+  <figcaption><b>Três perguntas, na ordem em que as pessoas fazem.</b> Quanto sobrou, quando
+  volta, e qual janela é a que de fato está te travando — desenhada maior do que as que não
+  estão. <em>Os endereços de e-mail desta figura foram substituídos por
+  <code>you@example.com</code>; nada mais foi alterado.</em></figcaption>
+</figure>
+
+<div class="defs">
+  <div>
+    <dt>Quanto sobrou</dt>
+    <dd>Um mostrador do que resta, não do que foi consumido. Você está decidindo se começa
+    alguma coisa, então o número útil é o que você tem.</dd>
+  </div>
+  <div>
+    <dt>Quando volta</dt>
+    <dd>Uma contagem regressiva <em>e</em> o horário de relógio. <em>56m</em> responde "dá para
+    esperar?"; <em>13:10</em> responde "vou almoçar?".</dd>
+  </div>
+  <div>
+    <dt>Qual limite está travando</dt>
+    <dd>Uma janela de sessão e uma janela semanal são limites diferentes e qualquer um pode ser
+    o que está te parando. O que está travando diz <em>é este o limite que te trava</em> e é
+    desenhado maior.</dd>
+  </div>
+  <div>
+    <dt>Onde o trabalho novo deve começar</dt>
+    <dd>Uma faixa no topo nomeia a conta com espaço, então a resposta está na tela antes de você
+    ter que deduzir.</dd>
+  </div>
+</div>
+
+<h2>Leituras ao vivo, e como são obtidas</h2>
+
+<p>As duas CLIs respondem uma pergunta de uso no protocolo suportado delas:
+<code>get_usage</code> no canal de controle stream-json do Claude Code, e
+<code>account/rateLimits/read</code> no <code>codex app-server</code>. Medido contra os binários
+reais, não lembrado de uma página de documentação.</p>
+
+<p>O que uma sondagem <strong>não</strong> faz, e isso foi conferido: nenhum endpoint HTTP
+nosso, nenhuma leitura dos seus arquivos de credencial, nenhum token gasto, nenhuma transcrição
+escrita.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">A checagem que definiu o escopo, antes de qualquer coisa ser construída</span>
+  <p>Cada sondagem foi rodada contra um diretório de configuração <strong>vazio</strong>. As duas
+  leem a conta do diretório para o qual são apontadas, e as duas falham dizendo isso, em vez de
+  devolver os números da conta ambiente com o nome errado. Isso é mantido como teste de
+  segurança — e se algum dia ele passar como <code>Ok</code>, o recurso está atribuindo cotas
+  erradas e precisa ser desligado.</p>
+</div>
+
+<h2>Trocar</h2>
+
+<p>A troca automática tem três ajustes:</p>
+
+<ul>
+  <li><strong>Desligada</strong> — você escolhe, sempre.</li>
+  <li><strong>Quando esgotar</strong> — trabalho novo se move quando o provedor diz que uma
+  conta acabou.</li>
+  <li><strong>Perto do limite</strong> — trabalho novo se move antes de acabar.</li>
+</ul>
+
+<p><strong>Sessões em execução mantêm a conta.</strong> Uma troca muda onde o trabalho
+<em>novo</em> começa; ela nunca puxa o diretório debaixo de um agente no meio de uma tarefa.</p>
+
+<h3>Continuidade através de uma troca</h3>
+
+<p>Um agente movido para uma conta nova não pode ser retomado com <code>--resume</code>, porque
+uma retomada não atravessa diretórios de configuração. A continuidade é carregada pelo
+<a href="page:brain">briefing da Memória</a> — a sessão nova começa sabendo o que o projeto sabe,
+que é a parte que de fato importava.</p>
+
+<h2>Dois diretórios, uma assinatura</h2>
+
+<p>Este foi achado olhando a tela. Três cartões Claude, dois mostrando estatísticas idênticas
+sob nomes diferentes. Não eram leituras duplicadas: <code>claude auth status --json</code> contra
+cada diretório resolve — dois dos diretórios eram o mesmo e-mail sob a mesma organização.
+<strong>Uma cota só, desenhada duas vezes.</strong> Os números eram a única coisa honesta naquela
+tela; os dois nomes eram a mentira.</p>
+
+<p>Como é tratado agora:</p>
+
+<ul>
+  <li><strong>Chaveado por e-mail, não por organização.</strong> Um plano Team coloca as cotas
+  separadas de várias pessoas sob uma organização só, então identidade de org juntaria contas
+  que são genuinamente diferentes.</li>
+  <li><strong>Um e-mail ausente é <em>desconhecido</em>, nunca <em>o mesmo</em>.</strong> O Codex
+  0.149.1 não escreve identidade nenhuma, e chutar aqui juntaria duas contas reais.</li>
+  <li><strong>A metade que era bug.</strong> A troca automática tratava um gêmeo como destino.
+  <em>Quando esgotar</em> estava protegido por acidente; <em>perto do limite</em> não estava, e
+  ficaria jogando trabalho novo entre duas visões de uma janela só — justamente no ajuste que
+  alguém liga para ter isso resolvido por ele.</li>
+  <li><strong>Avisado, não impedido.</strong> Dois diretórios em uma conta é legítimo. O login
+  não é recusado e nada é escondido; os dois cartões dizem o que são, acima do mostrador em vez
+  de embaixo.</li>
+</ul>
+
+<p>Nada disso é guardado. A linha adotada é lida com o ambiente corrente, então uma coluna
+<code>twin_of</code> seria um fato que envelhece em silêncio.</p>
+
+<h2>Os chips na barra de status</h2>
+
+<figure class="fig">
+  <img src="../img/quota-chips.png" alt="A barra de status mostrando Claude Code em 67 por cento com reset em 4 dias e 11 horas, e Codex em 100 por cento.">
+  <figcaption><b>A resposta onde a pergunta é feita.</b> Você pensa em cota quando está prestes a
+  começar alguma coisa, não quando está na tela de Contas.</figcaption>
+</figure>
+
+<h2>O que custou chegar aqui</h2>
+
+<p>A primeira versão deste recurso era correta e inútil, e vale saber por quê. Ela leu todas as
+115 transcrições da máquina de desenvolvimento e estabeleceu que o Claude Code declara cota
+<em>só no turno em que recusa</em>. Isso é verdade. Então o painel foi construído com honestidade
+impecável e dizia <em>cota desconhecida</em> em quase todo lugar.</p>
+
+<p>A descoberta era verdadeira sobre <strong>transcrições</strong>, não sobre <strong>os
+provedores</strong>. Perguntar direto às CLIs deu números oficiais, e o painel honesto virou um
+painel útil sem um único número ser maquiado.
+Veja <a href="page:confidence">Oficial e Observado</a>.</p>

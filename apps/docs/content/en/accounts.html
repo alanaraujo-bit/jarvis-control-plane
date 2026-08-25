@@ -1,1 +1,144 @@
-<p>TODO</p>
+<p>If you pay for more than one subscription, you already know the failure: the one you are
+using runs out mid-task, and the other three sit idle because nothing tells you they exist or
+which of them has room.</p>
+
+<h2>An account <em>is</em> a configuration directory</h2>
+
+<p>This is the identity model, and everything follows from it. An account is a provider
+configuration directory — <code>CLAUDE_CONFIG_DIR</code> for Claude Code,
+<code>CODEX_HOME</code> for Codex. Register a directory, and the credentials inside it are that
+account.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Nothing here ever rewrites your credentials</span>
+  <p>The account already signed in on this machine is <strong>adopted</strong>, never copied.
+  Rewriting one global credential file would log you out of the session you are sitting in
+  front of, and it could not let a running session finish on the old account while new work
+  starts on the next one — which is the entire point.</p>
+</div>
+
+<p>That is also why a switch is cheap: pointing a new session at a different directory is a
+different environment variable, not a login.</p>
+
+<h2>What the panel answers</h2>
+
+<figure class="fig">
+  <img src="../img/accounts.png" alt="Two Claude account cards, each with a dial showing remaining allowance, a reset countdown and a wall-clock time, and a note that two of the accounts share one subscription.">
+  <figcaption><b>Three questions, in the order people ask them.</b> What is left, when it comes
+  back, and which window is the one actually holding you up — drawn larger than the ones that
+  are not. <em>Email addresses in this figure were replaced with <code>you@example.com</code>;
+  nothing else was altered.</em></figcaption>
+</figure>
+
+<div class="defs">
+  <div>
+    <dt>How much is left</dt>
+    <dd>A dial showing what remains, not what has been consumed. You are deciding whether to
+    start something, so the useful number is the one you have.</dd>
+  </div>
+  <div>
+    <dt>When it comes back</dt>
+    <dd>Both a countdown and the wall-clock moment. <em>56m</em> answers "can I wait?";
+    <em>13:10</em> answers "should I go to lunch?".</dd>
+  </div>
+  <div>
+    <dt>Which limit is binding</dt>
+    <dd>A session window and a weekly window are different limits and either can be the one
+    stopping you. The binding one says <em>this is the limit holding you up</em> and is drawn
+    larger.</dd>
+  </div>
+  <div>
+    <dt>Where new work should start</dt>
+    <dd>A strip at the top names the account with room, so the answer is on screen before you
+    have to work it out.</dd>
+  </div>
+</div>
+
+<h2>Live readings, and how they are obtained</h2>
+
+<p>Both CLIs answer a usage question on their own supported protocol:
+<code>get_usage</code> on Claude Code's stream-json control channel, and
+<code>account/rateLimits/read</code> on <code>codex app-server</code>. Measured against the real
+binaries, not remembered from a doc page.</p>
+
+<p>What a probe does <strong>not</strong> do, and this was checked: no HTTP endpoint of our own,
+no reading of your credential files, no token spent, no transcript written.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">The check that decided the scope, before anything was built</span>
+  <p>Each probe was run against an <strong>empty</strong> configuration directory. Both read the
+  account in the directory they are pointed at, and both fail by saying so rather than returning
+  the ambient account's numbers under the wrong name. That is kept as a safety test — and if it
+  ever passes as <code>Ok</code>, the feature is misattributing allowances and must be turned
+  off.</p>
+</div>
+
+<h2>Switching</h2>
+
+<p>Automatic switching has three settings:</p>
+
+<ul>
+  <li><strong>Off</strong> — you choose, always.</li>
+  <li><strong>When exhausted</strong> — new work moves once the provider says an account is
+  out.</li>
+  <li><strong>Near the limit</strong> — new work moves before it runs out.</li>
+</ul>
+
+<p><strong>Running sessions keep their account.</strong> A switch changes where <em>new</em>
+work starts; it never yanks the directory out from under an agent that is mid-task.</p>
+
+<h3>Continuity across a switch</h3>
+
+<p>An agent moved to a new account cannot be resumed with <code>--resume</code>, because a
+resume cannot cross configuration directories. Continuity is carried by the
+<a href="page:brain">Brain brief</a> instead — the new session starts knowing what the project
+knows, which is the part that actually mattered.</p>
+
+<h2>Two directories, one subscription</h2>
+
+<p>This one was found by looking at the screen. Three Claude cards, two showing identical
+statistics under different names. They were not duplicated readings:
+<code>claude auth status --json</code> against each directory settles it — two of the
+directories were the same email under the same organisation. <strong>One allowance, drawn
+twice.</strong> The numbers were the only honest thing on that screen; the two names were the
+lie.</p>
+
+<p>How it is handled now:</p>
+
+<ul>
+  <li><strong>Keyed on email, not organisation.</strong> A Team plan puts several people's
+  separate allowances under one org, so org identity would merge accounts that are genuinely
+  different.</li>
+  <li><strong>An absent email is <em>unknown</em>, never <em>same</em>.</strong> Codex 0.149.1
+  writes no identity at all, and guessing here would merge two real accounts.</li>
+  <li><strong>The bug half.</strong> Automatic switching treated a twin as a destination.
+  <em>When exhausted</em> was protected by accident; <em>near the limit</em> was not, and would
+  ping-pong new work between two views of one window — on the exact setting somebody turns on to
+  have this handled for them.</li>
+  <li><strong>Told, not prevented.</strong> Two directories on one account is legitimate. Signing
+  in is not refused and nothing is hidden; both cards say what they are, above the dial rather
+  than under it.</li>
+</ul>
+
+<p>Nothing about this is stored. The adopted row is read with the ambient environment, so a
+<code>twin_of</code> column would be a fact that goes stale silently.</p>
+
+<h2>The chips in the status bar</h2>
+
+<figure class="fig">
+  <img src="../img/quota-chips.png" alt="The status bar showing Claude Code at 67 percent with a reset in 4 days 11 hours, and Codex at 100 percent.">
+  <figcaption><b>The answer where the question gets asked.</b> You wonder about quota while you
+  are about to start something, not while you are on the Accounts screen.</figcaption>
+</figure>
+
+<h2>What it cost to get here</h2>
+
+<p>The first version of this feature was correct and useless, and it is worth knowing why. It
+read all 115 transcripts on the development machine and established that Claude Code states
+quota <em>only in the turn it refuses</em>. That is true. So the panel was built impeccably
+honestly and said <em>allowance unknown</em> nearly everywhere.</p>
+
+<p>The finding was true about <strong>transcripts</strong>, not about <strong>the
+providers</strong>. Asking the CLIs directly gave official numbers, and the honest panel became
+a useful one without a single number being fudged.
+See <a href="page:confidence">Official and Observed</a>.</p>

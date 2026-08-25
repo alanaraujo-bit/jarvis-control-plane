@@ -1,1 +1,143 @@
-<p>TODO</p>
+<h2>What you need</h2>
+
+<div class="defs">
+  <div>
+    <dt>Windows 11</dt>
+    <dd>Or Windows 10 with WebView2, which is present on any machine that has been updated in
+    recent years. Windows is the only platform shipping today.</dd>
+  </div>
+  <div>
+    <dt>An agent CLI you already use</dt>
+    <dd><strong>Claude Code</strong> (<code>claude</code>) or <strong>Codex</strong>
+    (<code>codex</code>), on your <code>PATH</code>, already signed in. J.A.R.V.I.S. does not
+    install them and does not replace their sign-in.</dd>
+  </div>
+  <div>
+    <dt>Git</dt>
+    <dd>The <code>git</code> binary. Project detection, Review, worktrees and commit history all
+    ask Git rather than reimplementing it.</dd>
+  </div>
+</div>
+
+<p>Node and pnpm are detected and reported if present, but they are not required to run the app
+— only to build it from source.</p>
+
+<h2>Running the installer</h2>
+
+<ol class="steps">
+  <li>
+    <strong>Run the installer</strong>
+    Install mode is <strong>per-user</strong>. There is no administrator prompt, and nothing is
+    written outside your own profile.
+  </li>
+  <li>
+    <strong>Windows will warn you about an unknown publisher</strong>
+    This is expected and it is honest. The binaries are not signed with an Authenticode
+    certificate yet — see below. Choose <em>More info → Run anyway</em> if you trust where you
+    got the installer from.
+  </li>
+  <li>
+    <strong>Pick a language</strong>
+    The installer detects your OS language and offers English and Portuguese (Brazil), matching
+    the application's own locales.
+  </li>
+  <li>
+    <strong>Launch it</strong>
+    The window waits for the first-run check before it appears, so you never see the wrong
+    screen flash past. A first install shows a welcome screen once; after that it opens straight
+    into <a href="page:mission-control">Mission Control</a>.
+  </li>
+</ol>
+
+<p>Install footprint is <strong>7.3 MB</strong>, measured on the real installer rather than
+estimated. Monaco adds 1.04 MB of that and is loaded on demand rather than at startup.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The SmartScreen warning, explained properly</span>
+  <p>Two separate signing concerns get confused constantly, so here they are apart:</p>
+  <p><strong>The Authenticode certificate</strong> stops Windows warning about an unknown
+  publisher. It requires a purchase, it has not been bought, and that is
+  <a href="page:blockers">a tracked blocker</a>. Nothing technical is missing — the build
+  pipeline already has the shape for it.</p>
+  <p><strong>The minisign keypair</strong> proves an update actually came from us. It exists,
+  it works today, and every downloaded update is verified against a public key compiled into the
+  binary before anything is installed. An update that fails verification is refused rather than
+  applied.</p>
+  <p>So: updates are cryptographically verified even though the installer is unsigned. Those are
+  genuinely different guarantees.</p>
+</div>
+
+<h2>First run</h2>
+
+<p>The welcome screen reuses the same environment scan the product uses everywhere and the same
+folder picker — there is no bespoke onboarding flow to get out of sync with the real thing.
+Opening a folder from it lands you inside that project's workspace.</p>
+
+<p>It is gated on a stored flag and shown once per install. If that check ever fails, it
+defaults to <em>already seen</em>: a broken check should not be able to leave the window
+hidden.</p>
+
+<h3>Check the environment scan</h3>
+
+<p><strong>Settings → Environment</strong> lists what was found: Git, Node, pnpm, Claude Code,
+Codex, GitHub CLI, with versions. A provider that is not on your <code>PATH</code> is not
+offered when you start a session, and this page is where you find out why.</p>
+
+<figure class="fig">
+  <img src="../img/settings-appearance.png" alt="The Settings screen with eight sections listed on the left and Appearance open on the right, showing theme and language controls.">
+  <figcaption><b>Eight sections, ordered by how often they are reached.</b> Rescan lands on
+  Environment rather than wherever you happened to be last.</figcaption>
+</figure>
+
+<h2>Updating</h2>
+
+<p>The updater checks an endpoint, downloads in the background, and verifies the download
+against the compiled-in public key before installing. Your data is untouched by this: it lives
+in <code>%APPDATA%\dev.jarvis.desktop</code>, entirely outside the installation directory.</p>
+
+<div class="callout">
+  <span class="callout__title">Update checks currently fail, honestly</span>
+  <p>The update endpoint points at a release location that is not yet published, so
+  <em>Check for updates</em> reports a failure rather than pretending to be up to date. That is
+  <a href="page:blockers">a tracked blocker</a> about where to publish, not a bug in the
+  updater.</p>
+</div>
+
+<h2>Uninstalling</h2>
+
+<p>Uninstall removes the program and <strong>preserves your data</strong> — projects, sessions,
+history, missions and settings all stay. Reinstalling picks up exactly where you left off. If
+you genuinely want it all gone, delete <code>%APPDATA%\dev.jarvis.desktop</code> yourself; see
+<a href="page:data">Where your data lives</a>.</p>
+
+<h2>Building it from source</h2>
+
+<p>Node 22+, pnpm, and a Rust toolchain with the MSVC build tools.</p>
+
+<pre><code>pnpm install
+pnpm dev          <span class="c"># run the desktop app against Vite</span>
+pnpm tauri build  <span class="c"># produce the Windows installer</span></code></pre>
+
+<p>The Rust tests, including ones that drive a real PTY and a real Git repository:</p>
+
+<pre><code>cd apps/desktop/src-tauri
+cargo test
+cargo test -- --ignored   <span class="c"># also parses every Claude Code transcript on this machine</span></code></pre>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Close the installed app first</span>
+  <p>The product enforces a single instance so that exactly one process owns the database and
+  the session logs. If the installed copy is running, <code>pnpm dev</code> will be swallowed
+  silently rather than opening a second window.</p>
+</div>
+
+<div class="cards">
+  <a class="card" href="page:quickstart">
+    <strong>Next: your first ten minutes</strong>
+    <span>Open a folder, run an agent, and write a mission it has to prove it finished.</span>
+  </a>
+  <a class="card" href="page:data">
+    <strong>Where your data lives</strong>
+    <span>Every path the product writes to, and what survives an update.</span>
+  </a>
+</div>

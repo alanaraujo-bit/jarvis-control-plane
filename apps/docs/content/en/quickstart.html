@@ -1,1 +1,129 @@
-<p>TODO</p>
+<p>Ten minutes, one real project, and an agent that finishes something you can prove it
+finished. Nothing here is a toy: every step runs against your own code.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Open a folder</strong>
+    <p>Go to <strong>Projects</strong> on the rail and choose <em>Open folder</em>. Pick a real
+    repository. J.A.R.V.I.S. asks Git whether it is a repository and which branch you are on;
+    it does not create or modify anything.</p>
+    <figure class="fig">
+      <img src="../img/projects.png" alt="The Projects screen listing two projects with their branch and path.">
+      <figcaption>Projects you have opened, with the branch Git reports and the real path on
+      disk.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Tell the project what it is</strong>
+    <p>Open the project, go to <strong>Brain</strong>, and write three or four things an agent
+    would otherwise get wrong. The port your dev server actually uses. The convention nobody
+    writes down. The word your team uses differently.</p>
+    <p>This is the highest-leverage two minutes in the product. Every agent that starts in this
+    project from now on is told these before it reads a single file, and it costs nothing per
+    session. See <a href="page:memory">Memory</a>.</p>
+    <figure class="fig">
+      <img src="../img/brain.png" alt="The Brain area with four knowledge entries grouped under their kinds, and a counter showing the brief is 595 characters.">
+      <figcaption>The counter above is the actual size of what an agent receives. You can open
+      the brief and read exactly what gets sent.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Start an agent</strong>
+    <p>In <strong>Sessions</strong>, press <code>+</code> and choose Claude Code or Codex. You
+    get a real terminal — the same CLI, the same keys, the same behaviour — running in the
+    project directory.</p>
+    <p>Ask it for something small and real. A failing test fixed. A function documented.
+    Anything with a check you could run afterwards.</p>
+    <figure class="fig">
+      <img src="../img/terminal.png" alt="A shell session open in a project's Sessions area, running git status and git log, with the Terminal and Conversation toggle in the top right.">
+      <figcaption>A real pseudo-terminal. Note the <b>Terminal · Conversation</b> toggle on the
+      right — the same session, two ways of reading it.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Flip to Conversation while it works</strong>
+    <p>Press the toggle. The process is not touched and nothing restarts. You get structured
+    turns, the tools it called, and the provider's own token counts for each turn — not an
+    estimate, the numbers the provider stated.</p>
+    <p>Flip back whenever you want to type. See <a href="page:session-log">The session event
+    log</a> for why this works at all.</p>
+  </li>
+
+  <li>
+    <strong>Write a mission with a check that can fail</strong>
+    <p>Go to <strong>Missions</strong> and create one. Give it an acceptance criterion of kind
+    <code>Command</code> — your test suite, a lint run, a build. Something that genuinely fails
+    today.</p>
+    <p>Then try to complete the mission. <strong>It will refuse</strong>, and it will name the
+    criterion that does not hold. That refusal is the feature.</p>
+  </li>
+
+  <li>
+    <strong>Let the agent do the work, then verify</strong>
+    <p>Back in the session, ask the agent to make the check pass. When it says it is done, run
+    verification on the mission. The command actually runs, its exit code is compared with the
+    one you expected, and its real output is stored as evidence.</p>
+    <p>Now completion is allowed. See <a href="page:missions">Missions</a>.</p>
+  </li>
+
+  <li>
+    <strong>Break it on purpose</strong>
+    <p>Undo the change — delete the file, revert the fix. Re-verify. <strong>The completion is
+    revoked</strong>, because the evidence stopped holding.</p>
+    <p>This is the difference between a mission and a checkbox. A checkbox records that somebody
+    once believed something. A mission records whether it is currently true.</p>
+  </li>
+
+  <li>
+    <strong>Look at what just happened</strong>
+    <p><strong>Review</strong> shows what changed, attributed to the session that changed it.
+    <strong>Activity</strong> shows the sequence of events. <strong>Analytics</strong> shows what
+    it cost in tokens and in your own time. <strong>History</strong> shows the session, titled,
+    and lets you reopen it read-only months from now.</p>
+    <figure class="fig">
+      <img src="../img/review.png" alt="The Review area showing two changed files with a unified diff of one of them.">
+      <figcaption>Git decides what changed — we parse <code>status</code> and <code>diff</code>
+      rather than computing a diff and hoping it agrees with your own
+      <code>git</code>.</figcaption>
+    </figure>
+  </li>
+</ol>
+
+<h2>Three things to try next</h2>
+
+<div class="cards">
+  <a class="card" href="page:guide-guardrails">
+    <strong>Stop a dangerous command</strong>
+    <span>Set one rule and watch a force push be refused before it runs.</span>
+  </a>
+  <a class="card" href="page:guide-unattended">
+    <strong>Walk away from a run</strong>
+    <span>Set a mission to Unattended and let the autopilot verify after every turn.</span>
+  </a>
+  <a class="card" href="page:notebook">
+    <strong>Keep your prompts somewhere real</strong>
+    <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd> from anywhere, and one button sends a note
+    into the agent you are watching.</span>
+  </a>
+</div>
+
+<h2>Two keys worth learning now</h2>
+
+<div class="defs">
+  <div>
+    <dt><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></dt>
+    <dd>The command palette. Every destination, every settings section, every action, ranked by
+    subsequence — type <code>mc</code> and get Mission Control.</dd>
+  </div>
+  <div>
+    <dt><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></dt>
+    <dd>Global Search, across every project: knowledge, notes, missions, activity, and what was
+    actually <em>said</em> in any conversation you have ever had.</dd>
+  </div>
+</div>
+
+<p>The <a href="page:shortcuts">full list</a> is short, and it says which key the product takes
+away from your shell and why.</p>

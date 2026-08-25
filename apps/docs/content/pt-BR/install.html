@@ -1,1 +1,146 @@
-<p>TODO</p>
+<h2>O que você precisa</h2>
+
+<div class="defs">
+  <div>
+    <dt>Windows 11</dt>
+    <dd>Ou Windows 10 com WebView2, que está presente em qualquer máquina atualizada nos últimos
+    anos. Windows é a única plataforma que existe hoje.</dd>
+  </div>
+  <div>
+    <dt>Uma CLI de agente que você já usa</dt>
+    <dd><strong>Claude Code</strong> (<code>claude</code>) ou <strong>Codex</strong>
+    (<code>codex</code>), no seu <code>PATH</code>, já logada. O J.A.R.V.I.S. não instala elas e
+    não substitui o login delas.</dd>
+  </div>
+  <div>
+    <dt>Git</dt>
+    <dd>O binário <code>git</code>. Detecção de projeto, Revisão, worktrees e histórico de
+    commits todos perguntam ao Git em vez de reimplementá-lo.</dd>
+  </div>
+</div>
+
+<p>Node e pnpm são detectados e informados se estiverem presentes, mas não são necessários para
+rodar o app — só para compilá-lo a partir do código.</p>
+
+<h2>Rodando o instalador</h2>
+
+<ol class="steps">
+  <li>
+    <strong>Execute o instalador</strong>
+    O modo de instalação é <strong>por usuário</strong>. Não há pedido de administrador, e nada é
+    escrito fora do seu próprio perfil.
+  </li>
+  <li>
+    <strong>O Windows vai te avisar sobre um publicador desconhecido</strong>
+    Isso é esperado e é honesto. Os binários ainda não são assinados com um certificado
+    Authenticode — veja abaixo. Escolha <em>Mais informações → Executar assim mesmo</em> se você
+    confia na origem do instalador.
+  </li>
+  <li>
+    <strong>Escolha um idioma</strong>
+    O instalador detecta o idioma do sistema e oferece inglês e português (Brasil), batendo com
+    os idiomas do próprio aplicativo.
+  </li>
+  <li>
+    <strong>Abra</strong>
+    A janela espera a checagem de primeira execução antes de aparecer, então você nunca vê a tela
+    errada passando piscando. Uma primeira instalação mostra uma tela de boas-vindas uma vez;
+    depois disso ela abre direto na <a href="page:mission-control">Central de Missões</a>.
+  </li>
+</ol>
+
+<p>A pegada de instalação é de <strong>7,3 MB</strong>, medida no instalador real e não
+estimada. O Monaco responde por 1,04 MB disso e é carregado sob demanda, não na inicialização.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">O aviso do SmartScreen, explicado direito</span>
+  <p>Duas questões de assinatura diferentes são confundidas o tempo todo, então aqui estão elas
+  separadas:</p>
+  <p><strong>O certificado Authenticode</strong> impede o Windows de avisar sobre um publicador
+  desconhecido. Ele exige uma compra, não foi comprado, e isso é
+  <a href="page:blockers">um bloqueio rastreado</a>. Nada técnico está faltando — o pipeline de
+  build já tem o formato para isso.</p>
+  <p><strong>O par de chaves minisign</strong> prova que uma atualização veio mesmo de nós. Ele
+  existe, funciona hoje, e toda atualização baixada é verificada contra uma chave pública
+  compilada dentro do binário antes de qualquer coisa ser instalada. Uma atualização que falha na
+  verificação é recusada em vez de aplicada.</p>
+  <p>Ou seja: atualizações são verificadas criptograficamente mesmo com o instalador sem
+  assinatura. São garantias genuinamente diferentes.</p>
+</div>
+
+<h2>Primeira execução</h2>
+
+<p>A tela de boas-vindas reaproveita a mesma varredura de ambiente que o produto usa em todo
+lugar e o mesmo seletor de pasta — não existe um fluxo de onboarding próprio que possa
+dessincronizar da coisa real. Abrir uma pasta por ali te deixa dentro da área de trabalho daquele
+projeto.</p>
+
+<p>Ela é controlada por uma flag guardada e mostrada uma vez por instalação. Se essa checagem
+falhar, o padrão é <em>já vista</em>: uma checagem quebrada não pode conseguir deixar a janela
+escondida.</p>
+
+<h3>Confira a varredura de ambiente</h3>
+
+<p><strong>Configurações → Ambiente</strong> lista o que foi encontrado: Git, Node, pnpm, Claude
+Code, Codex, GitHub CLI, com versões. Um provedor que não está no seu <code>PATH</code> não é
+oferecido quando você inicia uma sessão, e esta é a página onde você descobre por quê.</p>
+
+<figure class="fig">
+  <img src="../img/settings-appearance.png" alt="A tela de Configurações com oito seções listadas à esquerda e Aparência aberta à direita, mostrando controles de tema e idioma.">
+  <figcaption><b>Oito seções, ordenadas por quanto são acessadas.</b> Reexaminar cai em Ambiente,
+  e não em onde quer que você estivesse por último.</figcaption>
+</figure>
+
+<h2>Atualizando</h2>
+
+<p>O atualizador consulta um endpoint, baixa em segundo plano, e verifica o download contra a
+chave pública compilada antes de instalar. Seus dados ficam intocados por isso: eles moram em
+<code>%APPDATA%\dev.jarvis.desktop</code>, inteiramente fora do diretório de instalação.</p>
+
+<div class="callout">
+  <span class="callout__title">As checagens de atualização falham hoje, honestamente</span>
+  <p>O endpoint de atualização aponta para um local de release que ainda não foi publicado, então
+  <em>Verificar atualizações</em> informa uma falha em vez de fingir estar em dia. Isso é
+  <a href="page:blockers">um bloqueio rastreado</a> sobre onde publicar, não um bug no
+  atualizador.</p>
+</div>
+
+<h2>Desinstalando</h2>
+
+<p>A desinstalação remove o programa e <strong>preserva seus dados</strong> — projetos, sessões,
+histórico, missões e configurações ficam todos. Reinstalar retoma exatamente de onde você parou.
+Se você realmente quiser tudo fora, apague <code>%APPDATA%\dev.jarvis.desktop</code> você mesmo;
+veja <a href="page:data">Onde ficam os seus dados</a>.</p>
+
+<h2>Compilando a partir do código</h2>
+
+<p>Node 22+, pnpm, e uma toolchain Rust com as ferramentas de build MSVC.</p>
+
+<pre><code>pnpm install
+pnpm dev          <span class="c"># roda o app de desktop contra o Vite</span>
+pnpm tauri build  <span class="c"># produz o instalador do Windows</span></code></pre>
+
+<p>Os testes em Rust, incluindo os que dirigem um PTY real e um repositório Git real:</p>
+
+<pre><code>cd apps/desktop/src-tauri
+cargo test
+cargo test -- --ignored   <span class="c"># também analisa toda transcrição do Claude Code desta máquina</span></code></pre>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Feche o app instalado primeiro</span>
+  <p>O produto força uma única instância para que exatamente um processo seja dono do banco e dos
+  logs de sessão. Se a cópia instalada estiver rodando, o <code>pnpm dev</code> vai ser engolido
+  em silêncio em vez de abrir uma segunda janela.</p>
+</div>
+
+<div class="cards">
+  <a class="card" href="page:quickstart">
+    <strong>Depois: seus dez primeiros minutos</strong>
+    <span>Abrir uma pasta, rodar um agente, e escrever uma missão que ele tem que provar que
+    terminou.</span>
+  </a>
+  <a class="card" href="page:data">
+    <strong>Onde ficam os seus dados</strong>
+    <span>Todo caminho em que o produto escreve, e o que sobrevive a uma atualização.</span>
+  </a>
+</div>
