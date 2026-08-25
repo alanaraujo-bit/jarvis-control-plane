@@ -14,4 +14,9 @@ brand/icon.png
 
 # Updater signing key. The private half must never leave this machine (§60).
 .keys/
+# Codex discovers guardrail hooks at .codex/hooks/hooks.json *inside the
+# project* (§35), so running J.A.R.V.I.S. on itself writes one here. It holds an
+# absolute path to this machine's installed binary and a per-session policy
+# file, so it is generated state rather than source.
+.codex/
 .tmp/
