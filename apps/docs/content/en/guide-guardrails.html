@@ -1,1 +1,100 @@
-<p>TODO</p>
+<p>Decide once what an agent may never do. Ten minutes now, and you can leave a run going without
+having to think about it again.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Open Settings → Guardrails</strong>
+    <p>Nine rows, one per class of sensitive operation, each with <strong>Always ask</strong>,
+    <strong>Allow</strong> and <strong>Never allow</strong>. Everything starts on
+    <em>Always ask</em>, which is the honest default: the product does not know your risk
+    tolerance.</p>
+    <figure class="fig">
+      <img src="../img/settings-guardrails.png" alt="The Guardrails section listing nine operations, each with Always ask, Allow and Never allow, all currently on the default.">
+      <figcaption>Every row also says what it matches, so you are choosing about a real thing
+      rather than a category name.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Set the two that are almost always right</strong>
+    <p><strong>Read a credential file</strong> and <strong>Deploy to production</strong> are the
+    two most people want on <em>Never allow</em> and never think about again. Neither is something
+    an agent should be doing on your behalf while you are elsewhere.</p>
+  </li>
+
+  <li>
+    <strong>Think about the destructive three</strong>
+    <p><em>Force push</em>, <em>Rewrite history</em> and <em>Throw away uncommitted work</em>.
+    The third is the one that matters most and gets the least attention: it is the only thing on
+    the list that <strong>Git keeps no copy of</strong>. A force push can be recovered from a
+    reflog; a discarded working tree cannot be recovered from anything.</p>
+  </li>
+
+  <li>
+    <strong>Override per project where it makes sense</strong>
+    <p>A project's own <strong>Settings</strong> area has the same panel. Rules resolve
+    <strong>project → global → default</strong>, and unset genuinely means unset — so a global
+    change still reaches every project that never expressed an opinion.</p>
+    <p>The obvious case: <em>Publish a package</em> set to <em>Never allow</em> globally, and
+    <em>Always ask</em> in the one repository you actually publish from.</p>
+  </li>
+
+  <li>
+    <strong>Watch one actually work</strong>
+    <p>Start a Claude Code session in a scratch repository and ask it to force-push. The command
+    is stopped <strong>before it runs</strong> and you get a decision to make. Answer it, and look
+    at <a href="page:activity">Activity</a> — the decision is recorded there with the operation it
+    classified.</p>
+  </li>
+</ol>
+
+<h2>Four things to know before you rely on this</h2>
+
+<div class="defs">
+  <div>
+    <dt>Codex needs one extra step</dt>
+    <dd>It has the same hook mechanism, but will not run a hook until you trust it in Codex's own
+    interface. J.A.R.V.I.S. writes the configuration at session start so it is there to be
+    trusted. Until you do, that session is <strong>observed, not guarded</strong>, and the
+    capability model says so rather than showing you a shield that is not doing anything.</dd>
+  </div>
+  <div>
+    <dt>Your own typing is never guarded</dt>
+    <dd>Guardrails govern agents. A command you type in a terminal runs. That is deliberate — a
+    tool that second-guesses its owner gets switched off within a week.</dd>
+  </div>
+  <div>
+    <dt>Not flagged is not the same as safe</dt>
+    <dd>The classifier matches patterns over command text. A command it does not flag
+    <strong>failed to match a pattern</strong>; it was not proven harmless. Those are different
+    claims and only one of them is true.</dd>
+  </div>
+  <div>
+    <dt>It fails open</dt>
+    <dd>A missing snapshot or a version it does not understand means it stays silent and the
+    command proceeds. This runs before every tool call in every session, so a guard that failed
+    closed would turn any bug in itself into an agent that cannot work at all, everywhere.</dd>
+  </div>
+</div>
+
+<h2>Under Unattended, "ask" refuses</h2>
+
+<p>Nobody is there to answer, so a rule set to <em>Always ask</em> becomes a refusal, and the
+mission moves to Waiting with a reason. Decide before you walk away whether you would rather that
+operation happen or the run stop — because those are the only two options once you are gone.
+See <a href="page:guide-unattended">Run a mission unattended</a>.</p>
+
+<h2>Answering from your phone</h2>
+
+<p>If you have <a href="page:guide-phone">paired a phone</a>, a held operation reaches it. Only
+<strong>allow once</strong> is available there: the other answers write lasting policy, and a
+lasting policy decided on a small screen with a thumb is the wrong kind of decision to make
+quickly. Not approving is a refusal, and the guardrail already refuses by default.</p>
+
+<h2>Discarding in Review</h2>
+
+<p>Inside <a href="page:review">Review</a>, discard is guarded and staging is not. Guarding
+staging would teach you to switch the guardrail off, and then the discard is unguarded too —
+which is how you end up guarding nothing. The gate names its operation directly rather than
+classifying a string it just built, and it asks you there rather than creating something to
+resolve later.</p>

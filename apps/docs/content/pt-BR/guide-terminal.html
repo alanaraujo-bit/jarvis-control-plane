@@ -1,1 +1,83 @@
-<p>TODO</p>
+<p>O terminal é onde o trabalho acontece, então ele vale dez minutos de aprendizado. Cinco coisas
+que mudam como o produto parece.</p>
+
+<h2>Quatro agentes ao mesmo tempo</h2>
+
+<p>Divida em até quatro painéis, em três layouts: lado a lado, empilhados, ou grade. A montagem
+natural é um agente por assunto — um implementando, um rodando testes, um em que você mesmo
+digita.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Dividir não pode te custar um histórico</span>
+  <p>Um terminal <strong>nunca é reparentado</strong>. Só a caixa de CSS dele muda. Um terminal
+  remontado perdeu o histórico, e perder o histórico de um agente porque você quis ver dois deles
+  ao mesmo tempo não é uma troca que alguém aceitaria.</p>
+</div>
+
+<p>Fechar um painel fecha o painel — a <em>sessão continua rodando</em>, e o botão diz isso. Quatro
+é o teto porque um quinto painel num tamanho normal de janela é mais estreito que o prompt que a
+maioria das CLIs de agente desenha, então seria uma opção que produz algo inutilizável.</p>
+
+<h2>Uma busca que não briga com o navegador</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span> abre um painel sobre o terminal, com
+diferenciação de maiúsculas, um contador ao vivo, e uma régua panorâmica que aparece só enquanto
+você busca.</p>
+
+<p>Se você já usou um terminal dentro de outro app baseado em web, provavelmente já viu o
+<kbd>Ctrl</kbd>+<kbd>F</kbd> abrir a busca do <em>navegador</em>. Isso acontecia aqui também,
+sempre que o terminal não tinha literalmente o foco do DOM. Agora é resolvido na fase de captura,
+com o <kbd>Shift</kbd> excluído para que
+<span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span> continue sendo a
+<a href="page:search">Busca global</a>.</p>
+
+<h2>Uma imagem direto no prompt</h2>
+
+<p>Copie uma captura de tela, clique num terminal, aperte
+<span class="keys"><kbd>Ctrl</kbd><kbd>V</kbd></span>. A imagem é escrita no <strong>diretório da
+própria sessão</strong> e o caminho entre aspas é digitado no prompt, <em>sem enviar</em>. Um chip
+diz que há uma imagem anexada, e passar o mouse mostra a figura de verdade.</p>
+
+<p>Nada cai no seu repositório, então nada aparece no seu <code>git status</code> nem na
+<a href="page:review">Revisão</a>. É a mesma regra que o
+<a href="page:brain">briefing da Memória</a> segue.</p>
+
+<h2>Sua biblioteca de prompts, a um atalho</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></span> abre o
+<a href="page:notebook">bloco de notas</a> sobre o que quer que você esteja fazendo, e um botão
+manda uma nota para o terminal em que você estava — chegando no prompt, sem enviar, para você ainda
+poder editar.</p>
+
+<p>O envio é <strong>recusado</strong> quando o programa que recebe não habilitou bracketed paste,
+porque um shell simples leria um prompt de vários parágrafos como vinte comandos em vez de um
+prompt.</p>
+
+<h2>Ditar em vez de digitar</h2>
+
+<p>O botão de microfone ao lado das abas. <a href="page:voice">Transcrito localmente</a>, preparado
+com os nomes de arquivo e o branch do seu próprio projeto, e digitado no prompt sem enviar. Útil
+exatamente quando um prompt são três parágrafos de contexto que você prefere falar a digitar.</p>
+
+<h2>Mais duas coisas que vale saber</h2>
+
+<div class="defs">
+  <div>
+    <dt>O tamanho do texto aplica sem reiniciar</dt>
+    <dd>Mude em <strong>Configurações → Terminal</strong> e um shell <em>em execução</em> cresce,
+    mantém o histórico, e roda o próximo comando. Ele também reajusta e avisa ao PTY, ou o shell
+    continuaria quebrando linha na largura antiga.</dd>
+  </div>
+  <div>
+    <dt>O Ctrl+K não chega mais ao seu shell</dt>
+    <dd>Ele é a paleta de comandos, resolvida globalmente antes de qualquer widget ver. Então o
+    matar-até-o-fim-da-linha do readline se foi. É a mesma troca que o VS Code e o Cursor fazem, e é
+    <a href="page:shortcuts">declarada em vez de deixada para você descobrir</a>.</dd>
+  </div>
+</div>
+
+<h2>Nada sobrevive ao app</h2>
+
+<p>Processos de agente são contidos em job objects do Windows. Sair leva os agentes junto, então
+você nunca acaba com uma CLI órfã segurando um lock de arquivo ou gastando tokens onde ninguém está
+lendo a saída.</p>

@@ -1,1 +1,113 @@
-<p>TODO</p>
+<p>Várias assinaturas, cada uma com sua janela, e trabalho que se move para a próxima em vez de
+parar.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Veja o que você já tem</strong>
+    <p>Abra <strong>Contas</strong>. A conta já logada nesta máquina é <em>adotada</em> — ela está
+    lá sem você registrar nada, porque uma conta
+    <a href="page:accounts">é um diretório de configuração</a>, e o seu já existe.</p>
+  </li>
+
+  <li>
+    <strong>Adicione outra</strong>
+    <p><em>Adicionar conta</em> cria um diretório de configuração novo e inicia o login do próprio
+    provedor. Isso abre um navegador e você completa o fluxo OAuth.</p>
+    <div class="callout" data-kind="key">
+      <span class="callout__title">Este produto nunca vê uma senha ou um token</span>
+      <p>O login acontece inteiramente dentro da CLI do provedor. Depois o J.A.R.V.I.S. pergunta ao
+      provedor <em>como este diretório está logado</em> e guarda o e-mail, a organização e o plano —
+      para você distinguir quatro contas na tela. Nada mais é lido, e nada do que você já tinha é
+      reescrito.</p>
+    </div>
+  </li>
+
+  <li>
+    <strong>Cheque se há gêmeas</strong>
+    <p>Se dois cartões mostram estatísticas idênticas sob nomes diferentes, provavelmente são
+    <strong>uma assinatura só desenhada duas vezes</strong> — o mesmo e-mail logado em dois
+    diretórios. O produto detecta isso, chaveado por <em>e-mail</em> e não por organização, e diz
+    nos dois cartões, acima do mostrador.</p>
+    <p>Ele não impede. Dois diretórios em uma conta é legítimo. Ele só garante que você não está
+    olhando para uma mentira.</p>
+    <figure class="fig">
+      <img src="../img/accounts.png" alt="Dois cartões de conta, um marcado como compartilhando assinatura com um terceiro, cada um com um mostrador de cota restante e uma contagem regressiva de reset.">
+      <figcaption><b>"Mesma assinatura que Claude 3. Uma cota só, mostrada duas vezes — passar o
+      trabalho de uma para a outra não ganha nada."</b> <em>Os endereços de e-mail desta figura
+      foram substituídos por <code>you@example.com</code>.</em></figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Escolha um modo de troca</strong>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Modo</th><th>O que faz</th><th>Escolha quando</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Desligada</strong></td><td>Você escolhe, sempre.</td><td>Você quer saber exatamente em qual conta cada pedaço de trabalho está.</td></tr>
+        <tr><td><strong>Quando esgotar</strong></td><td>Trabalho novo se move quando o provedor diz que uma conta acabou.</td><td>O padrão sensato. Você não perde nada e nada te surpreende.</td></tr>
+        <tr><td><strong>Perto do limite</strong></td><td>Trabalho novo se move antes de acabar.</td><td>Você inicia execuções longas sem supervisão e prefere que uma não pare no meio.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><strong>Sessões em execução mantêm a conta.</strong> Uma troca muda onde o trabalho
+    <em>novo</em> começa; ela nunca puxa o diretório de configuração debaixo de um agente no meio
+    de uma tarefa.</p>
+  </li>
+
+  <li>
+    <strong>Leia os chips em vez da tela</strong>
+    <p>Depois de configurado, a barra de status é onde você de fato confere. A cota restante e o
+    reset de cada provedor, permanentemente visíveis, para que a resposta esteja lá quando a
+    pergunta surgir — que é quando você está prestes a começar alguma coisa, não quando você está
+    nesta tela.</p>
+    <figure class="fig">
+      <img src="../img/quota-chips.png" alt="A barra de status mostrando Claude Code em 67 por cento resetando em 4 dias e 11 horas, e Codex em 100 por cento.">
+      <figcaption>Provedor, quanto resta, e quando volta.</figcaption>
+    </figure>
+  </li>
+</ol>
+
+<h2>Lendo um cartão direito</h2>
+
+<div class="defs">
+  <div>
+    <dt>O mostrador exibe o que <em>sobrou</em></dt>
+    <dd>Não o que foi consumido. Você está decidindo se começa alguma coisa.</dd>
+  </div>
+  <div>
+    <dt>Duas janelas, e uma delas está travando</dt>
+    <dd>Uma janela de sessão e uma janela semanal são limites diferentes, e qualquer uma pode ser a
+    que está te parando. A que trava diz <em>é este o limite que te trava</em> e é desenhada maior
+    do que a que não trava.</dd>
+  </div>
+  <div>
+    <dt>Uma contagem regressiva <em>e</em> um relógio</dt>
+    <dd><em>56m</em> responde "dá para esperar?". <em>13:10</em> responde "vou almoçar?".</dd>
+  </div>
+  <div>
+    <dt>Procedência e idade</dt>
+    <dd>Toda leitura diz se é <span class="badge" data-t="official">Oficial</span> e qual a idade
+    dela. <em>Verificar agora</em> atualiza. Veja
+    <a href="page:confidence">Oficial e Observado</a>.</dd>
+  </div>
+</div>
+
+<h2>O que uma checagem ao vivo de fato faz</h2>
+
+<p>Ela pergunta à CLI no protocolo suportado dela — <code>get_usage</code> no canal de controle do
+Claude Code, <code>account/rateLimits/read</code> no <code>codex app-server</code>. Nenhum endpoint
+HTTP nosso, nenhuma leitura dos seus arquivos de credencial, <strong>nenhum token gasto</strong>, e
+nenhuma transcrição escrita.</p>
+
+<p>Cada sondagem também foi rodada contra um diretório de configuração vazio antes de qualquer
+coisa ser construída: as duas leem a conta do diretório para o qual são apontadas, e as duas
+<em>falham dizendo isso</em> em vez de devolver os números da conta ambiente com o nome errado. Essa
+checagem é mantida como teste de segurança permanente.</p>
+
+<h2>Continuidade quando o trabalho se move</h2>
+
+<p>Uma retomada não atravessa diretórios de configuração, então um agente movido para uma conta
+nova não é retomado — ele é iniciado do zero com o <a href="page:brain">briefing da Memória</a>. A
+sessão nova sabe o que o projeto sabe, que é a parte que importava. É também por isso que vale
+preencher a Memória direito se você trabalha com várias contas.</p>

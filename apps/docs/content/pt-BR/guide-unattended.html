@@ -1,1 +1,146 @@
-<p>TODO</p>
+<p>O objetivo de uma execução sem supervisão é que você vá embora. Este guia é sobre preparar
+isso para que ir embora seja uma decisão razoável, e para que o que você encontre ao voltar seja
+um <em>resultado</em> e não uma transcrição para ler.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A coisa para entender primeiro</span>
+  <p>Uma execução sem supervisão termina quando <strong>checagens reais passam</strong>. Se a sua
+  missão não tem nenhum critério que uma máquina consiga verificar, o piloto automático não tem
+  nada pelo que se guiar e vai gastar o orçamento inteiro chutando. A qualidade da execução é
+  decidida inteiramente pelos critérios que você escreve.</p>
+</div>
+
+<ol class="steps">
+  <li>
+    <strong>Dê uma Memória ao projeto primeiro</strong>
+    <p>Ninguém está lá para corrigir uma suposição errada, então as suposições têm que estar certas
+    desde o começo. Quatro frases na <a href="page:brain">Memória</a> — o que isto é, a convenção
+    que importa, a armadilha, o vocabulário — valem mais aqui do que em qualquer outro lugar do
+    produto.</p>
+  </li>
+
+  <li>
+    <strong>Considere uma worktree</strong>
+    <p>Uma <a href="page:worktrees">worktree</a> dá ao agente o próprio checkout no próprio branch.
+    Ele não consegue sujar a árvore que você está lendo e não consegue brigar com você por um
+    arquivo.</p>
+    <div class="callout" data-kind="warn">
+      <span class="callout__title">Uma worktree nova é uma pasta não confiada</span>
+      <p>O Claude Code pergunta se você confia numa pasta na primeira vez que abre uma. Ninguém
+      está lá para responder, então <strong>iniciar é recusado</strong> com esse motivo em vez de
+      travar para sempre. Abra a worktree uma vez, responda a pergunta de confiança, e aí inicie a
+      execução.</p>
+    </div>
+  </li>
+
+  <li>
+    <strong>Escreva critérios que uma máquina consiga conferir</strong>
+    <p>Prefira <code>Command</code> a qualquer outra coisa — sua suíte de testes, uma checagem de
+    tipos, um build, um lint. <code>FileExists</code> e <code>FileContains</code> são bons para
+    artefatos.</p>
+    <p>Critérios <code>Manual</code> são legítimos e o piloto automático não consegue satisfazer:
+    uma execução cujo trabalho restante é manual vai corretamente parar e esperar por você. Isso
+    não é uma falha, mas saiba que vai acontecer.</p>
+    <p>Marque como <strong>obrigatórios</strong> os critérios que genuinamente decidem a conclusão.
+    Uma execução para quando todos os obrigatórios se sustentam.</p>
+  </li>
+
+  <li>
+    <strong>Defina as proteções que você realmente quer</strong>
+    <p>Em Sem supervisão, uma regra de <em>Sempre perguntar</em> vira uma
+    <strong>recusa</strong> — ninguém pode responder, e estacionar o agente num prompt
+    desperdiçaria a execução. Então decida deliberadamente:</p>
+    <ul>
+      <li>Deixe em <em>Sempre perguntar</em> se você prefere que a execução pare a que ela faça
+      aquilo.</li>
+      <li>Coloque <em>Nunca permitir</em> se aquilo nunca pode acontecer, jamais.</li>
+      <li>Coloque <em>Permitir</em> só se você pensou genuinamente a respeito.</li>
+    </ul>
+    <p>Veja <a href="page:guide-guardrails">Configurar proteções</a>.</p>
+  </li>
+
+  <li>
+    <strong>Confira o limite de turnos e a cota</strong>
+    <p>O limite fica em <strong>Configurações → Autonomia</strong>, entre 4 e 100. Uma execução
+    <em>mantém o orçamento com que começou</em>, então mudar depois não vai mover a linha de
+    chegada debaixo de uma execução já em andamento.</p>
+    <p>Dê uma olhada nos <a href="page:accounts">chips de cota</a> na barra de status. Uma execução
+    que começa numa conta com vinte minutos restantes é uma execução que vai parar por um motivo
+    que não tem nada a ver com o seu código.</p>
+  </li>
+
+  <li>
+    <strong>Coloque a missão em Sem supervisão e inicie</strong>
+    <p>O piloto automático assume a cadeira da pessoa. Depois de cada turno ele verifica a missão
+    contra os critérios reais, e então ou manda a próxima instrução — nomeando o que ainda não
+    passa — ou para.</p>
+  </li>
+
+  <li>
+    <strong>Vá embora</strong>
+    <p>Turnos terminados não vão te notificar: com um orçamento padrão isso seriam vinte
+    notificações enquanto você está fora por escolha. <strong>Perguntas ainda vão</strong>, porque
+    um agente dirigido que para para perguntar não consegue continuar até alguém responder.</p>
+  </li>
+</ol>
+
+<h2>Os três jeitos de acabar</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Final</th><th>O que significa</th><th>O que fazer</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge" data-t="official">Concluída</span></td>
+      <td>Todo critério obrigatório verificado, com evidência anexada.</td>
+      <td>Leia a evidência, e depois veja o diff na <a href="page:review">Revisão</a>.</td>
+    </tr>
+    <tr>
+      <td><span class="badge" data-t="observed">Esperando · Bloqueada</span></td>
+      <td>Alguma coisa precisa de uma pessoa: uma proteção reteve uma operação, ou o agente
+      esbarrou em algo que ele não consegue fazer.</td>
+      <td>Leia o motivo — ele é sempre declarado — responda, e reinicie.</td>
+    </tr>
+    <tr>
+      <td><span class="badge" data-t="danger">Falhou</span></td>
+      <td>O orçamento de turnos acabou, ou os mesmos critérios continuaram falhando.</td>
+      <td>Leia a <a href="page:activity">Atividade</a> turno a turno. Normalmente os critérios
+      estavam errados, não o agente.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Não existe um quarto final, deliberadamente. <em>Continuar e torcer</em> é o que uma execução
+faz quando o modelo não dá a ela nenhum lugar honesto para parar.</p>
+
+<h2>O que você vai encontrar ao voltar</h2>
+
+<ul>
+  <li><strong>A missão</strong>, em um dos três estados acima, com evidência de todo critério que
+  ela conferiu.</li>
+  <li><strong>A Atividade</strong>, com cada fronteira de turno, cada verificação, e a razão de
+  ter parado.</li>
+  <li><strong>A Revisão</strong>, com o diff, atribuído à sessão.</li>
+  <li><strong>A Memória</strong>, possivelmente com uma entrada nova — se a execução concluiu, o
+  agente foi perguntado uma vez o que ainda importaria da próxima vez. Na maior parte das vezes ele
+  declina, o que é esperado.</li>
+  <li><strong>Uma notificação</strong>, dizendo que a execução parou e por quê.</li>
+</ul>
+
+<h2>Parar uma execução mais cedo</h2>
+
+<div class="callout">
+  <span class="callout__title">Parar não mata o agente</span>
+  <p>Quem assume normalmente quer digitar a próxima coisa com as próprias mãos, e matar o processo
+  jogaria fora o contexto dele. Então o piloto automático se afasta e te deixa uma sessão viva em
+  um prompt.</p>
+</div>
+
+<h2>Por que o piloto automático nunca chuta que um turno acabou</h2>
+
+<p>Um terminal quieto não significa nada — o agente pode estar pensando, ou esperando uma chamada
+de rede. A condição de parada vem do <strong>provedor</strong>: o
+<code>stop_reason: "end_turn"</code> do Claude Code, o <code>event_msg/task_complete</code> do
+Codex. Conferido em 88 transcrições reais: 664 fronteiras de turno, nenhuma delas ambígua.
+Veja <a href="page:internals-autopilot">Dentro do piloto automático</a>.</p>

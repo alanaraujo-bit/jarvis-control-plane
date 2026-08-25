@@ -1,1 +1,104 @@
-<p>TODO</p>
+<p>You started a run and went to make coffee. An agent hit a guardrail and is waiting. Pairing a
+phone means you can answer that from the kitchen instead of finding out forty minutes later.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">What this is, in one sentence</span>
+  <p>A <strong>blind mailbox</strong>. The desktop pushes a summary of what needs a person; the
+  phone reads it and queues an answer. The relay stores only a hash of each token, holds no
+  copy of your work, and is off entirely until you pair a device.</p>
+</div>
+
+<ol class="steps">
+  <li>
+    <strong>Read what gets sent, before you connect</strong>
+    <p><strong>Settings → Phone</strong> states it up front rather than afterwards.</p>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Sent</th><th>Never sent</th></tr></thead>
+      <tbody>
+        <tr><td>That something is waiting, and what class of thing</td><td>File contents</td></tr>
+        <tr><td>Which project and which session, by name</td><td>Terminal output</td></tr>
+        <tr><td>What is running right now</td><td>Conversation text</td></tr>
+        <tr><td>The device name, so you know which machine</td><td>Your code, your diffs, your credentials</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </li>
+
+  <li>
+    <strong>Pair</strong>
+    <p>A <strong>six-character code</strong>. Single use, valid for five minutes, with attempts
+    counted. No account, no email, no password. Open the web app on the phone and enter the
+    code.</p>
+  </li>
+
+  <li>
+    <strong>Check it worked</strong>
+    <p>The phone should show your machine by name, and what is running on it. If nothing appears,
+    the desktop half is one background thread that logs and swallows every failure rather than
+    interrupting you — so check the Phone section rather than waiting.</p>
+  </li>
+
+  <li>
+    <strong>Answer something from it</strong>
+    <p>When a <a href="page:guardrails">guardrail</a> holds an operation, it appears on the phone
+    with what it is.</p>
+    <div class="callout">
+      <span class="callout__title">Only one answer is available there</span>
+      <p><strong>Allow once.</strong> Guardrails offer four answers and three of them write a
+      lasting policy — including <em>Never allow</em>. A phone has a small screen and a thumb, so
+      it gets the one answer that expires with the thing it answers.</p>
+      <p>Refusing is simply not approving: the guardrail already refuses by default, so the safe
+      outcome needs no button at all.</p>
+    </div>
+  </li>
+</ol>
+
+<h2>Disconnecting</h2>
+
+<p>One control in <strong>Settings → Phone</strong>. It <strong>revokes the token</strong>, not
+just the local pairing.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">This had to be fixed to mean what it says</span>
+  <p>Found by running it: clearing the local pairing left the mailbox standing, and a paired phone
+  kept reading. A switch that leaves a live token working is worse than no switch at all.</p>
+</div>
+
+<h2>Everything expires, and that is enforced on read</h2>
+
+<p>A serverless relay has no process to sweep in and delete things, so expiry is checked
+<em>when a value is read</em> — an expired value is never served even if nothing has cleaned it
+up. Commands expire far sooner than status snapshots, because a stale approval is worse than a
+stale status.</p>
+
+<h2>What you cannot do from a phone</h2>
+
+<div class="defs">
+  <div>
+    <dt>Start a mission</dt>
+    <dd>Declined rather than overlooked. Starting one needs the same checks the desktop makes —
+    including refusing an untrusted folder — and doing those correctly from a phone is its own
+    piece of work rather than a button.</dd>
+  </div>
+  <div>
+    <dt>Read the conversation</dt>
+    <dd>By design. A relay holding a copy of the work would be the second store the
+    <a href="page:session-log">session log</a> exists to prevent.</dd>
+  </div>
+  <div>
+    <dt>Receive a push notification</dt>
+    <dd>Not built. It needs a developer account and is its own scope. The relay snapshot already
+    carries what needs a person — the same question answered on a different screen. See
+    <a href="page:not-built">What is not built</a>.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">One honest caveat about how it looks</span>
+  <p>The web app's logic is tested and its transport is proven end to end against real
+  infrastructure — after pairing, the desktop published on its own and the mailbox came back
+  carrying the real machine's hostname with nobody driving it.</p>
+  <p>But it has <strong>never been looked at on a phone-sized viewport</strong>. How it behaves is
+  verified; how it <em>looks</em> is not.</p>
+</div>

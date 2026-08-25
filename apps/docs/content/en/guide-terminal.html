@@ -1,1 +1,82 @@
-<p>TODO</p>
+<p>The terminal is where the work happens, so it is worth ten minutes of learning. Five things
+that change how the product feels.</p>
+
+<h2>Four agents at once</h2>
+
+<p>Split into up to four panes, in three layouts: side by side, stacked, or grid. The natural
+setup is one agent per concern — one implementing, one running tests, one you are typing in
+yourself.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Splitting cannot cost you a scrollback</span>
+  <p>A terminal is <strong>never re-parented</strong>. Only its CSS box changes. A remounted
+  terminal has lost its scrollback, and losing an agent's history because you wanted to see two
+  of them at once is not a trade anyone would take.</p>
+</div>
+
+<p>Closing a pane closes the pane — the <em>session keeps running</em>, and the button says so.
+Four is the ceiling because a fifth pane at a normal window size is narrower than the prompt most
+agent CLIs draw, so it would be an option that produces something unusable.</p>
+
+<h2>Search that does not fight the browser</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>F</kbd></span> opens a panel over the terminal, with
+match-case, a live counter, and an overview ruler that appears only while you are searching.</p>
+
+<p>If you have used a terminal inside another web-based app, you have probably had
+<kbd>Ctrl</kbd>+<kbd>F</kbd> open the <em>browser's</em> find bar instead. That happened here too,
+whenever the terminal did not literally hold DOM focus. It is resolved in the capture phase now,
+with <kbd>Shift</kbd> excluded so that
+<span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span> stays
+<a href="page:search">Global Search</a>.</p>
+
+<h2>An image straight into the prompt</h2>
+
+<p>Copy a screenshot, click into a terminal, press
+<span class="keys"><kbd>Ctrl</kbd><kbd>V</kbd></span>. The image is written into
+<strong>the session's own directory</strong> and the quoted path is typed at the prompt,
+<em>unsubmitted</em>. A chip says an image is attached, and hovering it shows the actual
+picture.</p>
+
+<p>Nothing lands in your repository, so nothing appears in your <code>git status</code> or in
+<a href="page:review">Review</a>. That is the same rule the
+<a href="page:brain">Brain brief</a> follows.</p>
+
+<h2>Your prompt library, one shortcut away</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></span> opens the
+<a href="page:notebook">Notebook</a> over whatever you are doing, and one button sends a note into
+the terminal you were on — arriving in the prompt, unsent, so you can still edit it.</p>
+
+<p>Sending is <strong>refused</strong> when the receiving program has not enabled bracketed paste,
+because a plain shell would read a multi-paragraph prompt as twenty commands rather than one
+prompt.</p>
+
+<h2>Dictate instead of typing</h2>
+
+<p>The microphone button beside the tabs. <a href="page:voice">Transcribed locally</a>, primed
+with your project's own file names and branch, and typed into the prompt without submitting.
+Useful exactly when a prompt is three paragraphs of context you would rather say than type.</p>
+
+<h2>Two more things worth knowing</h2>
+
+<div class="defs">
+  <div>
+    <dt>Type size applies without a restart</dt>
+    <dd>Change it in <strong>Settings → Terminal</strong> and a <em>running</em> shell grows,
+    keeps its scrollback, and runs the next command. It also refits and tells the PTY, or the
+    shell would keep wrapping at the old width.</dd>
+  </div>
+  <div>
+    <dt>Ctrl+K no longer reaches your shell</dt>
+    <dd>It is the command palette, resolved globally before any widget sees it. So readline's
+    kill-to-end-of-line is gone. This is the same trade VS Code and Cursor make, and it is
+    <a href="page:shortcuts">stated rather than left for you to discover</a>.</dd>
+  </div>
+</div>
+
+<h2>Nothing outlives the app</h2>
+
+<p>Agent processes are contained in Windows job objects. Quitting takes its agents with it, so you
+never end up with an orphaned CLI holding a file lock or spending tokens where nothing is reading
+the output.</p>

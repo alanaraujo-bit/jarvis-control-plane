@@ -1,1 +1,111 @@
-<p>TODO</p>
+<p>Several subscriptions, each with its own window, and work that moves to the next one instead
+of stopping.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Look at what you already have</strong>
+    <p>Open <strong>Accounts</strong>. The account already signed in on this machine is
+    <em>adopted</em> — it is there without you registering anything, because an account
+    <a href="page:accounts">is a configuration directory</a>, and yours already exists.</p>
+  </li>
+
+  <li>
+    <strong>Add another</strong>
+    <p><em>Add account</em> creates a new configuration directory and starts the provider's own
+    sign-in. That opens a browser and you complete the OAuth flow.</p>
+    <div class="callout" data-kind="key">
+      <span class="callout__title">This product never sees a password or a token</span>
+      <p>Sign-in happens entirely inside the provider's CLI. Afterwards J.A.R.V.I.S. asks the
+      provider <em>who this directory is signed in as</em> and stores the email, organisation and
+      plan — so you can tell four accounts apart on screen. Nothing else is read, and nothing you
+      already had is rewritten.</p>
+    </div>
+  </li>
+
+  <li>
+    <strong>Check for twins</strong>
+    <p>If two cards show identical statistics under different names, they are probably
+    <strong>one subscription drawn twice</strong> — the same email signed in to two directories.
+    The product detects this, keyed on <em>email</em> rather than organisation, and says so on
+    both cards above the dial.</p>
+    <p>It does not prevent it. Two directories on one account is legitimate. It just makes sure
+    you are not looking at a lie.</p>
+    <figure class="fig">
+      <img src="../img/accounts.png" alt="Two account cards, one marked as sharing a subscription with a third, each with a dial showing remaining allowance and a reset countdown.">
+      <figcaption><b>"Same subscription as Claude 3. One allowance, shown twice — moving work
+      from one to the other gains nothing."</b> <em>Email addresses in this figure were replaced
+      with <code>you@example.com</code>.</em></figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Choose a switching mode</strong>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Mode</th><th>What it does</th><th>Choose it when</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Off</strong></td><td>You pick, always.</td><td>You want to know exactly which account each piece of work is on.</td></tr>
+        <tr><td><strong>When exhausted</strong></td><td>New work moves once the provider says an account is out.</td><td>The sensible default. You lose nothing and nothing surprises you.</td></tr>
+        <tr><td><strong>Near the limit</strong></td><td>New work moves before it runs out.</td><td>You start long unattended runs and would rather not have one stop halfway.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><strong>Running sessions keep their account.</strong> A switch changes where <em>new</em>
+    work starts; it never pulls the configuration directory out from under an agent mid-task.</p>
+  </li>
+
+  <li>
+    <strong>Read the chips instead of the screen</strong>
+    <p>Once this is set up, the status bar is where you actually check. Each provider's remaining
+    allowance and reset, permanently visible, so the answer is there when the question comes
+    up — which is when you are about to start something, not when you are on this screen.</p>
+    <figure class="fig">
+      <img src="../img/quota-chips.png" alt="The status bar showing Claude Code at 67 percent resetting in 4 days 11 hours, and Codex at 100 percent.">
+      <figcaption>Provider, remaining, and when it comes back.</figcaption>
+    </figure>
+  </li>
+</ol>
+
+<h2>Reading a card properly</h2>
+
+<div class="defs">
+  <div>
+    <dt>The dial shows what is <em>left</em></dt>
+    <dd>Not what has been consumed. You are deciding whether to start something.</dd>
+  </div>
+  <div>
+    <dt>Two windows, and one of them is binding</dt>
+    <dd>A session window and a weekly window are different limits, and either can be the one
+    stopping you. The binding one says <em>this is the limit holding you up</em> and is drawn
+    larger than the one that is not.</dd>
+  </div>
+  <div>
+    <dt>A countdown <em>and</em> a wall clock</dt>
+    <dd><em>56m</em> answers "can I wait?". <em>13:10</em> answers "should I go to lunch?".</dd>
+  </div>
+  <div>
+    <dt>Provenance and age</dt>
+    <dd>Every reading says whether it is <span class="badge" data-t="official">Official</span> and
+    how old it is. <em>Check now</em> refreshes it. See
+    <a href="page:confidence">Official and Observed</a>.</dd>
+  </div>
+</div>
+
+<h2>What a live check actually does</h2>
+
+<p>It asks the CLI on its own supported protocol — <code>get_usage</code> on Claude Code's
+control channel, <code>account/rateLimits/read</code> on <code>codex app-server</code>. No HTTP
+endpoint of ours, no reading your credential files, <strong>no token spent</strong>, and no
+transcript written.</p>
+
+<p>Each probe was also run against an empty configuration directory before any of this was built:
+both read the account in the directory they are pointed at, and both <em>fail by saying so</em>
+rather than returning the ambient account's numbers under the wrong name. That check is kept as a
+permanent safety test.</p>
+
+<h2>Continuity when work moves</h2>
+
+<p>A resume cannot cross configuration directories, so an agent moved to a new account is not
+resumed — it is started fresh with the <a href="page:brain">Brain brief</a>. The new session knows
+what the project knows, which is the part that mattered. This is also the reason the Brain is
+worth filling in properly if you work across several accounts.</p>

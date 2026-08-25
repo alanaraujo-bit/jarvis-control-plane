@@ -1,1 +1,108 @@
-<p>TODO</p>
+<p>Você iniciou uma execução e foi fazer um café. Um agente esbarrou numa proteção e está
+esperando. Parear um celular significa poder responder isso da cozinha em vez de descobrir
+quarenta minutos depois.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">O que isso é, em uma frase</span>
+  <p>Uma <strong>caixa de correio cega</strong>. O desktop empurra um resumo do que precisa de uma
+  pessoa; o celular lê e enfileira uma resposta. O relay guarda apenas um hash de cada token, não
+  guarda cópia nenhuma do seu trabalho, e fica totalmente desligado até você parear um
+  aparelho.</p>
+</div>
+
+<ol class="steps">
+  <li>
+    <strong>Leia o que é enviado, antes de conectar</strong>
+    <p><strong>Configurações → Celular</strong> declara isso de saída, e não depois.</p>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Enviado</th><th>Nunca enviado</th></tr></thead>
+      <tbody>
+        <tr><td>Que alguma coisa está esperando, e de que classe</td><td>Conteúdo de arquivo</td></tr>
+        <tr><td>Qual projeto e qual sessão, pelo nome</td><td>Saída de terminal</td></tr>
+        <tr><td>O que está rodando agora</td><td>Texto de conversa</td></tr>
+        <tr><td>O nome do aparelho, para você saber qual máquina</td><td>Seu código, seus diffs, suas credenciais</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </li>
+
+  <li>
+    <strong>Pareie</strong>
+    <p>Um <strong>código de seis caracteres</strong>. Uso único, válido por cinco minutos, com
+    tentativas contadas. Sem conta, sem e-mail, sem senha. Abra o app web no celular e digite o
+    código.</p>
+  </li>
+
+  <li>
+    <strong>Confira se funcionou</strong>
+    <p>O celular deve mostrar a sua máquina pelo nome, e o que está rodando nela. Se nada aparecer,
+    a metade do desktop é uma thread de fundo que registra e engole toda falha em vez de te
+    interromper — então confira a seção Celular em vez de esperar.</p>
+  </li>
+
+  <li>
+    <strong>Responda alguma coisa por ele</strong>
+    <p>Quando uma <a href="page:guardrails">proteção</a> retém uma operação, ela aparece no celular
+    com o que ela é.</p>
+    <div class="callout">
+      <span class="callout__title">Só uma resposta está disponível ali</span>
+      <p><strong>Permitir uma vez.</strong> As proteções oferecem quatro respostas e três delas
+      escrevem política duradoura — incluindo <em>Nunca permitir</em>. Um celular tem tela pequena
+      e um polegar, então ele recebe a única resposta que expira junto com a coisa que ela
+      responde.</p>
+      <p>Recusar é simplesmente não aprovar: a proteção já recusa por padrão, então o desfecho
+      seguro não precisa de botão nenhum.</p>
+    </div>
+  </li>
+</ol>
+
+<h2>Desconectando</h2>
+
+<p>Um controle em <strong>Configurações → Celular</strong>. Ele <strong>revoga o token</strong>,
+não só o pareamento local.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Isso teve que ser consertado para significar o que diz</span>
+  <p>Achado rodando: limpar o pareamento local deixava a caixa de correio de pé, e um celular
+  pareado continuava lendo. Um interruptor que deixa um token vivo funcionando é pior do que
+  interruptor nenhum.</p>
+</div>
+
+<h2>Tudo expira, e isso é verificado na leitura</h2>
+
+<p>Um relay serverless não tem um processo para varrer e apagar coisas, então a expiração é
+verificada <em>quando um valor é lido</em> — um valor expirado nunca é servido, mesmo que nada
+tenha limpado. Comandos expiram bem antes de snapshots de status, porque uma aprovação velha é
+pior do que um status velho.</p>
+
+<h2>O que você não consegue fazer de um celular</h2>
+
+<div class="defs">
+  <div>
+    <dt>Iniciar uma missão</dt>
+    <dd>Recusado, e não esquecido. Iniciar uma precisa das mesmas checagens que o desktop faz —
+    incluindo recusar uma pasta não confiada — e fazer isso direito a partir de um celular é um
+    trabalho próprio, não um botão.</dd>
+  </div>
+  <div>
+    <dt>Ler a conversa</dt>
+    <dd>Por desenho. Um relay guardando uma cópia do trabalho seria o segundo depósito que o
+    <a href="page:session-log">log da sessão</a> existe para impedir.</dd>
+  </div>
+  <div>
+    <dt>Receber uma notificação push</dt>
+    <dd>Não construída. Precisa de uma conta de desenvolvedor e é um escopo próprio. O snapshot do
+    relay já carrega o que precisa de uma pessoa — a mesma pergunta respondida em outra tela. Veja
+    <a href="page:not-built">O que não está pronto</a>.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Uma ressalva honesta sobre a aparência</span>
+  <p>A lógica do app web é testada e o transporte dele é provado de ponta a ponta contra
+  infraestrutura real — depois do pareamento, o desktop publicou por conta própria e a caixa de
+  correio voltou carregando o hostname real da máquina, sem ninguém dirigindo.</p>
+  <p>Mas ele <strong>nunca foi olhado num viewport de tamanho de celular</strong>. Como ele se
+  comporta está verificado; como ele <em>parece</em> não está.</p>
+</div>

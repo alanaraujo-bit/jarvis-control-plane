@@ -1,1 +1,96 @@
-<p>TODO</p>
+<p>You had a long session with an agent last week. It knew things — the shape of the problem,
+what you had already ruled out, the file that turned out to matter. Then you closed the tab.</p>
+
+<p>It is still there.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Find it</strong>
+    <p>Two ways, and they suit different memories:</p>
+    <ul>
+      <li><strong><a href="page:history">History</a></strong> if you remember roughly
+      <em>when</em>. Sessions are grouped by day and filterable by range, provider and project.
+      Claude Code names its own sessions, so many of them have a real title.</li>
+      <li><strong><a href="page:search">Global Search</a></strong>
+      (<span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span>) if you remember
+      <em>a phrase</em>. It searches what was actually said inside every session you have ever
+      run, and shows the line it matched on.</li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>Read it first</strong>
+    <p>A row opens a <strong>preview</strong>: the conversation, read-only. Turns, tool calls,
+    token counts. Nothing is started and nothing is attached — this is a
+    <a href="page:session-log">projection of the log</a>, and the log never went anywhere.</p>
+    <p>Read enough to remember where you were. That is usually the whole point of coming back.</p>
+  </li>
+
+  <li>
+    <strong>Continue it</strong>
+    <p>The preview offers the way back into a terminal:</p>
+    <ul>
+      <li>If the session is <strong>still live</strong>, you rejoin it.</li>
+      <li>If it <strong>finished</strong>, a new agent is started and handed the old conversation,
+      in a tab named after it.</li>
+    </ul>
+  </li>
+</ol>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified by planting a fact</span>
+  <p>A fact was planted in a session, the session was closed, then continued, then asked about
+  the fact. The answer came back: <strong>"Amber."</strong></p>
+</div>
+
+<h2>When the offer is not there</h2>
+
+<p>Both CLIs resume by opposite mechanisms, and only one of them can be followed afterwards. So
+the <a href="page:providers">capability model</a> states which, and where continuing cannot work,
+<strong>the offer is absent with a reason</strong> rather than present and quietly broken.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Provider</th><th>How it resumes</th><th>What that means here</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Claude Code</td>
+      <td><code>Fork</code> — <code>--resume &lt;id&gt; --fork-session</code> honours our own
+      session id and writes a new transcript named for it.</td>
+      <td>The continuation is a session we can follow from the start.</td>
+    </tr>
+    <tr>
+      <td>Codex</td>
+      <td><code>AppendInPlace</code> — <code>codex resume</code> appends to the rollout it was
+      given rather than creating one.</td>
+      <td>A different shape, and the interface says so rather than pretending they are the
+      same.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">If the project folder moved</span>
+  <p>Continuing into a folder that no longer exists is <strong>refused</strong>. This was found
+  by doing exactly that and watching a real agent open in the user's home directory instead —
+  which is worse than an error, because the agent then works confidently on the wrong files. The
+  refusal covers every launch into a moved project, not just this path.</p>
+</div>
+
+<h2>Continuing after an account switch</h2>
+
+<p>A resume cannot cross <a href="page:accounts">configuration directories</a>, so a session that
+moved to a different account cannot be resumed with <code>--resume</code> at all. Continuity is
+carried by the <a href="page:brain">Brain brief</a> instead: the new session starts knowing what
+the project knows, which is the part that actually mattered.</p>
+
+<h2>Deleting one instead</h2>
+
+<p>If what you want is for it to be gone: <a href="page:history">History</a> deletes rows,
+full-text index entries <em>and</em> the log directory, and tells you how many bytes it freed. A
+live session is refused rather than half-deleted.</p>
+
+<p>No retention policy exists, deliberately. The surface says what the logs cost so that deleting
+is a decision you <em>can</em> make, rather than one made on your behalf about your own
+history.</p>

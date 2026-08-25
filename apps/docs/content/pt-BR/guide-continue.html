@@ -1,1 +1,98 @@
-<p>TODO</p>
+<p>Você teve uma sessão longa com um agente semana passada. Ele sabia coisas — o formato do
+problema, o que você já tinha descartado, o arquivo que acabou importando. Aí você fechou a
+aba.</p>
+
+<p>Ela continua lá.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Encontre</strong>
+    <p>Dois jeitos, e eles servem memórias diferentes:</p>
+    <ul>
+      <li><strong><a href="page:history">Histórico</a></strong> se você lembra mais ou menos
+      <em>quando</em>. As sessões são agrupadas por dia e filtráveis por período, provedor e
+      projeto. O Claude Code nomeia as próprias sessões, então muitas têm título de verdade.</li>
+      <li><strong><a href="page:search">Busca global</a></strong>
+      (<span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span>) se você lembra
+      <em>uma frase</em>. Ela busca o que foi de fato dito dentro de toda sessão que você já rodou,
+      e mostra a linha em que casou.</li>
+    </ul>
+  </li>
+
+  <li>
+    <strong>Leia antes</strong>
+    <p>Uma linha abre uma <strong>prévia</strong>: a conversa, somente leitura. Turnos, chamadas de
+    ferramenta, contagens de token. Nada é iniciado e nada é conectado — isto é uma
+    <a href="page:session-log">projeção do log</a>, e o log nunca foi a lugar nenhum.</p>
+    <p>Leia o suficiente para lembrar onde você estava. Normalmente esse é o objetivo inteiro de
+    voltar.</p>
+  </li>
+
+  <li>
+    <strong>Continue</strong>
+    <p>A prévia oferece o caminho de volta para um terminal:</p>
+    <ul>
+      <li>Se a sessão <strong>ainda está viva</strong>, você reentra nela.</li>
+      <li>Se ela <strong>terminou</strong>, um agente novo é iniciado e recebe a conversa antiga,
+      numa aba com o nome dela.</li>
+    </ul>
+  </li>
+</ol>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado plantando um fato</span>
+  <p>Um fato foi plantado numa sessão, a sessão foi fechada, depois continuada, depois perguntada
+  sobre o fato. A resposta voltou: <strong>"Âmbar."</strong></p>
+</div>
+
+<h2>Quando a oferta não está lá</h2>
+
+<p>As duas CLIs retomam por mecanismos opostos, e só uma delas pode ser acompanhada depois. Então o
+<a href="page:providers">modelo de capacidades</a> declara qual, e onde continuar não pode
+funcionar, <strong>a oferta está ausente com um motivo</strong> em vez de presente e
+silenciosamente quebrada.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Provedor</th><th>Como ele retoma</th><th>O que isso significa aqui</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Claude Code</td>
+      <td><code>Fork</code> — <code>--resume &lt;id&gt; --fork-session</code> honra o nosso próprio
+      id de sessão e escreve uma transcrição nova com esse nome.</td>
+      <td>A continuação é uma sessão que conseguimos acompanhar desde o começo.</td>
+    </tr>
+    <tr>
+      <td>Codex</td>
+      <td><code>AppendInPlace</code> — o <code>codex resume</code> anexa ao rollout que ele recebeu
+      em vez de criar um.</td>
+      <td>Um formato diferente, e a interface diz isso em vez de fingir que são iguais.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Se a pasta do projeto foi movida</span>
+  <p>Continuar dentro de uma pasta que não existe mais é <strong>recusado</strong>. Isso foi
+  descoberto fazendo exatamente isso e vendo um agente real abrir no diretório pessoal do usuário —
+  o que é pior do que um erro, porque aí o agente trabalha com confiança nos arquivos errados. A
+  recusa cobre todo lançamento dentro de um projeto movido, não só esse caminho.</p>
+</div>
+
+<h2>Continuar depois de uma troca de conta</h2>
+
+<p>Uma retomada não atravessa <a href="page:accounts">diretórios de configuração</a>, então uma
+sessão que mudou de conta não pode ser retomada com <code>--resume</code> de jeito nenhum. A
+continuidade é carregada pelo <a href="page:brain">briefing da Memória</a>: a sessão nova começa
+sabendo o que o projeto sabe, que é a parte que de fato importava.</p>
+
+<h2>Apagar em vez disso</h2>
+
+<p>Se o que você quer é que ela suma: o <a href="page:history">Histórico</a> apaga linhas, entradas
+do índice de texto completo <em>e</em> o diretório de log, e te diz quantos bytes liberou. Uma
+sessão viva é recusada em vez de meio apagada.</p>
+
+<p>Não existe política de retenção, deliberadamente. A superfície diz quanto os logs custam para
+que apagar seja uma decisão que você <em>consegue</em> tomar, em vez de uma tomada em seu nome
+sobre o seu próprio histórico.</p>

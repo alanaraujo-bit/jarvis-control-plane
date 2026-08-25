@@ -1,1 +1,139 @@
-<p>TODO</p>
+<p>The point of an unattended run is that you leave. This guide is about setting it up so that
+leaving is a reasonable thing to do, and so that what you find when you come back is a
+<em>result</em> rather than a transcript to read.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The one thing to understand first</span>
+  <p>An unattended run finishes when <strong>real checks pass</strong>. If your mission has no
+  criterion a machine can verify, the autopilot has nothing to steer by and will spend its whole
+  budget guessing. The quality of the run is decided entirely by the criteria you write.</p>
+</div>
+
+<ol class="steps">
+  <li>
+    <strong>Give the project a Brain first</strong>
+    <p>Nobody is there to correct a wrong assumption, so the assumptions have to be right at the
+    start. Four sentences in <a href="page:brain">Brain</a> — what this is, the convention that
+    matters, the trap, the vocabulary — are worth more here than anywhere else in the product.</p>
+  </li>
+
+  <li>
+    <strong>Consider a worktree</strong>
+    <p>A <a href="page:worktrees">worktree</a> gives the agent its own checkout on its own branch.
+    It cannot dirty the tree you are reading and cannot fight you over a file.</p>
+    <div class="callout" data-kind="warn">
+      <span class="callout__title">A fresh worktree is an untrusted folder</span>
+      <p>Claude Code asks whether you trust a folder the first time it opens one. Nobody is there
+      to answer, so <strong>starting is refused</strong> with that reason rather than hanging
+      forever. Open the worktree once, answer the trust question, then start the run.</p>
+    </div>
+  </li>
+
+  <li>
+    <strong>Write criteria a machine can check</strong>
+    <p>Prefer <code>Command</code> over everything else — your test suite, a type check, a build,
+    a lint. <code>FileExists</code> and <code>FileContains</code> are good for artefacts.</p>
+    <p><code>Manual</code> criteria are legitimate and the autopilot cannot satisfy them: a run
+    whose remaining work is manual will correctly stop and wait for you. That is not a failure,
+    but know it will happen.</p>
+    <p>Mark the criteria that genuinely gate completion as <strong>required</strong>. A run stops
+    when every required one holds.</p>
+  </li>
+
+  <li>
+    <strong>Set the guardrails you actually want</strong>
+    <p>Under Unattended, an <em>Always ask</em> rule becomes a <strong>refusal</strong> — nobody
+    can answer, and parking the agent on a prompt would waste the run. So decide deliberately:</p>
+    <ul>
+      <li>Leave it on <em>Always ask</em> if you would rather the run stop than do that thing.</li>
+      <li>Set <em>Never allow</em> if it must never happen, ever.</li>
+      <li>Set <em>Allow</em> only if you have genuinely thought about it.</li>
+    </ul>
+    <p>See <a href="page:guide-guardrails">Set up guardrails</a>.</p>
+  </li>
+
+  <li>
+    <strong>Check the turn budget and the quota</strong>
+    <p>The budget is in <strong>Settings → Autonomy</strong>, between 4 and 100. A run
+    <em>keeps the budget it started with</em>, so changing it later will not move the finish line
+    under a run already going.</p>
+    <p>Glance at the <a href="page:accounts">quota chips</a> in the status bar. A run that starts
+    on an account with twenty minutes left is a run that will stop for a reason that has nothing
+    to do with your code.</p>
+  </li>
+
+  <li>
+    <strong>Set the mission to Unattended and start</strong>
+    <p>The autopilot takes the human's seat. After every turn it verifies the mission against the
+    real criteria, then either sends the next instruction — naming what does not pass yet — or
+    stops.</p>
+  </li>
+
+  <li>
+    <strong>Leave</strong>
+    <p>Finished turns will not notify you: under a default budget that would be twenty
+    notifications while you are away by choice. <strong>Questions still will</strong>, because a
+    driven agent that stops to ask cannot continue until somebody answers.</p>
+  </li>
+</ol>
+
+<h2>The three ways it ends</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Ending</th><th>What it means</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge" data-t="official">Completed</span></td>
+      <td>Every required criterion verified, with evidence attached.</td>
+      <td>Read the evidence, then <a href="page:review">Review</a> the diff.</td>
+    </tr>
+    <tr>
+      <td><span class="badge" data-t="observed">Waiting · Blocked</span></td>
+      <td>Something needs a person: a guardrail held an operation, or the agent hit something it
+      cannot do.</td>
+      <td>Read the reason — it is always stated — answer it, and restart.</td>
+    </tr>
+    <tr>
+      <td><span class="badge" data-t="danger">Failed</span></td>
+      <td>The turn budget ran out, or the same criteria kept failing.</td>
+      <td>Read <a href="page:activity">Activity</a> for the turn-by-turn. Usually the criteria
+      were wrong, not the agent.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>There is deliberately no fourth ending. <em>Keep going and hope</em> is what a run does when
+the model gives it nowhere honest to stop.</p>
+
+<h2>What you will find when you come back</h2>
+
+<ul>
+  <li><strong>The mission</strong>, in one of the three states above, with evidence for every
+  criterion it checked.</li>
+  <li><strong>Activity</strong>, with every turn boundary, every verification, and the reason it
+  stopped.</li>
+  <li><strong>Review</strong>, with the diff, attributed to the session.</li>
+  <li><strong>The Brain</strong>, possibly with one new entry — if the run completed, the agent
+  was asked once what would still matter next time. Most of the time it declines, which is
+  expected.</li>
+  <li><strong>One notification</strong>, saying the run stopped and why.</li>
+</ul>
+
+<h2>Stopping a run early</h2>
+
+<div class="callout">
+  <span class="callout__title">Stopping does not kill the agent</span>
+  <p>Somebody taking over usually wants to type the next thing themselves, and killing the process
+  would throw away its context. So the autopilot stands down and leaves you a live session at a
+  prompt.</p>
+</div>
+
+<h2>Why the autopilot never guesses that a turn ended</h2>
+
+<p>A quiet terminal means nothing — the agent might be thinking, or waiting on a network call.
+The stopping condition comes from the <strong>provider</strong>: Claude Code's
+<code>stop_reason: "end_turn"</code>, Codex's <code>event_msg/task_complete</code>. Checked
+across 88 real transcripts: 664 turn boundaries, none of them ambiguous.
+See <a href="page:internals-autopilot">Inside the autopilot</a>.</p>

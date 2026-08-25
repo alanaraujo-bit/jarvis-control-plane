@@ -1,1 +1,103 @@
-<p>TODO</p>
+<p>Decida uma vez o que um agente nunca pode fazer. Dez minutos agora, e você consegue deixar uma
+execução rodando sem ter que pensar nisso de novo.</p>
+
+<ol class="steps">
+  <li>
+    <strong>Abra Configurações → Proteções</strong>
+    <p>Nove linhas, uma por classe de operação sensível, cada uma com <strong>Sempre
+    perguntar</strong>, <strong>Permitir</strong> e <strong>Nunca permitir</strong>. Tudo começa em
+    <em>Sempre perguntar</em>, que é o padrão honesto: o produto não sabe qual é a sua tolerância a
+    risco.</p>
+    <figure class="fig">
+      <img src="../img/settings-guardrails.png" alt="A seção Proteções listando nove operações, cada uma com Sempre perguntar, Permitir e Nunca permitir, todas no padrão.">
+      <figcaption>Toda linha também diz o que ela casa, para você estar escolhendo sobre uma coisa
+      real em vez de sobre um nome de categoria.</figcaption>
+    </figure>
+  </li>
+
+  <li>
+    <strong>Ajuste as duas que quase sempre estão certas</strong>
+    <p><strong>Ler um arquivo de credencial</strong> e <strong>Publicar em produção</strong> são as
+    duas que a maioria das pessoas quer em <em>Nunca permitir</em> e nunca mais pensar a respeito.
+    Nenhuma das duas é coisa que um agente deveria estar fazendo em seu nome enquanto você está em
+    outro lugar.</p>
+  </li>
+
+  <li>
+    <strong>Pense nas três destrutivas</strong>
+    <p><em>Push forçado</em>, <em>Reescrever o histórico</em> e <em>Jogar fora trabalho não
+    commitado</em>. A terceira é a que mais importa e a que recebe menos atenção: ela é a única
+    coisa da lista da qual o <strong>Git não guarda cópia</strong>. Um push forçado dá para
+    recuperar de um reflog; uma árvore de trabalho descartada não dá para recuperar de nada.</p>
+  </li>
+
+  <li>
+    <strong>Sobrescreva por projeto onde fizer sentido</strong>
+    <p>A área <strong>Configurações</strong> do próprio projeto tem o mesmo painel. As regras
+    resolvem <strong>projeto → global → padrão</strong>, e sem valor significa genuinamente sem
+    valor — então uma mudança global ainda alcança todo projeto que nunca opinou.</p>
+    <p>O caso óbvio: <em>Publicar um pacote</em> em <em>Nunca permitir</em> globalmente, e
+    <em>Sempre perguntar</em> no único repositório do qual você de fato publica.</p>
+  </li>
+
+  <li>
+    <strong>Veja uma funcionando de verdade</strong>
+    <p>Inicie uma sessão do Claude Code num repositório de rascunho e peça um push forçado. O
+    comando é parado <strong>antes de rodar</strong> e você recebe uma decisão para tomar. Responda,
+    e olhe a <a href="page:activity">Atividade</a> — a decisão é registrada ali com a operação que
+    ela classificou.</p>
+  </li>
+</ol>
+
+<h2>Quatro coisas para saber antes de depender disto</h2>
+
+<div class="defs">
+  <div>
+    <dt>O Codex precisa de um passo a mais</dt>
+    <dd>Ele tem o mesmo mecanismo de hook, mas não executa um hook até você confiar nele na
+    interface do próprio Codex. O J.A.R.V.I.S. escreve a configuração no início da sessão para que
+    ela esteja lá para ser confiada. Até você fazer isso, aquela sessão é <strong>observada, não
+    protegida</strong>, e o modelo de capacidades diz isso em vez de te mostrar um escudo que não
+    está fazendo nada.</dd>
+  </div>
+  <div>
+    <dt>O que você mesmo digita nunca é protegido</dt>
+    <dd>As proteções governam agentes. Um comando que você digita num terminal roda. Isso é
+    deliberado — uma ferramenta que duvida do próprio dono é desligada em uma semana.</dd>
+  </div>
+  <div>
+    <dt>Não sinalizado não é a mesma coisa que seguro</dt>
+    <dd>O classificador casa padrões sobre o texto do comando. Um comando que ele não sinaliza
+    <strong>falhou em casar com um padrão</strong>; ele não foi provado inofensivo. São afirmações
+    diferentes e só uma delas é verdadeira.</dd>
+  </div>
+  <div>
+    <dt>Ela falha aberta</dt>
+    <dd>Um snapshot faltando ou uma versão que ela não entende significa que ela fica em silêncio e
+    o comando prossegue. Isso roda antes de toda chamada de ferramenta em toda sessão, então uma
+    proteção que falhasse fechada transformaria qualquer bug nela mesma em um agente que não
+    consegue trabalhar, em todo lugar.</dd>
+  </div>
+</div>
+
+<h2>Em Sem supervisão, "perguntar" recusa</h2>
+
+<p>Ninguém está lá para responder, então uma regra em <em>Sempre perguntar</em> vira uma recusa, e
+a missão vai para Esperando com um motivo. Decida antes de ir embora se você prefere que aquela
+operação aconteça ou que a execução pare — porque essas são as duas únicas opções depois que você
+sai. Veja <a href="page:guide-unattended">Executar uma missão sem supervisão</a>.</p>
+
+<h2>Respondendo do celular</h2>
+
+<p>Se você <a href="page:guide-phone">pareou um celular</a>, uma operação retida chega até ele. Só
+<strong>permitir uma vez</strong> está disponível lá: as outras respostas escrevem política
+duradoura, e uma política duradoura decidida numa tela pequena com um polegar é o tipo errado de
+decisão para tomar rápido. Não aprovar é uma recusa, e a proteção já recusa por padrão.</p>
+
+<h2>Descartando na Revisão</h2>
+
+<p>Dentro da <a href="page:review">Revisão</a>, o descarte é protegido e adicionar ao índice não é.
+Proteger o índice te ensinaria a desligar a proteção, e aí o descarte também fica desprotegido —
+que é como se acaba não protegendo nada. A trava nomeia a operação dela diretamente em vez de
+classificar uma string que ela acabou de montar, e ela te pergunta ali mesmo em vez de criar algo
+para resolver depois.</p>
