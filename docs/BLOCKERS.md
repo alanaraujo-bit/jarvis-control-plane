@@ -226,3 +226,30 @@ a thing to do while he is away.
 **What is left for Alan on B6:** nothing, unless he wants a third genuine Claude
 subscription. The remaining item is a run to schedule, not a credential to
 supply.
+
+### B2 — update after the 0.5.0 build (2026-08-25)
+
+**`tauri build` does not produce `latest.json`.** Measured, not assumed: the
+0.5.0 run finished with exactly two artifacts —
+`J.A.R.V.I.S_0.5.0_x64-setup.exe` and its `.sig`. `createUpdaterArtifacts: true`
+generates the **signature**; the manifest the updater actually fetches is
+normally written by `tauri-action` in CI, and there is no CI here.
+
+So the endpoint in `tauri.conf.json` would 404 on the manifest **even if the
+repository were public**. That is a second, independent half of B2 that nobody
+had noticed, because update checks have always failed for the first reason.
+
+A correct manifest is now written by hand at
+`apps/desktop/src-tauri/target/release/bundle/nsis/latest.json` — version,
+`pub_date` from the installer's own mtime, the signature read out of the `.sig`
+file, and the release-asset URL. Any future release has to produce one the same
+way, or the release process needs the CI action that does it.
+
+**Both halves still need you:**
+
+1. The repository is private, so `releases/latest/download/…` is unreachable
+   without authentication. Making a source repository public is not a decision
+   an agent should take on somebody's behalf — the least-effort fix stays a
+   separate public repository holding only release artifacts, with the endpoint
+   pointed at it.
+2. Whoever cuts a release has to attach `latest.json` beside the installer.
