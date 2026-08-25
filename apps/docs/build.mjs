@@ -239,29 +239,7 @@ function renderPage({ locale, page, body, headings, index, version }) {
 ${alternates}
 <link rel="icon" href="../assets/mark.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/site.css">
-<script>
-  /* Applied before first paint: a documentation site that flashes the wrong
-     theme is the first thing anyone notices about it.
-
-     A "theme" query parameter wins over everything, so a link can carry the
-     theme it was meant to be read in — which is also how this site's own
-     screenshots are taken, without a preference from one run leaking into the
-     next. */
-  (function () {
-    /* Parsed rather than matched with a regex: this script is embedded in a
-       template literal, and a backslash escape inside one is consumed before
-       it ever reaches the browser. A \\b here became a real backspace
-       character and the match silently never fired. */
-    var q = new URLSearchParams(location.search).get("theme");
-    if (q === "light" || q === "dark") { document.documentElement.dataset.theme = q; return; }
-    try {
-      var t = localStorage.getItem("jarvis-docs-theme");
-      if (t === "light" || t === "dark") { document.documentElement.dataset.theme = t; return; }
-    } catch (e) { /* private windows and blocked site data both throw */ }
-    document.documentElement.dataset.theme =
-      matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  })();
-</script>
+<script src="../assets/theme.js"></script>
 </head>
 <body>
 <a class="skip" href="#content">${esc(ui.skip)}</a>
@@ -319,7 +297,6 @@ ${alternates}
   </div>
 </div>
 
-<script>window.DOCS_LOCALE=${JSON.stringify(locale)};window.DOCS_UI=${JSON.stringify(ui)};</script>
 <script src="./search-index.js"></script>
 <script src="../assets/site.js"></script>
 </body>
@@ -374,7 +351,11 @@ for (const locale of LOCALES) {
   // blocked under `file://`, and this site has to open from disk.
   writeFileSync(
     join(DIST, locale, "search-index.js"),
-    `window.DOCS_INDEX=${JSON.stringify(index)};`,
+    `window.DOCS_LOCALE=${JSON.stringify(locale)};
+` +
+      `window.DOCS_UI=${JSON.stringify(UI[locale])};
+` +
+      `window.DOCS_INDEX=${JSON.stringify(index)};`,
   );
 }
 

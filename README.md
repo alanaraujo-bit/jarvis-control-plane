@@ -44,6 +44,10 @@ Working and verified against real agents on a real machine:
 Not built yet — deliberately absent rather than stubbed (§81):
 Preview, onboarding, mobile companion, cloud sync, voice.
 
+**The product documentation is [`apps/docs`](apps/docs/README.md)** — 47 pages in
+English and Portuguese, built with `node apps/docs/build.mjs` and served with
+`pnpm docs:serve`.
+
 **Picking this up in a new session? Start with [`docs/HANDOFF.md`](docs/HANDOFF.md).**
 
 `docs/ROADMAP.md` is the live plan. `docs/DECISIONS.md` records why things are
@@ -110,6 +114,7 @@ apps/desktop/          Tauri v2 application
     envscan/             environment detection
 packages/protocol/     shared IPC types
 packages/i18n/         en + pt-BR catalogues
+apps/docs/             the public documentation site (bilingual, static)
 brand/                 mark and installer artwork generators
 tools/                 window capture and UI automation for visual review
 docs/                  architecture, roadmap, decisions, blockers
