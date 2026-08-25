@@ -1,1 +1,159 @@
-<p>TODO</p>
+<p>Ser avisado quando um agente para de trabalhar — porque terminou, ou porque precisa de uma
+decisão — com uma prévia do que ele quer.</p>
+
+<h2>A regra sobre a qual tudo gira</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Notifique só sobre o que você já não está olhando</span>
+  <p>Estar olhando significa que a janela <strong>tem o foco</strong> <em>e</em> que aquela sessão
+  está <strong>na tela</strong>. As duas coisas, juntas.</p>
+  <p>E uma notificação suprimida é <strong>descartada por completo</strong>, não guardada e marcada
+  como lida. É isso que faz da central uma lista do que você <em>perdeu</em>, e não um log de tudo
+  que já aconteceu.</p>
+</div>
+
+<p>Isso é decidido no núcleo, em um lugar só, e testado — não deixado para cada superfície
+resolver por conta própria.</p>
+
+<h2>Cinco fontes, duas confianças</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Fonte</th><th>Confiança</th><th>Porque</th></tr></thead>
+  <tbody>
+    <tr><td>Um turno terminou</td><td><span class="badge" data-t="official">Oficial</span></td><td>O provedor declarou.</td></tr>
+    <tr><td>Uma proteção decidiu</td><td><span class="badge" data-t="official">Oficial</span></td><td>Nós decidimos.</td></tr>
+    <tr><td>Uma missão concluiu</td><td><span class="badge" data-t="official">Oficial</span></td><td>A verificação rodou.</td></tr>
+    <tr><td>Uma execução parou</td><td><span class="badge" data-t="official">Oficial</span></td><td>O piloto automático parou, com um motivo.</td></tr>
+    <tr><td><strong>Uma pergunta no terminal</strong></td><td><span class="badge" data-t="observed">Observado</span></td><td><strong>Nada declarou.</strong> Foi lido da tela.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Por que a quinta tem que existir</h3>
+
+<p>O Claude Code perguntando se pode escrever um arquivo não é declarado em <strong>lugar
+nenhum</strong>. O hook de proteção retorna cedo para qualquer coisa que não seja um comando de
+shell classificado, e a transcrição registra a <em>resposta</em>, não a pergunta. O único lugar
+onde essa pergunta existe é no terminal.</p>
+
+<p>Então ela é lida de lá — e rotulada como <em>Lido do terminal</em>, para você sempre saber que
+tipo de afirmação está olhando. Veja <a href="page:confidence">Oficial e Observado</a>.</p>
+
+<h3>Como é detectada sem chutar as palavras</h3>
+
+<p>O detector foi construído a partir de quatro gravações de CLIs de agente reais, e ele se
+apoia na única invariante que sobrevive às quatro: <strong>uma lista numerada de escolhas com
+exatamente um glifo de cursor</strong>. Nunca nas palavras. As palavras mudam a cada versão; o
+formato de um prompt não.</p>
+
+<p>Um casamento só é confiável como conjunção: o formato se sustenta, <em>e</em> o terminal está
+quieto, <em>e</em> nada foi digitado desde então. Qualquer uma dessas sozinha produz falsos
+positivos.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Uma terceira CLI de agente está <em>provavelmente</em>, não <em>certamente</em>, coberta</span>
+  <p>A evidência são quatro gravações reais de duas CLIs. A invariante é um formato e não uma
+  frase, então uma terceira CLI provavelmente funcionaria — mas ela não foi gravada, e dizer
+  <em>provavelmente</em> é a palavra honesta.</p>
+</div>
+
+<h2>Sequências de escape, e por que uma limpeza simples quebra isso</h2>
+
+<p>Essas TUIs emitem escapes de avanço de cursor onde uma pessoa vê um espaço. Um
+<code>strip_ansi</code> convencional portanto transforma</p>
+
+<pre><code>Do you want to create hello.txt?</code></pre>
+
+<p>em</p>
+
+<pre><code>Doyouwanttocreatehello.txt?</code></pre>
+
+<p>Então a prévia passa por um renderizador que entende movimento de cursor, e não por um filtro
+que apaga códigos de escape.</p>
+
+<h2>Onde uma notificação aparece</h2>
+
+<figure class="fig">
+  <img src="../img/notification-toast.png" alt="Uma notificação flutuante no app mostrando a pergunta de um agente, com um sino e um contador na barra de título.">
+  <figcaption>Um sino na barra de título, uma central embaixo dele, e uma pilha de notificações
+  flutuantes no app.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>Um sino na barra de título</strong>, com um contador.</li>
+  <li><strong>Uma central</strong> embaixo dele — a lista do que você perdeu.</li>
+  <li><strong>Uma notificação flutuante no app</strong> quando a janela está na sua frente.</li>
+  <li><strong>Uma notificação do Windows</strong> quando a janela está atrás de outra coisa, mais
+  um piscar na barra de tarefas e um som curto.</li>
+</ul>
+
+<h2>O que uma notificação do Windows consegue e não consegue fazer, medido</h2>
+
+<p>Disparada da build instalada <em>antes</em> de a interface ser escrita, e é por isso que a
+interface tem o formato certo:</p>
+
+<ul>
+  <li>Ela <strong>aparece, atribuída a nós</strong> — nossa marca e nosso nome — numa máquina que
+  também carrega um <code>jarvis.exe</code> não relacionado com atalho próprio no menu
+  Iniciar.</li>
+  <li>Ela <strong>não</strong> aparece a partir de uma build de desenvolvimento, porque o plugin
+  só define a identidade do aplicativo para um binário empacotado, e um não empacotado não tem
+  atalho pelo qual ser identificado.</li>
+  <li><strong>Clicar nela não faz nada, e não pode.</strong> O plugin de notificação expõe
+  callbacks de ativação só no mobile.</li>
+</ul>
+
+<p>Então a notificação do desktop é um <em>alerta</em> e a central é a coisa em que você clica.
+Construído ao contrário, isso teria entregado uma notificação que parece interativa e não é.</p>
+
+<h2>A que teria sido entregue quebrada</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title"><code>isFocused()</code> devolve <code>true</code> para uma janela minimizada no Windows</span>
+  <p>O feed perguntava isso no instante em que uma notificação chegava, concluía que a pessoa
+  estava sentada bem ali, desenhava uma notificação flutuante numa janela que ninguém podia ver, e
+  <strong>nunca disparava a notificação do sistema</strong> — que é o objetivo inteiro do recurso.
+  Nada na interface parecia errado: a notificação aparecia corretamente na central.</p>
+  <p>Pego perguntando ao <em>Windows</em> o que ele de fato tinha recebido, e não encontrando nada
+  da execução que tinha acabado de acontecer. O conserto não é uma chamada melhor e sim
+  <strong>chamada nenhuma</strong>: a superfície lê o estado de foco que foi reportado a ela por
+  último, e checa o estado minimizado ao lado.</p>
+</div>
+
+<h2>Mais quatro achados rodando</h2>
+
+<ol>
+  <li>O contador <strong>cobria o sino</strong> — um selo de 13px sobre um ícone de 14px. Visível
+  só ampliando uma captura de tela real.</li>
+  <li>O botão de fechar da notificação ficava no nível do meio da pergunta do agente e
+  <strong>lia como parte do texto</strong>.</li>
+  <li>Abrir a central <strong>apagava a coisa que ela foi aberta para ver</strong>. Marcar tudo
+  como lido está certo, e isso também limpava o marcador que mostrava quais linhas eram
+  novas.</li>
+  <li>Clicar numa notificação de um <strong>projeto já aberto</strong> não fazia nada, porque
+  reabrir o mesmo projeto não é uma remontagem.</li>
+</ol>
+
+<h2>Execuções sem supervisão são mais silenciosas</h2>
+
+<p>Os <em>turnos terminados</em> de uma sessão dirigida são descartados. Com o limite padrão você
+receberia vinte notificações enquanto estava fora por escolha, e uma vigésima primeira quando a
+execução de fato parasse — a única que você queria, no fim de uma pilha.</p>
+
+<p>As <strong>perguntas</strong> dela não são descartadas. Um agente dirigido que para para
+perguntar é a única coisa numa execução sem supervisão que vale interromper alguém.</p>
+
+<h2>Configurações</h2>
+
+<p>Três interruptores em <strong>Configurações → Notificações</strong> — notificar, também mostrar
+notificação do sistema, tocar um som — e um botão de teste que dispara o caminho
+<em>real</em>, não uma simulação dele.</p>
+
+<div class="callout">
+  <span class="callout__title">O som nunca foi ouvido</span>
+  <p>Ele sintetiza dois tons senoidais pela Web Audio API — silencioso por construção, com um
+  envelope para não estalar — e vem ligado por padrão. Todo outro canal foi verificado olhando;
+  este não pode ser, e ninguém escutou ele ainda. Veja
+  <a href="page:not-built">O que não está pronto</a>.</p>
+</div>

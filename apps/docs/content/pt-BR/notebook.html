@@ -1,1 +1,94 @@
-<p>TODO</p>
+<p>Um bloco de notas que você alcança sem sair do terminal, com pastas para os prompts e ideias
+que você vinha acumulando. A parte que importa não é o bloco — é a única ação que um app de notas
+não consegue fazer: <strong>entregar a nota para o agente que você está assistindo</strong>.</p>
+
+<figure class="fig">
+  <img src="../img/notebook.png" alt="A sobreposição do bloco de notas aberta sobre uma sessão viva do Claude Code, mostrando pastas, uma lista de notas, a nota sendo editada, e um botão Enviar para o Claude Code.">
+  <figcaption><b>Aberto sobre um agente em execução, com o botão de enviar no canto.</b> A
+  sobreposição é alcançável por atalho justamente porque um terminal com o foco é exatamente
+  quando você procura sua biblioteca de prompts.</figcaption>
+</figure>
+
+<h2>Abrindo</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></span> de qualquer lugar, um
+botão na barra de título, ou a paleta de comandos.</p>
+
+<p>O atalho é resolvido na <strong>fase de captura</strong>, pela mesma razão que o
+<span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span>: o terminal e o Monaco reivindicam teclas
+antes de qualquer listener normal ver, e o momento em que você quer sua biblioteca de prompts é o
+momento em que um terminal tem o foco.</p>
+
+<h2>Estrutura: um nível, de propósito</h2>
+
+<div class="defs">
+  <div>
+    <dt>Pastas</dt>
+    <dd>Planas. Um nível. Uma biblioteca de prompts é uma lista que você percorre com o olho, não
+    uma hierarquia que você navega.</dd>
+  </div>
+  <div>
+    <dt>Sem pasta</dt>
+    <dd>Um lugar de verdade, não uma ausência. Uma nota não precisa de pasta para existir.</dd>
+  </div>
+  <div>
+    <dt>Notas</dt>
+    <dd>Título e corpo, salvos automaticamente enquanto você digita, com uma gravação forçada a
+    cada saída. Fixar, mover, duplicar, copiar, apagar.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Apagar uma pasta não consegue perder suas notas</span>
+  <p>As notas de dentro vão para <strong>Sem pasta</strong>. Isso é garantido pelo esquema do
+  banco, não por um diálogo de confirmação: um formato que não consegue perder quarenta prompts
+  vence um diálogo que alguém clica no automático.</p>
+</div>
+
+<h2>Enviar para o agente</h2>
+
+<p>O botão no canto manda a nota para o terminal em que você estava. Duas regras governam ele:</p>
+
+<ul>
+  <li><strong>Ela nunca é enviada.</strong> O texto chega no prompt e fica lá. Você edita e aperta
+  Enter. É a mesma regra que o <a href="page:voice">ditado por voz</a> e a
+  <a href="page:terminal">colagem de imagem</a> seguem — apertar Enter continua sendo seu.</li>
+  <li><strong>Ela é recusada quando o programa que recebe não habilitou bracketed paste.</strong>
+  Um shell simples interpretaria um prompt de várias linhas como vinte comandos em vez de um
+  prompt. Então é recusado com uma frase, e nada é escrito.</li>
+</ul>
+
+<h3>Como o texto chega lá</h3>
+
+<p>Pelo próprio caminho de <code>paste</code> do xterm, e não por um comando de digitação em Rust,
+e essa distinção foi decidida por medição e não por preferência.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A medição que decidiu</span>
+  <p>O auxiliar que digita em um terminal <strong>achata toda quebra de linha em espaço</strong>.
+  Mandar um prompt de vários parágrafos por ele teria entregado linhas emendadas parecendo
+  inteiramente corretas na tela. Medido contra o Claude Code 2.1.245 real em vez de presumido:
+  pelo <code>paste</code>, três linhas chegaram intactas e sem enviar.</p>
+</div>
+
+<h2>Busca</h2>
+
+<p>A caixa do topo busca em títulos e corpos de todas as pastas.</p>
+
+<div class="callout">
+  <span class="callout__title">Uma lacuna, conhecida e adiada</span>
+  <p>A <a href="page:search">Busca global</a> <strong>não</strong> encontra notas do bloco ainda.
+  Ela já encontra notas de projeto, então uma biblioteca de prompts que a busca global não enxerga
+  parece uma busca quebrada, e não uma fronteira. Foi adiada deliberadamente: precisa de um novo
+  tipo de busca atravessando o protocolo compartilhado e os dois catálogos de idioma, <em>e</em>
+  um caso especial de navegação, porque uma nota de bloco não tem projeto para abrir. Veja
+  <a href="page:not-built">O que não está pronto</a>.</p>
+</div>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado na build real</span>
+  <p>Um prompt foi digitado, salvo automaticamente, fechado, reaberto, e enviado para um Claude
+  Code vivo, que mostrou <code>[Pasted text #1 +5 lines]</code> e deixou ele parado no prompt. A
+  mesma nota enviada para um shell simples foi recusada com uma frase e não escreveu nada. Os dois
+  temas, a 1442px e 786px.</p>
+</div>

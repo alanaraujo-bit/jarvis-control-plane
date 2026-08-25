@@ -1,1 +1,93 @@
-<p>TODO</p>
+<p>A notepad you can reach without leaving the terminal, with folders for the prompts and ideas
+you have been hoarding. The part that matters is not the notepad — it is the one action a
+note-taking app cannot do: <strong>hand the note to the agent you are watching</strong>.</p>
+
+<figure class="fig">
+  <img src="../img/notebook.png" alt="The Notebook overlay open over a live Claude Code session, showing folders, a note list, the note being edited, and a Send to Claude Code button.">
+  <figcaption><b>Open over a running agent, with the send button in the corner.</b> The overlay
+  is reachable with a shortcut precisely because a terminal holding focus is exactly when you
+  reach for your prompt library.</figcaption>
+</figure>
+
+<h2>Opening it</h2>
+
+<p><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></span> from anywhere, a button
+in the titlebar, or the command palette.</p>
+
+<p>The shortcut is resolved in the <strong>capture phase</strong>, for the same reason
+<span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> is: a terminal and Monaco both claim keys
+before a normal listener ever sees them, and the moment you want your prompt library is the
+moment a terminal has focus.</p>
+
+<h2>Structure: one level, on purpose</h2>
+
+<div class="defs">
+  <div>
+    <dt>Folders</dt>
+    <dd>Flat. One level. A prompt library is a list you scan, not a hierarchy you navigate.</dd>
+  </div>
+  <div>
+    <dt>Unfiled</dt>
+    <dd>A real place, not an absence. A note does not need a folder to exist.</dd>
+  </div>
+  <div>
+    <dt>Notes</dt>
+    <dd>Title and body, autosaved as you type, with a flush on every exit. Pin, move, duplicate,
+    copy, delete.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Deleting a folder cannot lose your notes</span>
+  <p>The notes inside it move to <strong>Unfiled</strong>. This is enforced by the database
+  schema, not by a confirmation dialog: a shape that cannot lose forty prompts beats a dialog
+  somebody clicks through at speed.</p>
+</div>
+
+<h2>Send to agent</h2>
+
+<p>The button in the corner sends the note into the terminal you were on. Two rules govern it:</p>
+
+<ul>
+  <li><strong>It is never submitted.</strong> The text arrives in the prompt and stays there. You
+  edit it and press Enter. This is the same rule <a href="page:voice">voice dictation</a> and
+  <a href="page:terminal">image paste</a> follow — pressing Enter stays yours.</li>
+  <li><strong>It is refused when the receiving program has not enabled bracketed paste.</strong>
+  A plain shell would interpret a multi-line prompt as twenty commands rather than one prompt.
+  So it is refused with a sentence, and nothing is written.</li>
+</ul>
+
+<h3>How the text gets there</h3>
+
+<p>Through xterm's own <code>paste</code> path rather than a Rust typing command, and that
+distinction was decided by measurement rather than by preference.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The measurement that decided it</span>
+  <p>The typing helper that types into a terminal <strong>flattens every newline to a
+  space</strong>. Sending a multi-paragraph prompt through it would have delivered run-on lines
+  while looking entirely correct on screen. Measured against real Claude Code 2.1.245 instead of
+  assumed: through <code>paste</code>, three lines arrived intact and unsent.</p>
+</div>
+
+<h2>Search</h2>
+
+<p>The box at the top searches titles and bodies across every folder.</p>
+
+<div class="callout">
+  <span class="callout__title">One gap, known and deferred</span>
+  <p><a href="page:search">Global Search</a> does <strong>not</strong> find notebook notes yet. It
+  already finds project notes, so a prompt library the global search cannot see reads as a broken
+  search rather than as a boundary. It is deferred deliberately: it needs a new search kind
+  through the shared protocol and both language catalogues, <em>and</em> a navigation special
+  case, because a notebook note has no project to open. See
+  <a href="page:not-built">What is not built</a>.</p>
+</div>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified in the real build</span>
+  <p>A prompt was typed, autosaved, closed, reopened, and sent into a live Claude Code, which
+  showed <code>[Pasted text #1 +5 lines]</code> and left it sitting in the prompt. The same note
+  sent into a plain shell was refused with a sentence and wrote nothing. Both themes, at 1442px
+  and 786px.</p>
+</div>

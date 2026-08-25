@@ -1,1 +1,129 @@
-<p>TODO</p>
+<p>Duas sobreposições que parecem iguais e fazem trabalhos diferentes. Uma executa comandos. A
+outra encontra coisas que você ou um agente escreveram, em todo projeto que você já abriu.</p>
+
+<h2>A paleta de comandos — <span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></h2>
+
+<figure class="fig">
+  <img src="../img/palette.png" alt="A paleta de comandos aberta sobre a Central de Missões, listando destinos e ações.">
+  <figcaption>Destinos, seções de configurações e ações, ranqueados por subsequência.</figcaption>
+</figure>
+
+<p>Todo destino da barra lateral, toda seção de configurações pelo nome, e toda ação que o
+contexto atual oferece. Digite <code>cm</code> e receba a Central de Missões.</p>
+
+<h3>Como o ranqueamento funciona</h3>
+
+<p>Casamento por subsequência, com sequências contíguas e casamentos no início de palavra
+pontuando mais, e títulos mais curtos vencendo um empate porque o comando mais específico é o que
+você quis dizer.</p>
+
+<pre><code><span class="c">para cada caractere da consulta:</span>
+  ache ele no texto, na última posição ou depois
+  <span class="c">nenhum casamento em lugar nenhum → este comando sai</span>
+  pontos += 1
+         + 2  <span class="c">para cada passo de uma sequência ininterrupta</span>
+         + 3  <span class="c">se cair no começo de uma palavra</span>
+<span class="c">depois subtraia um centésimo do comprimento do título</span></code></pre>
+
+<p>Filtrar e ranquear são uma passada só: <em>não casou</em> e <em>casou mal</em> são a mesma
+resposta, então a lista nunca precisa ser percorrida duas vezes.</p>
+
+<div class="callout">
+  <span class="callout__title">A documentação que você está lendo usa o mesmo algoritmo</span>
+  <p>A busca deste site é uma portagem dessa função, sem mudanças. É a mesma interação no mesmo
+  produto, então digitar <code>cm</code> deveria se comportar do mesmo jeito nos dois lugares.
+  Aperte <span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> aqui e experimente.</p>
+</div>
+
+<h2>Busca global — <span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></h2>
+
+<figure class="fig">
+  <img src="../img/global-search.png" alt="A Busca global aberta com a consulta guardrail, mostrando um resultado de conversa de uma sessão real com a linha que casou citada.">
+  <figcaption><b>Um resultado de conversa, mostrando a linha em que casou</b> — as palavras que um
+  agente de fato disse, meses atrás, numa sessão que já foi fechada.</figcaption>
+</figure>
+
+<p>Cinco tipos de coisa, em <strong>todo projeto, sempre</strong>:</p>
+
+<div class="defs">
+  <div>
+    <dt>Conhecimento</dt>
+    <dd>Qualquer coisa na <a href="page:brain">Memória</a> de qualquer projeto.</dd>
+  </div>
+  <div>
+    <dt>Notas</dt>
+    <dd>Notas de projeto. <em>Não</em> notas do <a href="page:notebook">bloco</a> ainda — veja
+    abaixo.</dd>
+  </div>
+  <div>
+    <dt>Missões</dt>
+    <dd>Títulos, intenções e critérios.</dd>
+  </div>
+  <div>
+    <dt>Atividade</dt>
+    <dd>Traduzida e com carimbo de tempo, para você buscar por uma coisa que aconteceu.</dd>
+  </div>
+  <div>
+    <dt>Conversas</dt>
+    <dd><strong>O que foi de fato dito</strong>, em qualquer sessão, em qualquer época. Esta é a
+    que mais nada consegue fazer.</dd>
+  </div>
+</div>
+
+<h3>Por que ela nunca tem escopo do projeto aberto</h3>
+
+<p>A pergunta que as pessoas fazem é <em>onde eu vi aquilo?</em> Restringir ao projeto que por
+acaso está aberto esconderia a resposta em silêncio exatamente quando a resposta mora em outro
+lugar.</p>
+
+<h3>Abrir uma sessão que não existe mais</h3>
+
+<p>A Busca global é a primeira coisa do produto que consegue abrir a conversa de uma sessão
+<em>depois</em> que a sessão acabou e a aba dela foi fechada. Essa aba nunca é iniciada e nunca é
+fechada no backend — nada nunca esteve preso a ela, então não há nada para soltar. Veja
+<a href="page:session-log">O log de eventos da sessão</a>.</p>
+
+<h3>Sessões gravadas antes de a busca existir</h3>
+
+<p>Um preenchimento único percorre cada log de sessão uma vez, fora do caminho de inicialização,
+uma sessão por transação — uma tarefa de fundo com um marcador em vez de uma migração, então ela é
+retomável e idempotente mesmo com um travamento no meio.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado duas vezes, e a segunda é a interessante</span>
+  <p>A varredura em si foi verificada contra as sessões reais gravadas da máquina: 55 linhas de 10
+  logs reais, e uma palavra em português de uma execução real do Claude Code voltou atribuída à
+  sessão em que foi dita.</p>
+  <p>Depois a <em>ligação</em> foi verificada separadamente contra um lançamento real, porque dois
+  bugs anteriores nesta base de código foram os dois <em>"o código estava certo e a ligação nunca
+  rodou"</em>. A linha de log confirmando que o preenchimento terminou agora é incondicional por
+  exatamente esse motivo: uma tarefa de fundo que fica silenciosa em regime não pode ser
+  distinguida de uma que nunca começou.</p>
+</div>
+
+<h2>Como o índice é construído</h2>
+
+<p>Um índice FTS5 autônomo, não um de conteúdo externo. A tabela de eventos de sessão é
+<code>WITHOUT ROWID</code> com chave composta, contra a qual o modo de conteúdo externo não
+consegue se chavear.</p>
+
+<p>Conhecimento, notas, missões e atividade ficam no <code>LIKE</code> simples — são tabelas
+pequenas, e é a mesma escolha que a listagem de atividade já faz. Um índice não é de graça, e um
+que indexa cem linhas é um custo sem benefício.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A tabela sobre a qual isso foi construído não tinha escritor</span>
+  <p>A <code>session_events</code> existia desde a primeira migração e <strong>nada nunca tinha
+  escrito nela</strong>. As próprias anotações do projeto alegavam que ela "existe exatamente para
+  isso"; essa alegação foi conferida antes de qualquer coisa ser construída em cima, e encontrada
+  falsa. Ela foi estendida de forma aditiva em vez de recriada, e ligada ao leitor de transcrição
+  que já espelha uso e mudanças de arquivo.</p>
+</div>
+
+<h2>Dois atalhos, resolvidos antes de tudo</h2>
+
+<p>Tanto <span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> quanto
+<span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span> são tratados na
+<strong>fase de captura</strong>, porque o terminal e o Monaco têm ideias próprias sobre essas
+teclas. Um atalho que a interface anuncia tem que ser resolvido antes de qualquer widget ter
+opinião sobre ele. Veja <a href="page:shortcuts">Atalhos de teclado</a> para o que isso custa.</p>

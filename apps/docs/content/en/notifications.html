@@ -1,1 +1,157 @@
-<p>TODO</p>
+<p>Be told when an agent stops working — because it finished, or because it needs a decision —
+with a preview of what it wants.</p>
+
+<h2>The rule the whole thing turns on</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Notify only about what you are not already looking at</span>
+  <p>Watching means the window <strong>has focus</strong> <em>and</em> that session is
+  <strong>on screen</strong>. Both, together.</p>
+  <p>And a suppressed notification is <strong>dropped entirely</strong>, not stored and marked
+  read. That is what makes the centre a list of what you <em>missed</em> rather than a log of
+  everything that ever happened.</p>
+</div>
+
+<p>This is decided in the core, in one place, and tested — not left to each surface to work out
+for itself.</p>
+
+<h2>Five sources, two confidences</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Source</th><th>Confidence</th><th>Because</th></tr></thead>
+  <tbody>
+    <tr><td>A turn finished</td><td><span class="badge" data-t="official">Official</span></td><td>The provider stated it.</td></tr>
+    <tr><td>A guardrail decided</td><td><span class="badge" data-t="official">Official</span></td><td>We decided it.</td></tr>
+    <tr><td>A mission completed</td><td><span class="badge" data-t="official">Official</span></td><td>Verification ran.</td></tr>
+    <tr><td>A run stopped</td><td><span class="badge" data-t="official">Official</span></td><td>The autopilot stopped it, with a reason.</td></tr>
+    <tr><td><strong>A question on the terminal</strong></td><td><span class="badge" data-t="observed">Observed</span></td><td><strong>Nothing stated it.</strong> It was read off the screen.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Why the fifth one has to exist</h3>
+
+<p>Claude Code asking whether it may write a file is stated <strong>nowhere</strong>. The
+guardrail hook returns early for anything that is not a classified shell command, and the
+transcript records the <em>answer</em> rather than the question. The only place that question
+exists is on the terminal.</p>
+
+<p>So it is read from there — and labelled <em>Read from the terminal</em>, so you always know
+which kind of claim you are looking at. See <a href="page:confidence">Official and
+Observed</a>.</p>
+
+<h3>How it is detected without guessing at wording</h3>
+
+<p>The detector was built from four recordings of real agent CLIs, and it keys on the one
+invariant that survives all four: <strong>a numbered choice list with exactly one cursor
+glyph</strong>. Never on the words. Wording changes with every release; the shape of a prompt
+does not.</p>
+
+<p>A match is only trusted as a conjunction: the shape holds, <em>and</em> the terminal has been
+quiet, <em>and</em> nothing has been typed since. Any one of those alone produces false
+positives.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A third agent CLI is <em>probably</em>, not <em>certainly</em>, covered</span>
+  <p>The evidence is four real captures from two CLIs. The invariant is a shape rather than a
+  sentence, so a third CLI would likely work — but it has not been recorded, and saying
+  <em>probably</em> is the honest word.</p>
+</div>
+
+<h2>Escape sequences, and why a plain strip breaks this</h2>
+
+<p>These TUIs emit cursor-forward escapes where a person sees a space. A conventional
+<code>strip_ansi</code> therefore turns</p>
+
+<pre><code>Do you want to create hello.txt?</code></pre>
+
+<p>into</p>
+
+<pre><code>Doyouwanttocreatehello.txt?</code></pre>
+
+<p>So the preview goes through a renderer that understands cursor movement rather than a filter
+that deletes escape codes.</p>
+
+<h2>Where a notification appears</h2>
+
+<figure class="fig">
+  <img src="../img/notification-toast.png" alt="A toast notification in the app showing an agent's question, with a bell and badge in the titlebar.">
+  <figcaption>A bell in the titlebar, a centre under it, and an in-app toast stack.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>A bell in the titlebar</strong>, with a count.</li>
+  <li><strong>A centre</strong> under it — the list of what you missed.</li>
+  <li><strong>An in-app toast</strong> when the window is in front of you.</li>
+  <li><strong>A Windows toast</strong> when the window is behind something else, plus a taskbar
+  flash and a short sound.</li>
+</ul>
+
+<h2>What a Windows toast can and cannot do, measured</h2>
+
+<p>Fired from the installed build <em>before</em> the interface was written, which is why the
+interface is shaped correctly:</p>
+
+<ul>
+  <li>It <strong>appears, attributed to us</strong> — our own mark and name — on a machine that
+  also carries an unrelated <code>jarvis.exe</code> with its own Start Menu shortcut.</li>
+  <li>It does <strong>not</strong> appear from a development build, because the plugin only sets
+  the application identity for a packaged binary, and an unpackaged one has no shortcut to be
+  identified by.</li>
+  <li><strong>Clicking it does nothing, and cannot.</strong> The notification plugin exposes
+  activation callbacks on mobile only.</li>
+</ul>
+
+<p>So the desktop toast is an <em>alert</em> and the centre is the thing you click. Built the
+other way round, this would have shipped a toast that looks interactive and is not.</p>
+
+<h2>The one that would have shipped broken</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title"><code>isFocused()</code> returns <code>true</code> for a minimised window on Windows</span>
+  <p>The feed asked it the instant a notification arrived, concluded the person was sitting right
+  there, drew an in-app toast onto a window nobody could see, and <strong>never fired the desktop
+  toast</strong> — which is the entire point of the feature. Nothing in the interface looked
+  wrong: the notification appeared correctly in the centre.</p>
+  <p>Caught by asking <em>Windows</em> what it had actually been handed, and finding nothing from
+  the run that had just happened. The fix is not a better call but <strong>no call</strong>: the
+  surface reads the focus state that was last reported to it, and checks minimised state beside
+  it.</p>
+</div>
+
+<h2>Four more found by running it</h2>
+
+<ol>
+  <li>The count badge <strong>covered the bell</strong> — a 13px badge on a 14px icon. Visible
+  only by zooming into a real screenshot.</li>
+  <li>The toast's close button sat level with the middle of the agent's own question and
+  <strong>read as part of the text</strong>.</li>
+  <li>Opening the centre <strong>erased the thing it was opened to see</strong>. Marking
+  everything read is right, and it also cleared the marker showing which rows were new.</li>
+  <li>Clicking a notification for an <strong>already-open project</strong> did nothing, because
+  re-opening the same project is not a remount.</li>
+</ol>
+
+<h2>Unattended runs are quieter</h2>
+
+<p>A driven session's <em>finished turns</em> are dropped. Under the default budget you would
+otherwise get twenty notifications while away by choice, then a twenty-first when the run
+actually stopped — the only one you wanted, at the bottom of a pile.</p>
+
+<p>Its <strong>questions</strong> are not dropped. A driven agent that stops to ask is the one
+thing about an unattended run worth interrupting somebody for.</p>
+
+<h2>Settings</h2>
+
+<p>Three switches in <strong>Settings → Notifications</strong> — notify at all, also show a
+system notification, play a sound — and a test button that fires the <em>real</em> path rather
+than a simulation of it.</p>
+
+<div class="callout">
+  <span class="callout__title">The sound has never been heard</span>
+  <p>It synthesises two sine tones through the Web Audio API — quiet by construction, with an
+  envelope so it cannot click — and it is on by default. Every other channel was verified by
+  looking; this one cannot be, and nobody has listened to it yet. See
+  <a href="page:not-built">What is not built</a>.</p>
+</div>

@@ -1,1 +1,125 @@
-<p>TODO</p>
+<p>Two overlays that look similar and do different jobs. One runs commands. The other finds
+things you or an agent wrote, across every project you have ever opened.</p>
+
+<h2>The command palette — <span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></h2>
+
+<figure class="fig">
+  <img src="../img/palette.png" alt="The command palette open over Mission Control, listing destinations and actions.">
+  <figcaption>Destinations, settings sections and actions, ranked by subsequence.</figcaption>
+</figure>
+
+<p>Every rail destination, every settings section by name, and every action the current context
+offers. Type <code>mc</code> and get Mission Control.</p>
+
+<h3>How the ranking works</h3>
+
+<p>Subsequence matching, with contiguous runs and word-start matches scoring higher, and shorter
+titles winning a tie because the more specific command is the one you meant.</p>
+
+<pre><code><span class="c">for each character of the query:</span>
+  find it in the haystack, at or after the last position
+  <span class="c">no match anywhere → this command is out</span>
+  score += 1
+        + 2  <span class="c">for each step of an unbroken run</span>
+        + 3  <span class="c">if it lands at the start of a word</span>
+<span class="c">then subtract a hundredth of the title's length</span></code></pre>
+
+<p>Filtering and ranking are one pass: <em>no match</em> and <em>a bad score</em> are the same
+answer, so the list never has to be walked twice.</p>
+
+<div class="callout">
+  <span class="callout__title">The documentation you are reading uses the same scorer</span>
+  <p>This site's search is a port of that function, unchanged. It is the same interaction in the
+  same product, so typing <code>mc</code> should behave the same way in both places. Press
+  <span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> here and try it.</p>
+</div>
+
+<h2>Global Search — <span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></h2>
+
+<figure class="fig">
+  <img src="../img/global-search.png" alt="Global Search open with the query guardrail, showing a conversation hit from a real session with the matching line quoted.">
+  <figcaption><b>A conversation hit, showing the line it matched on</b> — the words an agent
+  actually said, months ago, in a session that has since been closed.</figcaption>
+</figure>
+
+<p>Five kinds of thing, across <strong>every project, always</strong>:</p>
+
+<div class="defs">
+  <div>
+    <dt>Knowledge</dt>
+    <dd>Anything in any project's <a href="page:brain">Brain</a>.</dd>
+  </div>
+  <div>
+    <dt>Notes</dt>
+    <dd>Project notes. <em>Not</em> <a href="page:notebook">notebook</a> notes yet — see below.</dd>
+  </div>
+  <div>
+    <dt>Missions</dt>
+    <dd>Titles, intents and criteria.</dd>
+  </div>
+  <div>
+    <dt>Activity</dt>
+    <dd>Translated and timestamped, so you can search for a thing that happened.</dd>
+  </div>
+  <div>
+    <dt>Conversations</dt>
+    <dd><strong>What was actually said</strong>, in any session, ever. This is the one nothing
+    else can do.</dd>
+  </div>
+</div>
+
+<h3>Why it is never scoped to the open project</h3>
+
+<p>The question people ask is <em>where did I see that?</em> Scoping to whichever project happens
+to be open would silently hide the answer exactly when the answer lives somewhere else.</p>
+
+<h3>Opening a session that no longer exists</h3>
+
+<p>Global Search is the first thing in the product that can open a session's conversation
+<em>after</em> the session ended and its tab was closed. That tab is never started and never
+closed on the backend — nothing was ever attached to it, so there is nothing to detach. See
+<a href="page:session-log">The session event log</a>.</p>
+
+<h3>Sessions recorded before search existed</h3>
+
+<p>A one-time backfill walks every session log once, off the startup path, one session per
+transaction — a background task with a bookmark rather than a migration, so it is resumable and
+idempotent across a crash halfway through.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified twice over, and the second one is the interesting one</span>
+  <p>The walk itself was verified against the machine's real recorded sessions: 55 rows out of 10
+  real logs, and a Portuguese word from a real Claude Code run came back attributed to the session
+  it was said in.</p>
+  <p>Then the <em>wiring</em> was verified separately against a real launch, because two earlier
+  bugs in this codebase were both <em>"the code was right and the wiring never ran"</em>. The log
+  line confirming the backfill finished is now unconditional for exactly that reason: a background
+  task that is silent in its steady state cannot be told apart from one that never started.</p>
+</div>
+
+<h2>How the index is built</h2>
+
+<p>A standalone FTS5 index, not an external-content one. The session events table is
+<code>WITHOUT ROWID</code> with a composite key, which external-content mode cannot key
+against.</p>
+
+<p>Knowledge, notes, missions and activity stay on plain <code>LIKE</code> — they are small
+tables, and it is the same choice the activity list already makes. An index is not free, and one
+that indexes a hundred rows is a cost with no benefit.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The table this was built on had no writer</span>
+  <p><code>session_events</code> had existed since the first migration and <strong>nothing had
+  ever written to it</strong>. The project's own notes claimed it "exists exactly for this"; that
+  claim was checked before anything was built on it, and found false. It was extended additively
+  rather than recreated, and wired into the transcript tailer that already mirrors usage and file
+  changes.</p>
+</div>
+
+<h2>Two shortcuts, resolved before anything else</h2>
+
+<p>Both <span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> and
+<span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span> are handled in the
+<strong>capture phase</strong>, because the terminal and Monaco both have their own ideas about
+those keys. A shortcut the interface advertises has to be resolved before any widget gets an
+opinion about it. See <a href="page:shortcuts">Keyboard shortcuts</a> for what that costs.</p>
