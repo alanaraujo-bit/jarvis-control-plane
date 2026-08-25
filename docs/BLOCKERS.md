@@ -287,3 +287,30 @@ Which is exactly what `Verificar atualizações` fetches. **The updater works.**
 and its `.sig` and *nothing else*. `latest.json` is written by hand or by a CI
 action, and a release without it puts every installation back where this entry
 started — an update check that fails against a URL that looks right.
+
+---
+
+## B-DOC1 — An unanswered AnyDesk remote-session request (2026-08-25, 14:3x)
+
+**Not a project blocker. Read this one first anyway.**
+
+While the documentation site was being built, an **incoming AnyDesk remote
+session request** appeared on top of the application window:
+
+```
+AnyDesk — 1604852548
+"-" (1604852548) deseja se conectar ao seu dispositivo.
+   [ Aceitar ]  [ Rejeitar ]
+```
+
+It was **not** initiated from this session and nothing here asked for it. It
+was left **unanswered on purpose** — accepting or rejecting a request for
+remote control of this machine is not a decision an agent should make on
+somebody's behalf. The window was minimised so it stopped covering the
+application being photographed; minimising answers nothing and the request is
+still exactly where it was.
+
+**What to do when you are back:** decide whether you recognise ID
+`1604852548`. If you do not, reject it and consider setting an AnyDesk
+unattended-access password, or closing AnyDesk when you are away. A screenshot
+of the request is at `.tmp/docshots/probe-settings.png`.

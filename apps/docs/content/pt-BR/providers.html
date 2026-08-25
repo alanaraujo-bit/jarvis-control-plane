@@ -1,0 +1,178 @@
+<p>Duas CLIs de agente vêm dentro do J.A.R.V.I.S. hoje: <strong>Claude Code</strong> e
+<strong>Codex</strong>. Elas não são intercambiáveis, e fingir o contrário seria o jeito mais
+fácil de fazer a interface mentir.</p>
+
+<h2>Um provedor é um adaptador, não um caso especial</h2>
+
+<p>Cada provedor é um adaptador em Rust por trás de um único trait. A primeira função do
+adaptador é se descrever, devolvendo uma struct <code>ProviderCapabilities</code> — como as
+sessões são correlacionadas, de onde vem a conversa, se o uso é oficial, se uma operação
+sensível pode ser parada, como um briefing chega até ele, de onde as sessões dele tiram
+nome.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A regra</span>
+  <p><strong>Capacidades são dados. Elas nunca são um booleano escrito dentro de um
+  componente.</strong> Uma superfície renderiza a partir do que o adaptador informa. Adicionar
+  um terceiro provedor não pode exigir encostar em um único arquivo React — e se exigisse, a
+  abstração já teria falhado.</p>
+</div>
+
+<p>Isso soa como boa prática comum até você ver o custo de quebrá-la. A alternativa é um
+componente que diz <code>if (provider === "claude-code")</code>, que está correto no dia em que
+foi escrito e silenciosamente errado para todo provedor adicionado depois. Existe um teste que
+falha se os dois adaptadores algum dia se descreverem de forma idêntica, porque dois provedores
+informando as mesmas capacidades é muito mais provável de ser um copiar-e-colar do que uma
+verdade.</p>
+
+<h2>O que os adaptadores realmente afirmam</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Capacidade</th><th>Claude Code</th><th>Codex</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Correlação de sessão</strong></td>
+      <td><code>Deterministic</code></td>
+      <td><code>FileWatch</code></td>
+    </tr>
+    <tr>
+      <td><strong>Origem da conversa</strong></td>
+      <td><code>Transcript</code></td>
+      <td><code>Transcript</code></td>
+    </tr>
+    <tr>
+      <td><strong>Relato de uso</strong></td>
+      <td><span class="badge" data-t="official">Oficial</span></td>
+      <td><span class="badge" data-t="official">Oficial</span></td>
+    </tr>
+    <tr>
+      <td><strong>Aplicação de proteções</strong></td>
+      <td><code>PreExecution</code></td>
+      <td><code>PreExecutionWhenTrusted</code></td>
+    </tr>
+    <tr>
+      <td><strong>Rota do briefing</strong></td>
+      <td><code>SystemPrompt</code></td>
+      <td><code>OpeningMessage</code></td>
+    </tr>
+    <tr>
+      <td><strong>Títulos de sessão</strong></td>
+      <td><code>Provider</code></td>
+      <td><code>Derived</code></td>
+    </tr>
+    <tr>
+      <td><strong>Retomar</strong></td>
+      <td><code>Fork</code></td>
+      <td><code>AppendInPlace</code></td>
+    </tr>
+    <tr>
+      <td><strong>Imagens · worktrees · troca de conta</strong></td>
+      <td>Sim</td>
+      <td>Sim</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p><a href="page:provider-matrix">A matriz completa</a> explica o que cada valor significa para
+você. As diferenças que valem entender agora são estas quatro.</p>
+
+<h3>Correlação: qual transcrição pertence a esta sessão</h3>
+
+<p>Quando você inicia um agente, o J.A.R.V.I.S. precisa saber qual arquivo JSONL no disco é o
+que este processo está escrevendo. Errar isso atribui o trabalho de um agente a outro.</p>
+
+<p>O Claude Code aceita <code>--session-id &lt;uuid&gt;</code> e escreve a transcrição dele com
+esse nome. O vínculo é um fato que nós afirmamos, então é <code>Deterministic</code>.</p>
+
+<p>O Codex nomeia os próprios arquivos de rollout. O adaptador observa o diretório e casa com o
+arquivo que apareceu depois que este processo começou. Isso é uma heurística muito boa e
+<strong>continua sendo uma heurística</strong>, então é informado como <code>FileWatch</code> em
+vez de enfeitado. Duas sessões do Codex iniciadas no mesmo segundo na mesma pasta é o caso em
+que ela poderia errar, e dizer isso é mais barato do que estar confiantemente enganado.</p>
+
+<h3>Proteções: parado, ou só observado</h3>
+
+<p>As duas CLIs têm um hook pré-ferramenta com o mesmo formato de fio. O Claude Code executa
+ele: uma recusa realmente para o comando antes de ele rodar, verificado contra a 2.1.240
+recusando um push forçado real e confirmando que o remoto ficou intocado.</p>
+
+<p>O Codex não executa um hook até você ter revisado e confiado nele na interface do próprio
+Codex. O J.A.R.V.I.S. escreve a configuração do hook no início da sessão para que ela esteja
+lá para ser confiada, e até você fazer isso aquela sessão é <em>observada</em> e não
+<em>protegida</em>. É exatamente isso que <code>PreExecutionWhenTrusted</code> quer dizer, e a
+interface fala isso em vez de te mostrar um escudo que não está fazendo nada.</p>
+
+<h3>Briefing: como a memória do projeto chega ao agente</h3>
+
+<p>A <a href="page:brain">Memória</a> entrega um briefing a todo agente antes de ele começar. O
+Claude Code aceita <code>--append-system-prompt-file</code>, então o briefing é passado fora de
+banda: nada é escrito no seu repositório, nada é gasto de um turno, e nada aparece no
+terminal.</p>
+
+<p>O Codex 0.147.0 não tem flag equivalente. Um briefing só poderia chegar como a mensagem de
+abertura da sessão — visível, e custando um turno. O adaptador informa
+<code>OpeningMessage</code>, e uma pessoa escolhendo provedor para uma
+<a href="page:guide-unattended">execução sem supervisão</a> consegue ver qual das duas está
+levando.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Medido, não lido de uma página de ajuda</span>
+  <p>A capacidade de briefing do Claude Code é fixada por um teste marcado
+  <code>#[ignore]</code> que inicia um agente real através de um PTY real e pede um codinome que
+  só aparece no briefing. Com a flag ele responde; sem ela, não. Uma capacidade afirmada a
+  partir de uma listagem de <code>--help</code> é uma afirmação sobre documentação, não sobre
+  comportamento.</p>
+</div>
+
+<h3>Títulos: quem dá nome a uma sessão</h3>
+
+<p>O Claude Code escreve uma linha <code>ai-title</code> na própria transcrição. Nada estava
+lendo isso, então toda sessão no banco ficava sem título até o <a href="page:history">Histórico</a>
+ser construído. Ela está presente em 89 das 124 transcrições da máquina em que isso foi
+verificado.</p>
+
+<p>O Codex não declara título em lugar nenhum. <code>set_thread_title</code> existe nos rollouts
+dele, mas como <em>definição</em> de ferramenta dentro das instruções, e não como um evento que
+ele emite — conferido em todos os rollouts daquela máquina. Então as sessões dele ganham um
+título <code>Derived</code>, calculado a partir do que foi dito nelas.</p>
+
+<h2>Os dois são observados do mesmo jeito</h2>
+
+<p>A pergunta que decidiu todo este desenho foi se uma sessão pode estar simultaneamente presa
+a um PTY <em>e</em> ser observável estruturalmente. Pode: as duas CLIs escrevem transcrições
+JSONL estruturadas em disco enquanto rodam interativamente.</p>
+
+<pre><code><span class="c">// Claude Code</span>
+~/.claude/projects/&lt;cwd-codificado&gt;/&lt;session-uuid&gt;.jsonl
+  <span class="c">eventos</span> user · assistant · system · attachment · ai-title · file-history-*
+  <span class="c">uso</span>     assistant.message.usage → input, output, cache_creation, cache_read
+  <span class="c">forma</span>   as mensagens formam um DAG via parentUuid
+
+<span class="c">// Codex</span>
+~/.codex/sessions/YYYY/MM/DD/rollout-&lt;ts&gt;-&lt;uuid&gt;.jsonl
+  <span class="c">envelope</span> {timestamp, ordinal, type, payload} — ordenado estritamente por ordinal
+  <span class="c">tipos</span>    session_meta · event_msg/* · response_item/* · turn_context · world_state
+  <span class="c">uso</span>      event_msg/token_count carrega rate_limits oficiais</code></pre>
+
+<p>É por isso que a <a href="page:conversation">Conversa</a> é dado estruturado de verdade, e não
+ANSI raspado de um terminal. O leitor que acompanha esses arquivos lida com linhas parciais,
+sequências UTF-8 partidas entre leituras, truncamento e CRLF — e foi validado analisando toda
+transcrição real da máquina de desenvolvimento: 79 arquivos, 49.905 itens de conversa, 19.582
+deles carregando uso oficial.</p>
+
+<h2>Onde um provedor é escolhido</h2>
+
+<p>Na área <strong>Sessões</strong> de um projeto, o <code>+</code> ao lado da faixa de abas
+oferece um Shell simples e todo agente que a <a href="page:settings">varredura de ambiente</a>
+encontrou na sua máquina. Um provedor cujo executável não está no <code>PATH</code> não é
+oferecido, e a seção Ambiente das Configurações diz o que está faltando.</p>
+
+<div class="callout">
+  <span class="callout__title">No código</span>
+  <p><code>providers/mod.rs</code> é o trait e o modelo de capacidades;
+  <code>providers/claude.rs</code> e <code>providers/codex.rs</code> são os dois adaptadores,
+  cada um com o raciocínio dos próprios valores em comentários;
+  <code>providers/tail.rs</code> é o leitor de JSONL.</p>
+</div>

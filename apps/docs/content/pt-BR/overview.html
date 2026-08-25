@@ -1,0 +1,144 @@
+<div class="hero">
+  <h2 id="a-versao-curta">A versão curta</h2>
+  <p>Claude Code, Codex e o que vier depois deles são extraordinários escrevendo código e
+  péssimos em tudo que está em volta. Eles não têm memória do seu projeto, não fazem ideia de
+  qual das suas quatro assinaturas ainda tem cota, não conseguem provar que terminaram o que
+  disseram que terminaram, e não guardam registro nenhum do que aconteceu depois que você
+  fechou a janela.</p>
+  <p><strong>O J.A.R.V.I.S. é a camada acima deles.</strong> Eles viram provedores de execução
+  dentro dele. Projetos, missões, agentes, sessões, código e verificação num lugar só, para que
+  a distância entre uma intenção e software funcionando seja a menor possível.</p>
+</div>
+
+<h2>O que ele faz, na prática</h2>
+
+<p>Você abre uma pasta. Você inicia um agente num terminal de verdade dentro dela — não numa
+janela de chat fingindo ser um. A partir daí o produto faz quatro coisas ao mesmo tempo que
+nenhuma CLI de agente faz sozinha:</p>
+
+<div class="cards">
+  <a class="card" href="page:session-log">
+    <strong>Ele guarda o registro</strong>
+    <span>Cada byte que o processo escreveu, cada turno estruturado, cada contagem de token,
+    cada arquivo tocado — num único log append-only por sessão, no seu disco.</span>
+  </a>
+  <a class="card" href="page:missions">
+    <strong>Ele confere o trabalho</strong>
+    <span>Uma missão está terminada quando comandos reais passam e arquivos reais existem — e
+    ela deixa de estar terminada no instante em que param.</span>
+  </a>
+  <a class="card" href="page:guardrails">
+    <strong>Ele segura o que é perigoso</strong>
+    <span>Um push forçado, um <code>rm -rf</code>, um deploy em produção — parados antes de
+    rodar, esperando uma decisão que é sua.</span>
+  </a>
+  <a class="card" href="page:accounts">
+    <strong>Ele olha o medidor</strong>
+    <span>Qual das suas assinaturas está te travando, quando a janela dela reseta, e onde o
+    trabalho novo deveria começar.</span>
+  </a>
+</div>
+
+<figure class="fig">
+  <img src="../img/project-areas.png" alt="Um projeto aberto no J.A.R.V.I.S., mostrando as sete áreas da área de trabalho: Sessões, Arquivos, Revisão, Prévia, Worktrees, Memória e Configurações.">
+  <figcaption><b>Um projeto é uma pasta.</b> Abrir um te dá sete áreas sobre o mesmo código. A
+  barra da esquerda nunca passa de seis destinos mais Configurações; tudo que tem forma de
+  projeto mora dentro do projeto.</figcaption>
+</figure>
+
+<h2>A ideia para ler primeiro</h2>
+
+<p>Quase toda decisão de design deste produto sai de uma só, e ela vale cinco minutos antes de
+qualquer outra coisa:</p>
+
+<blockquote>Uma sessão não é um widget de terminal mais um widget de chat. Ela é um único log
+de eventos, ordenado e append-only. Todo o resto — o terminal, a conversa, os números de uso, o
+feed de atividade, a evidência de uma missão — é uma <em>projeção</em> desse log.</blockquote>
+
+<p>É por isso que você consegue alternar um agente em execução entre Terminal e Conversa sem
+encostar no processo. É por isso que uma sessão que você fechou semana passada continua
+pesquisável pelo que foi dito dentro dela. É por isso que as contagens de token são os números
+do próprio provedor, e não uma estimativa. E é por isso que não existe um segundo depósito que
+possa discordar do primeiro.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Comece por aqui</span>
+  <p><a href="page:session-log">O log de eventos da sessão</a> explica a ideia e o que ela
+  compra. Se você for ler só uma página de conceito, leia essa.</p>
+</div>
+
+<h2>Local em primeiro lugar, e o que isso quer dizer exatamente</h2>
+
+<p>Seu código, seu histórico de Git, seus terminais, suas credenciais de provedor e toda sessão
+que você já rodou ficam na sua máquina. Não existe conta para criar e nada é enviado para
+usar o produto.</p>
+
+<p>Duas coisas podem sair, e as duas são interruptores que você liga:</p>
+
+<ul>
+  <li><strong>O relay do celular.</strong> Um resumo do que precisa de uma pessoa — nunca
+  conteúdo de arquivo, saída de terminal ou texto de conversa. Desligado até você parear um
+  aparelho. Veja <a href="page:local-first">Local em primeiro lugar</a>.</li>
+  <li><strong>O próprio agente.</strong> Claude Code e Codex falam com os provedores deles, nos
+  termos deles, com as suas credenciais. O J.A.R.V.I.S. inicia os dois e lê o que eles escrevem
+  em disco; ele nunca intermedia o tráfego deles.</li>
+</ul>
+
+<h2>O que ele não é</h2>
+
+<div class="defs">
+  <div>
+    <dt>Não é um editor com um painel de chat</dt>
+    <dd>O Monaco está aqui, e é deliberadamente pequeno — sem serviços de linguagem, carregado
+    sob demanda (<a href="page:files-editor">por quê</a>). O produto não está disputando as
+    horas em que você digita código com as próprias mãos.</dd>
+  </div>
+  <div>
+    <dt>Não é mais um agente</dt>
+    <dd>Nada aqui escreve código. Ele roda os agentes que você já paga e te conta a verdade
+    sobre o que eles fizeram.</dd>
+  </div>
+  <div>
+    <dt>Não é um invólucro de um fornecedor só</dt>
+    <dd>Dois provedores existem hoje e eles são genuinamente diferentes. Essas diferenças são
+    <a href="page:providers">dados que a interface lê</a>, então a interface continua honesta
+    sobre quem consegue fazer o quê.</dd>
+  </div>
+  <div>
+    <dt>Não está pronto</dt>
+    <dd>Várias coisas estão deliberadamente ausentes em vez de fingidas, e
+    <a href="page:not-built">uma página diz quais</a> e por quê. Também existe uma página de
+    <a href="page:blockers">bloqueios em aberto</a>, incluindo o instalador sem assinatura.</dd>
+  </div>
+</div>
+
+<h2>Para onde ir agora</h2>
+
+<div class="cards">
+  <a class="card" href="page:install">
+    <strong>Instalar</strong>
+    <span>Windows, por usuário, sem pedido de administrador — e o único aviso que você vai
+    ver.</span>
+  </a>
+  <a class="card" href="page:quickstart">
+    <strong>Seus dez primeiros minutos</strong>
+    <span>Abrir uma pasta, rodar um agente, escrever uma missão que ele tem que provar que
+    terminou.</span>
+  </a>
+  <a class="card" href="page:session-log">
+    <strong>Entender o modelo</strong>
+    <span>Um log, várias projeções — a ideia da qual o resto do produto é feito.</span>
+  </a>
+  <a class="card" href="page:shortcuts">
+    <strong>Aprender as teclas</strong>
+    <span>Cinco atalhos cobrem quase todo o produto. Um deles tira uma tecla do seu shell, e a
+    gente diz qual.</span>
+  </a>
+</div>
+
+<div class="callout">
+  <span class="callout__title">Versão</span>
+  <p>Esta documentação descreve a <strong>0.5.0</strong>, verificada contra o Claude Code
+  2.1.245 e o Codex CLI 0.149.1 no Windows 11. Onde um comportamento depende de uma versão
+  específica da CLI, a página diz.</p>
+</div>

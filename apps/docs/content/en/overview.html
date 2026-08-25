@@ -1,0 +1,140 @@
+<div class="hero">
+  <h2 id="the-short-version">The short version</h2>
+  <p>Claude Code, Codex and whatever comes after them are extraordinary at writing code and
+  hopeless at everything around it. They have no memory of your project, no idea which of your
+  four subscriptions still has allowance, no way to prove they finished what they said they
+  finished, and no record of what happened after you closed the window.</p>
+  <p><strong>J.A.R.V.I.S. is the layer above them.</strong> They become execution providers
+  inside it. Projects, missions, agents, sessions, code and verification live in one place, so
+  the distance between an intention and working software is as short as it can be.</p>
+</div>
+
+<h2>What it actually does</h2>
+
+<p>You open a folder. You start an agent in a real terminal inside it — not a chat window
+pretending to be one. From that moment the product is doing four things at once that no agent
+CLI does for itself:</p>
+
+<div class="cards">
+  <a class="card" href="page:session-log">
+    <strong>It keeps the record</strong>
+    <span>Every byte the process wrote, every structured turn, every token count, every file
+    touched — in one append-only log per session, on your disk.</span>
+  </a>
+  <a class="card" href="page:missions">
+    <strong>It checks the work</strong>
+    <span>A mission is finished when real commands pass and real files exist — and it is
+    <em>un</em>finished the moment they stop.</span>
+  </a>
+  <a class="card" href="page:guardrails">
+    <strong>It holds the dangerous things</strong>
+    <span>A force push, an <code>rm -rf</code>, a production deploy — stopped before they run,
+    for a decision that is yours.</span>
+  </a>
+  <a class="card" href="page:accounts">
+    <strong>It watches the meter</strong>
+    <span>Which of your subscriptions is holding you up, when its window resets, and where new
+    work should start instead.</span>
+  </a>
+</div>
+
+<figure class="fig">
+  <img src="../img/project-areas.png" alt="A project open in J.A.R.V.I.S., showing the seven areas of the workspace: Sessions, Files, Review, Preview, Worktrees, Brain and Settings.">
+  <figcaption><b>A project is a folder.</b> Opening one gives you seven areas over the same
+  code. The rail on the far left never grows past six destinations and Settings; everything
+  project-shaped lives inside the project instead.</figcaption>
+</figure>
+
+<h2>The one idea to read first</h2>
+
+<p>Almost every design decision in this product follows from a single one, and it is worth
+five minutes before anything else:</p>
+
+<blockquote>A session is not a terminal widget plus a chat widget. It is one append-only,
+ordered event log. Everything else — the terminal, the conversation, the usage numbers, the
+activity feed, the evidence on a mission — is a <em>projection</em> of that log.</blockquote>
+
+<p>This is why you can flip a running agent between Terminal and Conversation without touching
+the process. It is why a session you closed last week is still searchable by what was said
+inside it. It is why token counts are the provider's own numbers rather than an estimate. And
+it is why there is no second store that can disagree with the first one.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Start here</span>
+  <p><a href="page:session-log">The session event log</a> explains the idea and what it buys.
+  If you read one concept page, read that one.</p>
+</div>
+
+<h2>Local-first, and what that means precisely</h2>
+
+<p>Your code, your Git history, your terminals, your provider credentials and every session
+you have ever run stay on your machine. There is no account to create and nothing is uploaded
+to use the product.</p>
+
+<p>Two things can leave, and both are switches you turn on:</p>
+
+<ul>
+  <li><strong>The phone relay.</strong> A summary of what needs a person — never file contents,
+  terminal output or conversation text. Off unless you pair a device.
+  See <a href="page:local-first">Local-first</a>.</li>
+  <li><strong>The agent itself.</strong> Claude Code and Codex talk to their own providers, on
+  their own terms, with your own credentials. J.A.R.V.I.S. launches them and reads what they
+  write to disk; it never proxies their traffic.</li>
+</ul>
+
+<h2>What it is not</h2>
+
+<div class="defs">
+  <div>
+    <dt>Not an editor with a chat panel</dt>
+    <dd>Monaco is here, and it is deliberately small — no language services, loaded on demand
+    (<a href="page:files-editor">why</a>). The product is not competing for the hours you spend
+    typing code yourself.</dd>
+  </div>
+  <div>
+    <dt>Not another agent</dt>
+    <dd>Nothing here writes code. It runs the agents you already pay for and tells you the
+    truth about what they did.</dd>
+  </div>
+  <div>
+    <dt>Not a wrapper around one vendor</dt>
+    <dd>Two providers ship today and they genuinely differ. Those differences are
+    <a href="page:providers">data the interface reads</a>, so the interface stays honest about
+    which one can do what.</dd>
+  </div>
+  <div>
+    <dt>Not finished</dt>
+    <dd>Several things are deliberately absent rather than stubbed, and
+    <a href="page:not-built">one page says which</a> and why. There is also a page of
+    <a href="page:blockers">open blockers</a>, including the unsigned installer.</dd>
+  </div>
+</div>
+
+<h2>Where to go next</h2>
+
+<div class="cards">
+  <a class="card" href="page:install">
+    <strong>Install it</strong>
+    <span>Windows, per-user, no administrator prompt — and the one warning you will see.</span>
+  </a>
+  <a class="card" href="page:quickstart">
+    <strong>Your first ten minutes</strong>
+    <span>Open a folder, run an agent, write a mission it has to prove it finished.</span>
+  </a>
+  <a class="card" href="page:session-log">
+    <strong>Understand the model</strong>
+    <span>One log, many projections — the idea the rest of the product is built out of.</span>
+  </a>
+  <a class="card" href="page:shortcuts">
+    <strong>Learn the keys</strong>
+    <span>Five shortcuts cover most of the product. One of them takes a key away from your
+    shell, and we say which.</span>
+  </a>
+</div>
+
+<div class="callout">
+  <span class="callout__title">Version</span>
+  <p>This documentation describes <strong>0.5.0</strong>, verified against Claude Code 2.1.245
+  and Codex CLI 0.149.1 on Windows 11. Where a behaviour depends on a specific CLI version, the
+  page says so.</p>
+</div>

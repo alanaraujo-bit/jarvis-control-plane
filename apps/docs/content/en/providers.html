@@ -1,0 +1,172 @@
+<p>Two agent CLIs ship inside J.A.R.V.I.S. today: <strong>Claude Code</strong> and
+<strong>Codex</strong>. They are not interchangeable, and pretending otherwise would be the
+easiest way to make the interface lie.</p>
+
+<h2>A provider is an adapter, not a special case</h2>
+
+<p>Each provider is a Rust adapter behind one trait. The adapter's first job is to describe
+itself by returning a <code>ProviderCapabilities</code> struct — how sessions are correlated,
+where the conversation comes from, whether usage is official, whether a sensitive operation can
+be stopped, how a brief reaches it, where its sessions get their names.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The rule</span>
+  <p><strong>Capabilities are data. They are never a boolean written into a component.</strong>
+  A surface renders from what the adapter reports. Adding a third provider must not require
+  touching a single React file — and if it did, the abstraction would already have failed.</p>
+</div>
+
+<p>This sounds like ordinary good practice until you see what it costs to break. The
+alternative is a component that says <code>if (provider === "claude-code")</code>, which is
+correct on the day it is written and silently wrong for every provider added afterwards. There
+is a test that fails if the two adapters ever describe themselves identically, because two
+providers reporting the same capabilities is far more likely to be a copy-paste than a truth.</p>
+
+<h2>What the adapters actually claim</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Capability</th><th>Claude Code</th><th>Codex</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Session correlation</strong></td>
+      <td><code>Deterministic</code></td>
+      <td><code>FileWatch</code></td>
+    </tr>
+    <tr>
+      <td><strong>Conversation source</strong></td>
+      <td><code>Transcript</code></td>
+      <td><code>Transcript</code></td>
+    </tr>
+    <tr>
+      <td><strong>Usage reporting</strong></td>
+      <td><span class="badge" data-t="official">Official</span></td>
+      <td><span class="badge" data-t="official">Official</span></td>
+    </tr>
+    <tr>
+      <td><strong>Guardrail enforcement</strong></td>
+      <td><code>PreExecution</code></td>
+      <td><code>PreExecutionWhenTrusted</code></td>
+    </tr>
+    <tr>
+      <td><strong>Briefing route</strong></td>
+      <td><code>SystemPrompt</code></td>
+      <td><code>OpeningMessage</code></td>
+    </tr>
+    <tr>
+      <td><strong>Session titles</strong></td>
+      <td><code>Provider</code></td>
+      <td><code>Derived</code></td>
+    </tr>
+    <tr>
+      <td><strong>Resuming</strong></td>
+      <td><code>Fork</code></td>
+      <td><code>AppendInPlace</code></td>
+    </tr>
+    <tr>
+      <td><strong>Images · worktrees · account switching</strong></td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p><a href="page:provider-matrix">The full matrix</a> explains what each value means for you.
+The differences worth understanding now are these four.</p>
+
+<h3>Correlation: which transcript belongs to this session</h3>
+
+<p>When you start an agent, J.A.R.V.I.S. needs to know which JSONL file on disk is the one this
+process is writing. Getting that wrong attributes one agent's work to another.</p>
+
+<p>Claude Code accepts <code>--session-id &lt;uuid&gt;</code> and writes its transcript under
+that name. The link is a fact we asserted, so it is <code>Deterministic</code>.</p>
+
+<p>Codex names its own rollout files. The adapter watches the directory and matches on the file
+that appeared after this process started. That is a very good heuristic and it is
+<strong>still a heuristic</strong>, so it is reported as <code>FileWatch</code> rather than
+dressed up. Two Codex sessions started in the same second in the same folder is the case where
+it could be wrong, and saying so is cheaper than being confidently mistaken.</p>
+
+<h3>Guardrails: stopped, or only watched</h3>
+
+<p>Both CLIs have a pre-tool hook with the same wire shape. Claude Code runs it: a refusal
+genuinely stops the command before it executes, verified against 2.1.240 by refusing a real
+force push and confirming the remote was untouched.</p>
+
+<p>Codex will not run a hook until you have reviewed and trusted it in Codex's own interface.
+J.A.R.V.I.S. writes the hook configuration at session start so it is there to be trusted, and
+until you do, that session is <em>observed</em> rather than <em>guarded</em>. That is exactly
+what <code>PreExecutionWhenTrusted</code> means, and the interface says it rather than showing
+you a shield that is not doing anything.</p>
+
+<h3>Briefing: how a project's memory reaches the agent</h3>
+
+<p>The <a href="page:brain">Brain</a> hands every agent a brief before it starts. Claude Code
+takes <code>--append-system-prompt-file</code>, so the brief is passed out of band: nothing is
+written into your repository, nothing is spent from a turn, and nothing appears in the
+terminal.</p>
+
+<p>Codex 0.147.0 has no equivalent flag. A brief could only arrive as the session's opening
+message — visible, and costing a turn. The adapter reports <code>OpeningMessage</code>, and a
+person choosing a provider for an <a href="page:guide-unattended">unattended run</a> can see
+which of the two they are getting.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Measured, not read off a help page</span>
+  <p>The Claude Code briefing capability is pinned by an <code>#[ignore]</code>d test that
+  starts a real agent through a real PTY and asks it for a codename that appears only in the
+  brief. With the flag it answers; without it, it does not. A capability claimed from a
+  <code>--help</code> listing is a claim about documentation, not about behaviour.</p>
+</div>
+
+<h3>Titles: who names a session</h3>
+
+<p>Claude Code writes an <code>ai-title</code> line into its own transcript. Nothing was reading
+it, so every session in the database was untitled until <a href="page:history">History</a> was
+built. It is present in 89 of the 124 transcripts on the machine this was verified against.</p>
+
+<p>Codex states no title anywhere. <code>set_thread_title</code> exists in its rollouts, but as
+a tool <em>definition</em> inside the instructions rather than an event it emits — checked
+across every rollout on that machine. So its sessions get a <code>Derived</code> title,
+computed from what was said in them.</p>
+
+<h2>Both are watched the same way</h2>
+
+<p>The question that decided this whole design was whether one session can be simultaneously
+attached to a PTY <em>and</em> structurally observable. It can: both CLIs write structured JSONL
+transcripts to disk while running interactively.</p>
+
+<pre><code><span class="c">// Claude Code</span>
+~/.claude/projects/&lt;encoded-cwd&gt;/&lt;session-uuid&gt;.jsonl
+  <span class="c">events</span>  user · assistant · system · attachment · ai-title · file-history-*
+  <span class="c">usage</span>   assistant.message.usage → input, output, cache_creation, cache_read
+  <span class="c">shape</span>   messages form a DAG via parentUuid
+
+<span class="c">// Codex</span>
+~/.codex/sessions/YYYY/MM/DD/rollout-&lt;ts&gt;-&lt;uuid&gt;.jsonl
+  <span class="c">envelope</span> {timestamp, ordinal, type, payload} — strictly ordered by ordinal
+  <span class="c">types</span>    session_meta · event_msg/* · response_item/* · turn_context · world_state
+  <span class="c">usage</span>    event_msg/token_count carries official rate_limits</code></pre>
+
+<p>This is why <a href="page:conversation">Conversation</a> is real structured data rather than
+ANSI scraped out of a terminal. The tailer that reads these handles partial lines, UTF-8
+sequences split across reads, truncation and CRLF — and it was validated by parsing every real
+transcript on the development machine: 79 files, 49,905 conversation items, 19,582 of them
+carrying official usage.</p>
+
+<h2>Where a provider is chosen</h2>
+
+<p>In a project's <strong>Sessions</strong> area, the <code>+</code> next to the tab strip
+offers a plain Shell and every agent the <a href="page:settings">environment scan</a> found on
+your machine. A provider whose executable is not on <code>PATH</code> is not offered, and the
+Environment section of Settings says what is missing.</p>
+
+<div class="callout">
+  <span class="callout__title">In the source</span>
+  <p><code>providers/mod.rs</code> is the trait and the capability model;
+  <code>providers/claude.rs</code> and <code>providers/codex.rs</code> are the two adapters,
+  each with the reasoning for its own values in comments;
+  <code>providers/tail.rs</code> is the JSONL reader.</p>
+</div>

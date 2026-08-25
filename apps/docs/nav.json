@@ -1,0 +1,424 @@
+{
+  "locales": ["en", "pt-BR"],
+  "defaultLocale": "en",
+  "sections": [
+    {
+      "id": "start",
+      "title": { "en": "Start here", "pt-BR": "Comece aqui" },
+      "pages": [
+        {
+          "slug": "overview",
+          "title": { "en": "What J.A.R.V.I.S. is", "pt-BR": "O que é o J.A.R.V.I.S." },
+          "summary": {
+            "en": "A desktop environment where AI coding agents are execution providers rather than the product — and where everything they do lands in one log you own.",
+            "pt-BR": "Um ambiente de desktop onde agentes de IA são provedores de execução em vez de serem o produto — e onde tudo o que eles fazem cai em um único log que é seu."
+          }
+        },
+        {
+          "slug": "install",
+          "title": { "en": "Install", "pt-BR": "Instalação" },
+          "summary": {
+            "en": "What the installer does, what it needs, where it puts things, and the one warning Windows will show you.",
+            "pt-BR": "O que o instalador faz, do que ele precisa, onde ele coloca as coisas, e o único aviso que o Windows vai te mostrar."
+          }
+        },
+        {
+          "slug": "quickstart",
+          "title": { "en": "Your first ten minutes", "pt-BR": "Seus dez primeiros minutos" },
+          "summary": {
+            "en": "From an empty window to an agent that finished a mission you can prove it finished.",
+            "pt-BR": "De uma janela vazia a um agente que terminou uma missão cujo término você consegue provar."
+          }
+        }
+      ]
+    },
+    {
+      "id": "concepts",
+      "title": { "en": "Concepts", "pt-BR": "Conceitos" },
+      "pages": [
+        {
+          "slug": "session-log",
+          "title": { "en": "The session event log", "pt-BR": "O log de eventos da sessão" },
+          "summary": {
+            "en": "The one idea everything else rests on: a session is not a terminal plus a chat, it is a single ordered log with many projections.",
+            "pt-BR": "A ideia sobre a qual tudo se apoia: uma sessão não é um terminal mais um chat, é um único log ordenado com várias projeções."
+          }
+        },
+        {
+          "slug": "providers",
+          "title": { "en": "Providers and capabilities", "pt-BR": "Provedores e capacidades" },
+          "summary": {
+            "en": "Claude Code and Codex are adapters behind one interface — and where they differ, the difference is data the interface reads, never a boolean in a component.",
+            "pt-BR": "Claude Code e Codex são adaptadores atrás de uma única interface — e onde eles diferem, a diferença é um dado que a interface lê, nunca um booleano dentro de um componente."
+          }
+        },
+        {
+          "slug": "missions",
+          "title": { "en": "Missions, evidence and verification", "pt-BR": "Missões, evidência e verificação" },
+          "summary": {
+            "en": "A mission is finished when real checks pass — and it stops being finished when they stop passing.",
+            "pt-BR": "Uma missão está terminada quando checagens reais passam — e ela deixa de estar terminada quando elas param de passar."
+          }
+        },
+        {
+          "slug": "autonomy",
+          "title": { "en": "Autonomy", "pt-BR": "Autonomia" },
+          "summary": {
+            "en": "Four profiles that answer how much an agent decides on its own, resolved down a chain from the mission to the global default.",
+            "pt-BR": "Quatro perfis que respondem quanto um agente decide sozinho, resolvidos por uma cadeia que vai da missão até o padrão global."
+          }
+        },
+        {
+          "slug": "guardrails",
+          "title": { "en": "Guardrails", "pt-BR": "Proteções" },
+          "summary": {
+            "en": "The fence around autonomy: eight classes of sensitive operation, held for a decision before they run, in a process that fails open on purpose.",
+            "pt-BR": "A cerca em volta da autonomia: oito classes de operação sensível, retidas para uma decisão antes de rodarem, em um processo que falha aberto de propósito."
+          }
+        },
+        {
+          "slug": "confidence",
+          "title": { "en": "Official and Observed", "pt-BR": "Oficial e Observado" },
+          "summary": {
+            "en": "Every number and every claim in the product says where it came from. An estimate is never dressed as a fact.",
+            "pt-BR": "Todo número e toda afirmação no produto dizem de onde vieram. Uma estimativa nunca é vestida de fato."
+          }
+        },
+        {
+          "slug": "memory",
+          "title": { "en": "Memory", "pt-BR": "Memória" },
+          "summary": {
+            "en": "Three stores with three different jobs: knowledge that is briefed to agents, notes that never leave, and a notebook you hand to the agent yourself.",
+            "pt-BR": "Três depósitos com três funções diferentes: conhecimento que é passado aos agentes, notas que nunca saem, e um bloco que você mesmo entrega ao agente."
+          }
+        },
+        {
+          "slug": "accounts",
+          "title": { "en": "Accounts and quota", "pt-BR": "Contas e cota" },
+          "summary": {
+            "en": "Several subscriptions, each with its own five-hour window, and work that moves to the next one instead of stopping.",
+            "pt-BR": "Várias assinaturas, cada uma com sua janela de cinco horas, e trabalho que se move para a próxima em vez de parar."
+          }
+        },
+        {
+          "slug": "local-first",
+          "title": { "en": "Local-first", "pt-BR": "Local em primeiro lugar" },
+          "summary": {
+            "en": "Your code, your Git, your terminals, your credentials and your history stay on your machine — and what does leave it is a summary you switch on.",
+            "pt-BR": "Seu código, seu Git, seus terminais, suas credenciais e seu histórico ficam na sua máquina — e o que sai dela é um resumo que você liga."
+          }
+        }
+      ]
+    },
+    {
+      "id": "surfaces",
+      "title": { "en": "Surfaces", "pt-BR": "Superfícies" },
+      "pages": [
+        {
+          "slug": "mission-control",
+          "title": { "en": "Mission Control", "pt-BR": "Central de Missões" },
+          "summary": {
+            "en": "The home screen, ordered by what needs you rather than by what happened last.",
+            "pt-BR": "A tela inicial, ordenada pelo que precisa de você em vez de pelo que aconteceu por último."
+          }
+        },
+        {
+          "slug": "projects",
+          "title": { "en": "Projects", "pt-BR": "Projetos" },
+          "summary": {
+            "en": "A project is a real folder on disk. Opening one gives you a workspace with seven areas.",
+            "pt-BR": "Um projeto é uma pasta real no disco. Abrir um te dá uma área de trabalho com sete áreas."
+          }
+        },
+        {
+          "slug": "terminal",
+          "title": { "en": "Terminal", "pt-BR": "Terminal" },
+          "summary": {
+            "en": "A real pseudo-terminal with tabs, splits, scrollback search and image paste — the hero surface, and the one every agent actually runs in.",
+            "pt-BR": "Um pseudo-terminal de verdade com abas, divisões, busca no histórico e colagem de imagem — a superfície principal, e aquela em que todo agente de fato roda."
+          }
+        },
+        {
+          "slug": "conversation",
+          "title": { "en": "Conversation", "pt-BR": "Conversa" },
+          "summary": {
+            "en": "The same session, read as structured turns with official token usage — not scraped from the terminal, projected from the log.",
+            "pt-BR": "A mesma sessão, lida como turnos estruturados com uso oficial de tokens — não raspada do terminal, projetada do log."
+          }
+        },
+        {
+          "slug": "files-editor",
+          "title": { "en": "Files and the editor", "pt-BR": "Arquivos e o editor" },
+          "summary": {
+            "en": "Browse the project, open a file in Monaco, and save it without ever silently overwriting an agent that was writing at the same time.",
+            "pt-BR": "Navegue pelo projeto, abra um arquivo no Monaco e salve sem nunca sobrescrever em silêncio um agente que estava escrevendo ao mesmo tempo."
+          }
+        },
+        {
+          "slug": "review",
+          "title": { "en": "Review", "pt-BR": "Revisão" },
+          "summary": {
+            "en": "What changed, attributed to the session that changed it, with Git deciding the diff rather than us.",
+            "pt-BR": "O que mudou, atribuído à sessão que mudou, com o Git decidindo o diff em vez de nós."
+          }
+        },
+        {
+          "slug": "preview",
+          "title": { "en": "Preview", "pt-BR": "Prévia" },
+          "summary": {
+            "en": "The dev server your agent just started, opened from the address it printed — no port to configure and nothing to guess.",
+            "pt-BR": "O servidor de desenvolvimento que seu agente acabou de subir, aberto a partir do endereço que ele imprimiu — nenhuma porta para configurar e nada para adivinhar."
+          }
+        },
+        {
+          "slug": "worktrees",
+          "title": { "en": "Worktrees", "pt-BR": "Worktrees" },
+          "summary": {
+            "en": "Give an agent its own checkout of the same repository. A worktree is a project, so it works everywhere a project works.",
+            "pt-BR": "Dê a um agente seu próprio checkout do mesmo repositório. Uma worktree é um projeto, então ela funciona em todo lugar onde um projeto funciona."
+          }
+        },
+        {
+          "slug": "brain",
+          "title": { "en": "Project memory", "pt-BR": "Memória do projeto" },
+          "summary": {
+            "en": "What every agent that starts in this project is told before it reads a single file — and what an agent wrote there itself.",
+            "pt-BR": "O que todo agente que começa neste projeto ouve antes de ler um único arquivo — e o que um agente escreveu ali por conta própria."
+          }
+        },
+        {
+          "slug": "activity",
+          "title": { "en": "Activity", "pt-BR": "Atividade" },
+          "summary": {
+            "en": "What happened, in order, filterable — recorded at the moments worth knowing rather than at every event.",
+            "pt-BR": "O que aconteceu, em ordem, filtrável — registrado nos momentos que valem a pena saber, e não a cada evento."
+          }
+        },
+        {
+          "slug": "history",
+          "title": { "en": "History", "pt-BR": "Histórico" },
+          "summary": {
+            "en": "Every session this machine has ever run: titled, searchable by what was said in it, and openable again.",
+            "pt-BR": "Toda sessão que esta máquina já rodou: com título, pesquisável pelo que foi dito nela, e abrível de novo."
+          }
+        },
+        {
+          "slug": "analytics",
+          "title": { "en": "Analytics", "pt-BR": "Métricas" },
+          "summary": {
+            "en": "Tokens, runtime and human leverage — measured from real interaction, and honest about which numbers are official.",
+            "pt-BR": "Tokens, tempo de execução e alavancagem humana — medidos a partir de interação real, e honestos sobre quais números são oficiais."
+          }
+        },
+        {
+          "slug": "notebook",
+          "title": { "en": "The Notebook", "pt-BR": "O bloco de notas" },
+          "summary": {
+            "en": "Your prompt library, one shortcut away from any screen — and one click away from the agent you are watching.",
+            "pt-BR": "Sua biblioteca de prompts, a um atalho de qualquer tela — e a um clique do agente que você está assistindo."
+          }
+        },
+        {
+          "slug": "notifications",
+          "title": { "en": "Notifications", "pt-BR": "Notificações" },
+          "summary": {
+            "en": "Be told when an agent stops — because it finished, or because it is waiting on you — with a preview of what it wants.",
+            "pt-BR": "Ser avisado quando um agente para — porque terminou, ou porque está esperando você — com uma prévia do que ele quer."
+          }
+        },
+        {
+          "slug": "search",
+          "title": { "en": "Command palette and search", "pt-BR": "Paleta de comandos e busca" },
+          "summary": {
+            "en": "Two overlays: one that runs commands, one that finds anything you have ever written or an agent has ever said.",
+            "pt-BR": "Duas sobreposições: uma que executa comandos, outra que encontra qualquer coisa que você já escreveu ou que um agente já disse."
+          }
+        },
+        {
+          "slug": "voice",
+          "title": { "en": "Voice", "pt-BR": "Voz" },
+          "summary": {
+            "en": "Dictation into a running agent, transcribed entirely on your machine, primed with your project's own vocabulary.",
+            "pt-BR": "Ditado dentro de um agente em execução, transcrito inteiramente na sua máquina, treinado com o vocabulário do seu próprio projeto."
+          }
+        },
+        {
+          "slug": "settings",
+          "title": { "en": "Settings", "pt-BR": "Configurações" },
+          "summary": {
+            "en": "Eight sections as destinations, ordered by how often they are reached — plus a set of settings a project keeps for itself.",
+            "pt-BR": "Oito seções como destinos, ordenadas por quanto são acessadas — mais um conjunto de configurações que um projeto guarda para si."
+          }
+        }
+      ]
+    },
+    {
+      "id": "guides",
+      "title": { "en": "Guides", "pt-BR": "Guias" },
+      "pages": [
+        {
+          "slug": "guide-unattended",
+          "title": { "en": "Run a mission unattended", "pt-BR": "Executar uma missão sem supervisão" },
+          "summary": {
+            "en": "Set up a mission an autopilot can finish, walk away, and come back to a result with evidence attached.",
+            "pt-BR": "Prepare uma missão que um piloto automático consiga terminar, vá embora, e volte para um resultado com evidência anexada."
+          }
+        },
+        {
+          "slug": "guide-guardrails",
+          "title": { "en": "Set up guardrails", "pt-BR": "Configurar proteções" },
+          "summary": {
+            "en": "Decide once what an agent may never do, and watch a real command be stopped before it runs.",
+            "pt-BR": "Decida uma vez o que um agente nunca pode fazer, e veja um comando real ser parado antes de rodar."
+          }
+        },
+        {
+          "slug": "guide-continue",
+          "title": { "en": "Continue a past session", "pt-BR": "Continuar uma sessão antiga" },
+          "summary": {
+            "en": "Find a conversation from last week, read it, and pick it back up in a live terminal.",
+            "pt-BR": "Encontre uma conversa da semana passada, leia, e retome ela em um terminal ao vivo."
+          }
+        },
+        {
+          "slug": "guide-accounts",
+          "title": { "en": "Work across several accounts", "pt-BR": "Trabalhar com várias contas" },
+          "summary": {
+            "en": "Register more than one subscription, see which window is holding you up, and let work move when one runs out.",
+            "pt-BR": "Registre mais de uma assinatura, veja qual janela está te travando, e deixe o trabalho se mover quando uma acabar."
+          }
+        },
+        {
+          "slug": "guide-phone",
+          "title": { "en": "Pair your phone", "pt-BR": "Parear o celular" },
+          "summary": {
+            "en": "Answer an agent's approval from another room, through a relay that is a mailbox rather than a mirror.",
+            "pt-BR": "Responda a aprovação de um agente de outro cômodo, por um relay que é uma caixa de correio e não um espelho."
+          }
+        },
+        {
+          "slug": "guide-terminal",
+          "title": { "en": "Get the most from the terminal", "pt-BR": "Aproveitar o terminal ao máximo" },
+          "summary": {
+            "en": "Four agents side by side, a search that does not fight the browser, and an image pasted straight into a prompt.",
+            "pt-BR": "Quatro agentes lado a lado, uma busca que não briga com o navegador, e uma imagem colada direto em um prompt."
+          }
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "title": { "en": "Reference", "pt-BR": "Referência" },
+      "pages": [
+        {
+          "slug": "shortcuts",
+          "title": { "en": "Keyboard shortcuts", "pt-BR": "Atalhos de teclado" },
+          "summary": {
+            "en": "Every shortcut the product resolves, where it is resolved, and the one key it deliberately takes away from your shell.",
+            "pt-BR": "Todo atalho que o produto resolve, onde ele é resolvido, e a única tecla que ele deliberadamente tira do seu shell."
+          }
+        },
+        {
+          "slug": "provider-matrix",
+          "title": { "en": "Provider capability matrix", "pt-BR": "Matriz de capacidades dos provedores" },
+          "summary": {
+            "en": "What Claude Code can do that Codex cannot, and the other way round — measured against the real binaries.",
+            "pt-BR": "O que o Claude Code faz que o Codex não faz, e vice-versa — medido contra os binários reais."
+          }
+        },
+        {
+          "slug": "data",
+          "title": { "en": "Where your data lives", "pt-BR": "Onde ficam os seus dados" },
+          "summary": {
+            "en": "Every path the product writes to, what each one holds, and what an update or an uninstall does to it.",
+            "pt-BR": "Todo caminho em que o produto escreve, o que cada um guarda, e o que uma atualização ou uma desinstalação faz com ele."
+          }
+        },
+        {
+          "slug": "settings-reference",
+          "title": { "en": "Settings reference", "pt-BR": "Referência de configurações" },
+          "summary": {
+            "en": "Every setting, its default, its bounds, and what actually happens the moment you change it.",
+            "pt-BR": "Toda configuração, seu padrão, seus limites, e o que de fato acontece no momento em que você a muda."
+          }
+        },
+        {
+          "slug": "glossary",
+          "title": { "en": "Glossary", "pt-BR": "Glossário" },
+          "summary": {
+            "en": "The words this product uses, in the sense this product uses them.",
+            "pt-BR": "As palavras que este produto usa, no sentido em que este produto as usa."
+          }
+        }
+      ]
+    },
+    {
+      "id": "architecture",
+      "title": { "en": "Architecture", "pt-BR": "Arquitetura" },
+      "pages": [
+        {
+          "slug": "architecture",
+          "title": { "en": "How it is built", "pt-BR": "Como é construído" },
+          "summary": {
+            "en": "The stack, the crate layout, and the boundaries that let a provider be added without touching a component.",
+            "pt-BR": "A stack, o layout dos crates, e as fronteiras que permitem adicionar um provedor sem tocar em um componente."
+          }
+        },
+        {
+          "slug": "internals-guardrail",
+          "title": { "en": "Inside the guardrail", "pt-BR": "Dentro da salvaguarda" },
+          "summary": {
+            "en": "A separate process, a snapshot on disk, a tokenising classifier, and a decision appended to a file we follow.",
+            "pt-BR": "Um processo separado, um snapshot no disco, um classificador que tokeniza, e uma decisão anexada a um arquivo que seguimos."
+          }
+        },
+        {
+          "slug": "internals-autopilot",
+          "title": { "en": "Inside the autopilot", "pt-BR": "Dentro do piloto automático" },
+          "summary": {
+            "en": "A pure planner and a driver that touches the world — and why the provider, never a quiet terminal, says a turn ended.",
+            "pt-BR": "Um planejador puro e um driver que toca o mundo — e por que é o provedor, nunca um terminal quieto, que diz que um turno acabou."
+          }
+        },
+        {
+          "slug": "distribution",
+          "title": { "en": "Distribution and updates", "pt-BR": "Distribuição e atualizações" },
+          "summary": {
+            "en": "A per-user installer, a minisign-verified updater, and the reason your data cannot be touched by either.",
+            "pt-BR": "Um instalador por usuário, um atualizador verificado com minisign, e a razão pela qual seus dados não podem ser tocados por nenhum dos dois."
+          }
+        }
+      ]
+    },
+    {
+      "id": "state",
+      "title": { "en": "Project state", "pt-BR": "Estado do projeto" },
+      "pages": [
+        {
+          "slug": "status",
+          "title": { "en": "What is built", "pt-BR": "O que está pronto" },
+          "summary": {
+            "en": "Every milestone, what it shipped, and how it was verified — against real agents on a real machine.",
+            "pt-BR": "Cada marco, o que ele entregou, e como foi verificado — contra agentes reais em uma máquina real."
+          }
+        },
+        {
+          "slug": "not-built",
+          "title": { "en": "What is not built", "pt-BR": "O que não está pronto" },
+          "summary": {
+            "en": "The things deliberately absent rather than stubbed, and the reason each one is still absent.",
+            "pt-BR": "As coisas deliberadamente ausentes em vez de fingidas, e a razão pela qual cada uma ainda está ausente."
+          }
+        },
+        {
+          "slug": "blockers",
+          "title": { "en": "Known blockers", "pt-BR": "Bloqueios conhecidos" },
+          "summary": {
+            "en": "What is stopped, what it is waiting on, and what will happen when it is unblocked.",
+            "pt-BR": "O que está parado, do que está esperando, e o que vai acontecer quando for desbloqueado."
+          }
+        }
+      ]
+    }
+  ]
+}

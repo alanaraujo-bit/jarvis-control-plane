@@ -1,0 +1,129 @@
+<p>Software that works with agents is full of numbers nobody can check. Token counts, remaining
+allowance, whether an agent is waiting on you, what it is asking for. Most tools present all of
+it in the same typeface and let you assume it is all equally true.</p>
+
+<p>J.A.R.V.I.S. does not. Every number and every claim travels with a label saying where it came
+from, and the label is stored <em>with the value</em> rather than decided by whichever screen is
+drawing it.</p>
+
+<h2>Four levels</h2>
+
+<div class="defs">
+  <div>
+    <dt><span class="badge" data-t="official">Official</span></dt>
+    <dd>The provider stated it. A token count from <code>assistant.message.usage</code>, a rate
+    limit from <code>event_msg/token_count</code>, an agent's own reply. If this is wrong, the
+    provider was wrong.</dd>
+  </div>
+  <div>
+    <dt><span class="badge" data-t="observed">Observed</span></dt>
+    <dd>Measured by J.A.R.V.I.S. from something the provider emitted, but not stated by it. A
+    question read off a terminal is the clearest case: the agent asked it, but no structured
+    event says so.</dd>
+  </div>
+  <div>
+    <dt><span class="badge" data-t="working">Estimated</span></dt>
+    <dd>Derived or extrapolated. An allowance learned from this machine's own past refusals is
+    the main one — a real number, computed from real evidence, and still not a published
+    figure.</dd>
+  </div>
+  <div>
+    <dt><span class="badge" data-t="idle">Unknown</span></dt>
+    <dd>Nothing supports a value. Shown as unknown rather than as zero, because zero is a
+    number and this is the absence of one.</dd>
+  </div>
+</div>
+
+<h2>Where you will actually see it</h2>
+
+<h3>On a notification</h3>
+
+<p>A finished turn, a guardrail decision, a mission completing and a run stopping are
+<span class="badge" data-t="official">Official</span> — something stated them. A question read
+off a terminal is <span class="badge" data-t="observed">Observed</span>, and the notification
+says so in words: <em>Read from the terminal</em> against <em>Reported by the agent</em>.</p>
+
+<p>That difference is not decoration. Claude Code asking whether it may write a file is stated
+<strong>nowhere</strong>: the guardrail hook returns early for anything that is not a classified
+shell command, and the transcript records the answer rather than the question. The only way to
+know is to read the terminal, and the only honest thing to do is say that is what happened.</p>
+
+<figure class="fig">
+  <img src="../img/notification-toast.png" alt="A notification in J.A.R.V.I.S. showing an agent's question, labelled with where the information came from.">
+  <figcaption><b>The label is part of the notification, not a footnote.</b> The title is ours
+  and translated; the preview is the agent's own words and is deliberately left
+  untranslated.</figcaption>
+</figure>
+
+<h3>On an account's quota</h3>
+
+<p>This is where the rule was most expensive to keep, and where keeping it later paid.</p>
+
+<p>An early pass read all 115 transcripts on the development machine and established something
+true: <strong>Claude Code states its quota only in the turn it refuses.</strong> A rejection is
+Official and exact to the second; everything before it is Observed at best. So the panel was
+built to be impeccably honest, and it therefore said <em>allowance unknown</em> nearly
+everywhere — sending the user back to the web UI the feature existed to replace.</p>
+
+<p>The finding was true about <em>transcripts</em> and false about <em>the providers</em>. Both
+CLIs answer a live usage question on a supported protocol — <code>get_usage</code> on Claude
+Code's stream-json control channel, <code>account/rateLimits/read</code> on
+<code>codex app-server</code>. Those answers are Official, and the honest panel became a useful
+one without ever having to fudge a number.</p>
+
+<figure class="fig">
+  <img src="../img/accounts.png" alt="The Accounts surface showing two Claude accounts with dials for remaining allowance, reset countdowns, and a note that two directories share one subscription.">
+  <figcaption><b>Provenance sits on the card, not in a footnote.</b> Each reading carries its
+  own label and its own age. <em>Email addresses in this figure were replaced with
+  <code>you@example.com</code>; nothing else was altered.</em></figcaption>
+</figure>
+
+<h3>On evidence for a mission</h3>
+
+<p>A <a href="page:missions">mission</a> is completed on evidence, and evidence is the outcome
+of a real command or a real file check. A criterion nobody can automate is a
+<strong>Manual</strong> one, and its evidence reads <em>confirmed by {who}</em> rather than
+<em>passed</em>. The distinction survives into the database rather than living only on
+screen.</p>
+
+<h3>On an estimate that is allowed to exist</h3>
+
+<p>The <em>implied allowance</em> is learned from any official percentage the provider gives —
+if a reading says 29% used and states the tokens behind it, the total can be inferred. It is
+labelled Estimated, and it exists precisely so the fallback stops needing the refusal it is
+there to prevent.</p>
+
+<h2>Why the label travels with the value</h2>
+
+<p>A <code>Usage</code> frame in the <a href="page:session-log">session log</a> carries its
+confidence in the frame. It is not recomputed when a screen renders and it is not attached by
+the surface that happens to be displaying it.</p>
+
+<p>The reason is dull and decisive: a level decided at the UI layer is a level that two
+different screens can decide differently. The moment Analytics and the Accounts panel disagree
+about whether a number is official, both of them are untrustworthy — not just the one that is
+wrong.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">What the product will not do</span>
+  <p>It will not show an estimate in the same weight as a measurement. It will not fill an
+  unknown with a plausible default. It will not translate an agent's own words and present them
+  as if the agent said them in your language. And it will not report a guardrail as enforcing
+  when the provider has not agreed to run the hook.</p>
+</div>
+
+<h2>The honest failure this produces</h2>
+
+<p>Being strict about provenance means the interface sometimes has to say it does not know. A
+Codex account signed in on 0.149.1 writes no identity at all, so it has no name to show — and
+the product says the name is unknown instead of inventing one from the directory it lives in.</p>
+
+<p>That is the trade. A product that never says <em>unknown</em> is not a product that always
+knows.</p>
+
+<div class="callout">
+  <span class="callout__title">In the source</span>
+  <p><code>session/event.rs</code> defines <code>Confidence</code> and the comment explaining
+  why it travels with the number; <code>accounts/quota.rs</code> is where it does the most
+  work; <code>notify/</code> applies it to the five notification sources.</p>
+</div>

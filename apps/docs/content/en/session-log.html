@@ -1,0 +1,204 @@
+<p>Every tool that puts a chat next to a terminal has to answer a question it usually ducks:
+which one is true? If the terminal says one thing and the transcript says another, which do you
+show, and what happens to the ordering between them?</p>
+
+<p>J.A.R.V.I.S. answers it by refusing the premise. There is one store, one writer and one
+order. The terminal and the conversation are two ways of <em>reading</em> it.</p>
+
+<h2>One log, many projections</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 720 258" role="img" aria-labelledby="d-log-t">
+  <title id="d-log-t">Three inputs write into one ordered session event log; five surfaces read
+  projections out of it.</title>
+
+  <!-- inputs -->
+  <rect class="d-fill-surface d-stroke" x="4" y="24" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="45">PTY bytes</text>
+  <rect class="d-fill-surface d-stroke" x="4" y="86" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="107">provider JSONL</text>
+  <rect class="d-fill-surface d-stroke" x="4" y="148" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="169">lifecycle</text>
+  <rect class="d-fill-surface d-stroke" x="4" y="210" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="231">guardrail answers</text>
+
+  <path class="d-line" d="M154 41 H228" marker-end="url(#ar)"/>
+  <path class="d-line" d="M154 103 H228" marker-end="url(#ar)"/>
+  <path class="d-line" d="M154 165 H228" marker-end="url(#ar)"/>
+  <path class="d-line" d="M154 227 H228" marker-end="url(#ar)"/>
+
+  <!-- the log -->
+  <rect class="d-fill-accent d-stroke-accent" x="230" y="20" width="180" height="228" rx="8"/>
+  <text class="d-text" x="320" y="112" text-anchor="middle">Session event log</text>
+  <text class="d-text-sm" x="320" y="132" text-anchor="middle">ordered · append-only</text>
+  <text class="d-text-sm" x="320" y="150" text-anchor="middle">one writer</text>
+  <g class="d-accent">
+    <rect x="252" y="178" width="18" height="8" rx="2"/>
+    <rect x="276" y="178" width="18" height="8" rx="2"/>
+    <rect x="300" y="178" width="18" height="8" rx="2"/>
+    <rect x="324" y="178" width="18" height="8" rx="2"/>
+    <rect x="348" y="178" width="18" height="8" rx="2"/>
+    <rect x="372" y="178" width="14" height="8" rx="2" opacity="0.45"/>
+  </g>
+  <text class="d-text-sm" x="320" y="205" text-anchor="middle">frames, in the order they happened</text>
+
+  <path class="d-line" d="M410 44 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 90 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 136 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 182 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 228 H486" marker-end="url(#ar)"/>
+
+  <!-- projections -->
+  <rect class="d-fill-surface d-stroke" x="488" y="28" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="48">Terminal</text>
+  <text class="d-text-sm" x="574" y="48">replay the bytes</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="74" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="94">Conversation</text>
+  <text class="d-text-sm" x="596" y="94">project the turns</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="120" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="140">Analytics</text>
+  <text class="d-text-sm" x="574" y="140">fold the usage</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="166" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="186">Review · Activity</text>
+  <text class="d-text-sm" x="620" y="186">file changes</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="212" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="232">Search · History</text>
+  <text class="d-text-sm" x="622" y="232">index the text</text>
+
+  <defs>
+    <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+<p class="diagram__caption">Nothing on the right holds state of its own. Close the Conversation
+tab and reopen it a week later and it is rebuilt from the same frames — which is also why a
+finished session can be reopened at all.</p>
+
+<h2>What a frame is</h2>
+
+<p>A frame is a length, a sequence number, a millisecond timestamp, a one-byte kind, and a
+payload. The kinds are fixed and their numbers are never reused, because logs already written
+on your disk are decoded with them.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Kind</th><th>Byte</th><th>What it holds</th></tr></thead>
+  <tbody>
+    <tr><td><code>PtyOutput</code></td><td>1</td><td>Bytes the process wrote. The terminal's own truth, escape sequences and all.</td></tr>
+    <tr><td><code>PtyInput</code></td><td>2</td><td>Bytes sent <em>to</em> the process, so a replay shows what was typed rather than only what came back.</td></tr>
+    <tr><td><code>Message</code></td><td>10</td><td>A structured user, assistant or system message, as JSON.</td></tr>
+    <tr><td><code>ToolCall</code></td><td>11</td><td>A tool the agent invoked.</td></tr>
+    <tr><td><code>ToolResult</code></td><td>12</td><td>What that tool returned.</td></tr>
+    <tr><td><code>Usage</code></td><td>20</td><td>A token or rate-limit sample, always carrying its <a href="page:confidence">confidence</a>.</td></tr>
+    <tr><td><code>FileChange</code></td><td>21</td><td>A file this session created, modified or deleted.</td></tr>
+    <tr><td><code>Lifecycle</code></td><td>30</td><td>Started, state changed, resized, exited.</td></tr>
+    <tr><td><code>Attachment</code></td><td>40</td><td>An image or file attached to the session.</td></tr>
+    <tr><td><code>Approval</code></td><td>50</td><td>A <a href="page:guardrails">guardrail</a> request and the answer it got.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Terminal size is a frame, and that is not a detail</h3>
+
+<p>Output that positions the cursor absolutely renders as garbage when it is replayed into a
+terminal of a different width. So <code>Resized</code> is a lifecycle frame written at start
+and on every change: the replay always knows how wide the terminal was at that point in the
+stream. A session log without it would look correct until the first agent that draws a
+progress bar.</p>
+
+<h2>Why the bytes are not rows</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The split</span>
+  <p><code>sessions/&lt;id&gt;/stream.log</code> — the frames, append-only, binary.<br>
+  <code>sessions/&lt;id&gt;/index.bin</code> — a sparse offset index, one checkpoint every 256
+  frames.<br>
+  <strong>SQLite</strong> — metadata, the structured events worth querying, and the search
+  index.</p>
+</div>
+
+<p>An agent working for three hours produces tens of megabytes of terminal output. Stored as
+database rows, both the writes and the replay get slow enough to notice, and the database file
+grows in a way nobody can reason about. Stored as a framed file with a sparse index, appending
+is one write and seeking is one lookup plus a short scan.</p>
+
+<p>The index is sparse on purpose. One entry per frame would make the index a second copy of
+the log; one entry every 256 frames keeps it tiny and still bounds a seek.</p>
+
+<h2>What happens when the power goes out</h2>
+
+<p>A process killed mid-append leaves a partial trailing frame. On open, the log scans forward
+from the last index checkpoint, finds the last <strong>complete</strong> frame, and truncates
+everything after it.</p>
+
+<p>A torn write therefore costs at most one frame. It does not corrupt the session, it does not
+require a repair tool, and it does not lose the two hours before the crash. There is also a
+guard against a corrupt length field: a frame claiming more than 64 MB is refused rather than
+allocated.</p>
+
+<h2>One writer, always</h2>
+
+<p>The rule that makes the order a fact rather than an agreement: <strong>a session has exactly
+one writer.</strong> The session runtime owns the log. Nothing else appends to it — not the
+transcript follower, not the guardrail process, not the autopilot.</p>
+
+<p>Things that need to contribute hand their contribution over the same way a provider does:
+by writing to a file that the single writer follows. The
+<a href="page:internals-guardrail">guardrail</a> is the clearest case — it runs as a separate
+process, and it appends its decisions to <code>guardrail-decisions.jsonl</code>, which the
+session runtime tails and turns into <code>Approval</code> frames.</p>
+
+<h2>What this buys you, concretely</h2>
+
+<div class="defs">
+  <div>
+    <dt>Terminal ↔ Conversation, live</dt>
+    <dd>Flipping the toggle on a running agent changes which projection is on screen. The
+    process is not touched, nothing is restarted, and no context is lost.</dd>
+  </div>
+  <div>
+    <dt>Sessions that outlive their tab</dt>
+    <dd><a href="page:history">History</a> can open a session that ended months ago as a
+    read-only conversation, because there was never anything to keep alive — only frames to
+    read.</dd>
+  </div>
+  <div>
+    <dt>Numbers that are not invented</dt>
+    <dd><a href="page:analytics">Analytics</a> folds <code>Usage</code> frames. It never
+    estimates a token count, because it never has to.</dd>
+  </div>
+  <div>
+    <dt>Attribution without bookkeeping</dt>
+    <dd><a href="page:review">Review</a> can say which agent changed a file because
+    <code>FileChange</code> frames already recorded it. It is a join, not an invention.</dd>
+  </div>
+  <div>
+    <dt>Search over what was said</dt>
+    <dd><a href="page:search">Global Search</a> indexes message text from the same stream, which
+    is why it can find a sentence from a session you closed weeks ago.</dd>
+  </div>
+</div>
+
+<h2>The bug this design still allowed</h2>
+
+<p>Worth knowing, because it shows where the seams are. Global Search once returned only the
+<em>questions</em> from a conversation and never the replies. Usage and searchable text were
+being routed by a single <code>match</code>, so a message carrying both — the ordinary shape of
+an assistant reply — took the usage arm and its text was never indexed.</p>
+
+<p>One log did not prevent it. What one log did was make it a small fix in one place, and make
+the repair verifiable by running a real turn and searching for its own reply.</p>
+
+<div class="callout">
+  <span class="callout__title">In the source</span>
+  <p><code>apps/desktop/src-tauri/src/session/log.rs</code> is the format and the crash
+  recovery; <code>session/event.rs</code> is the frame kinds; <code>session/manager.rs</code> is
+  the single writer. The file format's own documentation comment is the authority if this page
+  and the code ever disagree.</p>
+</div>

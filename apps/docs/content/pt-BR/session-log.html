@@ -1,0 +1,203 @@
+<p>Toda ferramenta que coloca um chat ao lado de um terminal tem que responder uma pergunta que
+costuma desviar: qual dos dois é verdade? Se o terminal diz uma coisa e a transcrição diz
+outra, qual você mostra, e o que acontece com a ordem entre elas?</p>
+
+<p>O J.A.R.V.I.S. responde recusando a premissa. Existe um depósito, um escritor e uma ordem. O
+terminal e a conversa são dois jeitos de <em>ler</em> isso.</p>
+
+<h2>Um log, várias projeções</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 720 258" role="img" aria-labelledby="d-log-t">
+  <title id="d-log-t">Três entradas escrevem em um único log de eventos ordenado; cinco
+  superfícies leem projeções dele.</title>
+
+  <rect class="d-fill-surface d-stroke" x="4" y="24" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="45">bytes do PTY</text>
+  <rect class="d-fill-surface d-stroke" x="4" y="86" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="107">JSONL do provedor</text>
+  <rect class="d-fill-surface d-stroke" x="4" y="148" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="169">ciclo de vida</text>
+  <rect class="d-fill-surface d-stroke" x="4" y="210" width="150" height="34" rx="6"/>
+  <text class="d-text-mono" x="18" y="231">decisões da proteção</text>
+
+  <path class="d-line" d="M154 41 H228" marker-end="url(#ar)"/>
+  <path class="d-line" d="M154 103 H228" marker-end="url(#ar)"/>
+  <path class="d-line" d="M154 165 H228" marker-end="url(#ar)"/>
+  <path class="d-line" d="M154 227 H228" marker-end="url(#ar)"/>
+
+  <rect class="d-fill-accent d-stroke-accent" x="230" y="20" width="180" height="228" rx="8"/>
+  <text class="d-text" x="320" y="112" text-anchor="middle">Log de eventos</text>
+  <text class="d-text-sm" x="320" y="132" text-anchor="middle">ordenado · append-only</text>
+  <text class="d-text-sm" x="320" y="150" text-anchor="middle">um escritor só</text>
+  <g class="d-accent">
+    <rect x="252" y="178" width="18" height="8" rx="2"/>
+    <rect x="276" y="178" width="18" height="8" rx="2"/>
+    <rect x="300" y="178" width="18" height="8" rx="2"/>
+    <rect x="324" y="178" width="18" height="8" rx="2"/>
+    <rect x="348" y="178" width="18" height="8" rx="2"/>
+    <rect x="372" y="178" width="14" height="8" rx="2" opacity="0.45"/>
+  </g>
+  <text class="d-text-sm" x="320" y="205" text-anchor="middle">quadros, na ordem em que aconteceram</text>
+
+  <path class="d-line" d="M410 44 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 90 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 136 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 182 H486" marker-end="url(#ar)"/>
+  <path class="d-line" d="M410 228 H486" marker-end="url(#ar)"/>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="28" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="48">Terminal</text>
+  <text class="d-text-sm" x="580" y="48">reproduz os bytes</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="74" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="94">Conversa</text>
+  <text class="d-text-sm" x="576" y="94">projeta os turnos</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="120" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="140">Métricas</text>
+  <text class="d-text-sm" x="572" y="140">soma o uso</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="166" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="186">Revisão · Atividade</text>
+  <text class="d-text-sm" x="628" y="186">arquivos</text>
+
+  <rect class="d-fill-surface d-stroke" x="488" y="212" width="226" height="32" rx="6"/>
+  <text class="d-text" x="502" y="232">Busca · Histórico</text>
+  <text class="d-text-sm" x="620" y="232">indexa o texto</text>
+
+  <defs>
+    <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" class="d-arrow"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+<p class="diagram__caption">Nada do lado direito guarda estado próprio. Feche a aba de Conversa
+e abra de novo uma semana depois: ela é reconstruída dos mesmos quadros — que é também por que
+uma sessão encerrada pode ser reaberta.</p>
+
+<h2>O que é um quadro</h2>
+
+<p>Um quadro é um tamanho, um número de sequência, um carimbo de tempo em milissegundos, um
+byte de tipo e uma carga. Os tipos são fixos e seus números nunca são reaproveitados, porque
+logs já gravados no seu disco são decodificados com eles.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Tipo</th><th>Byte</th><th>O que carrega</th></tr></thead>
+  <tbody>
+    <tr><td><code>PtyOutput</code></td><td>1</td><td>Bytes que o processo escreveu. A verdade do terminal, sequências de escape e tudo.</td></tr>
+    <tr><td><code>PtyInput</code></td><td>2</td><td>Bytes enviados <em>para</em> o processo, para que uma reprodução mostre o que foi digitado e não só o que voltou.</td></tr>
+    <tr><td><code>Message</code></td><td>10</td><td>Uma mensagem estruturada de usuário, assistente ou sistema, em JSON.</td></tr>
+    <tr><td><code>ToolCall</code></td><td>11</td><td>Uma ferramenta que o agente chamou.</td></tr>
+    <tr><td><code>ToolResult</code></td><td>12</td><td>O que essa ferramenta devolveu.</td></tr>
+    <tr><td><code>Usage</code></td><td>20</td><td>Uma amostra de tokens ou de limite, sempre carregando sua <a href="page:confidence">confiança</a>.</td></tr>
+    <tr><td><code>FileChange</code></td><td>21</td><td>Um arquivo que esta sessão criou, alterou ou apagou.</td></tr>
+    <tr><td><code>Lifecycle</code></td><td>30</td><td>Iniciou, mudou de estado, redimensionou, saiu.</td></tr>
+    <tr><td><code>Attachment</code></td><td>40</td><td>Uma imagem ou arquivo anexado à sessão.</td></tr>
+    <tr><td><code>Approval</code></td><td>50</td><td>Um pedido de <a href="page:guardrails">proteção</a> e a resposta que ele recebeu.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>O tamanho do terminal é um quadro, e isso não é detalhe</h3>
+
+<p>Saída que posiciona o cursor de forma absoluta vira lixo quando é reproduzida em um terminal
+de largura diferente. Por isso <code>Resized</code> é um quadro de ciclo de vida, gravado no
+início e a cada mudança: a reprodução sempre sabe qual era a largura naquele ponto do fluxo. Um
+log de sessão sem isso pareceria correto até o primeiro agente que desenha uma barra de
+progresso.</p>
+
+<h2>Por que os bytes não são linhas de banco</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A separação</span>
+  <p><code>sessions/&lt;id&gt;/stream.log</code> — os quadros, append-only, binário.<br>
+  <code>sessions/&lt;id&gt;/index.bin</code> — um índice esparso de deslocamentos, um ponto de
+  controle a cada 256 quadros.<br>
+  <strong>SQLite</strong> — metadados, os eventos estruturados que vale consultar, e o índice de
+  busca.</p>
+</div>
+
+<p>Um agente trabalhando por três horas produz dezenas de megabytes de saída de terminal.
+Guardados como linhas de banco, tanto a escrita quanto a reprodução ficam lentas o bastante
+para incomodar, e o arquivo do banco cresce de um jeito que ninguém consegue raciocinar sobre.
+Guardados como um arquivo de quadros com índice esparso, anexar é uma escrita e buscar é uma
+consulta mais uma varredura curta.</p>
+
+<p>O índice é esparso de propósito. Uma entrada por quadro faria do índice uma segunda cópia do
+log; uma a cada 256 quadros o mantém minúsculo e ainda limita a busca.</p>
+
+<h2>O que acontece quando falta luz</h2>
+
+<p>Um processo morto no meio de um append deixa um quadro final parcial. Ao abrir, o log varre
+para frente a partir do último ponto de controle, acha o último quadro <strong>completo</strong>
+e trunca tudo depois dele.</p>
+
+<p>Uma escrita rasgada custa, portanto, no máximo um quadro. Ela não corrompe a sessão, não
+exige uma ferramenta de reparo, e não perde as duas horas anteriores ao travamento. Há também
+uma proteção contra um campo de tamanho corrompido: um quadro que declara mais de 64 MB é
+recusado em vez de alocado.</p>
+
+<h2>Um escritor, sempre</h2>
+
+<p>A regra que faz da ordem um fato e não um acordo: <strong>uma sessão tem exatamente um
+escritor.</strong> O runtime da sessão é dono do log. Nada mais anexa nele — nem o seguidor de
+transcrição, nem o processo da proteção, nem o piloto automático.</p>
+
+<p>O que precisa contribuir entrega sua contribuição do mesmo jeito que um provedor entrega:
+escrevendo em um arquivo que o escritor único acompanha. A
+<a href="page:internals-guardrail">proteção</a> é o caso mais claro — ela roda como processo
+separado e anexa suas decisões em <code>guardrail-decisions.jsonl</code>, que o runtime da
+sessão segue e transforma em quadros <code>Approval</code>.</p>
+
+<h2>O que isso compra, na prática</h2>
+
+<div class="defs">
+  <div>
+    <dt>Terminal ↔ Conversa, ao vivo</dt>
+    <dd>Virar a chave em um agente em execução muda qual projeção está na tela. O processo não é
+    tocado, nada reinicia, e nenhum contexto se perde.</dd>
+  </div>
+  <div>
+    <dt>Sessões que sobrevivem à própria aba</dt>
+    <dd>O <a href="page:history">Histórico</a> consegue abrir uma sessão que acabou meses atrás
+    como conversa somente leitura, porque nunca houve nada para manter vivo — só quadros para
+    ler.</dd>
+  </div>
+  <div>
+    <dt>Números que não são inventados</dt>
+    <dd>As <a href="page:analytics">Métricas</a> somam quadros <code>Usage</code>. Elas nunca
+    estimam uma contagem de tokens, porque nunca precisam.</dd>
+  </div>
+  <div>
+    <dt>Atribuição sem contabilidade paralela</dt>
+    <dd>A <a href="page:review">Revisão</a> sabe qual agente mudou um arquivo porque quadros
+    <code>FileChange</code> já registraram isso. É um join, não uma invenção.</dd>
+  </div>
+  <div>
+    <dt>Busca sobre o que foi dito</dt>
+    <dd>A <a href="page:search">Busca global</a> indexa o texto das mensagens do mesmo fluxo, e é
+    por isso que ela acha uma frase de uma sessão que você fechou semanas atrás.</dd>
+  </div>
+</div>
+
+<h2>O bug que este desenho ainda permitiu</h2>
+
+<p>Vale saber, porque mostra onde ficam as costuras. A Busca global já devolveu só as
+<em>perguntas</em> de uma conversa e nunca as respostas. Uso e texto pesquisável estavam sendo
+roteados por um único <code>match</code>, então uma mensagem carregando os dois — a forma comum
+de uma resposta de assistente — pegava o braço do uso e seu texto nunca era indexado.</p>
+
+<p>Um log só não impediu isso. O que um log só fez foi tornar a correção pequena e em um lugar
+só, e tornar o conserto verificável rodando um turno real e buscando pela própria resposta
+dele.</p>
+
+<div class="callout">
+  <span class="callout__title">No código</span>
+  <p><code>apps/desktop/src-tauri/src/session/log.rs</code> é o formato e a recuperação de
+  travamento; <code>session/event.rs</code> são os tipos de quadro;
+  <code>session/manager.rs</code> é o escritor único. O comentário de documentação do próprio
+  formato é a autoridade se esta página e o código algum dia discordarem.</p>
+</div>

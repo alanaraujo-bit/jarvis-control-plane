@@ -1,0 +1,135 @@
+<p>Software que trabalha com agentes é cheio de números que ninguém consegue conferir. Contagens
+de token, cota restante, se um agente está esperando você, o que ele está pedindo. A maioria das
+ferramentas apresenta tudo isso na mesma tipografia e deixa você supor que é tudo igualmente
+verdade.</p>
+
+<p>O J.A.R.V.I.S. não. Todo número e toda afirmação viajam com um rótulo dizendo de onde vieram,
+e o rótulo é guardado <em>junto com o valor</em> em vez de ser decidido por qualquer tela que
+esteja desenhando.</p>
+
+<h2>Quatro níveis</h2>
+
+<div class="defs">
+  <div>
+    <dt><span class="badge" data-t="official">Oficial</span></dt>
+    <dd>O provedor declarou. Uma contagem de token vinda de
+    <code>assistant.message.usage</code>, um limite vindo de
+    <code>event_msg/token_count</code>, a própria resposta de um agente. Se isso estiver errado,
+    o provedor estava errado.</dd>
+  </div>
+  <div>
+    <dt><span class="badge" data-t="observed">Observado</span></dt>
+    <dd>Medido pelo J.A.R.V.I.S. a partir de algo que o provedor emitiu, mas não declarado por
+    ele. Uma pergunta lida do terminal é o caso mais claro: o agente perguntou, mas nenhum
+    evento estruturado diz isso.</dd>
+  </div>
+  <div>
+    <dt><span class="badge" data-t="working">Estimado</span></dt>
+    <dd>Derivado ou extrapolado. Uma cota aprendida a partir das recusas passadas desta própria
+    máquina é a principal — um número real, calculado a partir de evidência real, e ainda assim
+    não uma cifra publicada.</dd>
+  </div>
+  <div>
+    <dt><span class="badge" data-t="idle">Desconhecido</span></dt>
+    <dd>Nada sustenta um valor. Mostrado como desconhecido em vez de zero, porque zero é um
+    número e isto é a ausência de um.</dd>
+  </div>
+</div>
+
+<h2>Onde você vai ver isso de fato</h2>
+
+<h3>Em uma notificação</h3>
+
+<p>Um turno terminado, uma decisão de proteção, uma missão concluindo e uma execução parando
+são <span class="badge" data-t="official">Oficial</span> — alguma coisa declarou. Uma pergunta
+lida do terminal é <span class="badge" data-t="observed">Observado</span>, e a notificação diz
+isso com todas as letras: <em>Lido do terminal</em> contra <em>Informado pelo agente</em>.</p>
+
+<p>Essa diferença não é enfeite. O Claude Code perguntando se pode escrever um arquivo não é
+declarado em <strong>lugar nenhum</strong>: o hook de proteção retorna cedo para qualquer coisa
+que não seja um comando de shell classificado, e a transcrição registra a resposta, não a
+pergunta. O único jeito de saber é ler o terminal, e a única coisa honesta a fazer é dizer que
+foi isso que aconteceu.</p>
+
+<figure class="fig">
+  <img src="../img/notification-toast.png" alt="Uma notificação no J.A.R.V.I.S. mostrando a pergunta de um agente, rotulada com a origem da informação.">
+  <figcaption><b>O rótulo é parte da notificação, não uma nota de rodapé.</b> O título é nosso e
+  é traduzido; a prévia são as palavras do próprio agente e é deliberadamente deixada sem
+  tradução.</figcaption>
+</figure>
+
+<h3>Na cota de uma conta</h3>
+
+<p>É aqui que a regra foi mais cara de manter, e onde mantê-la depois se pagou.</p>
+
+<p>Uma primeira passada leu todas as 115 transcrições da máquina de desenvolvimento e
+estabeleceu algo verdadeiro: <strong>o Claude Code declara a cota dele só no turno em que
+recusa.</strong> Uma rejeição é Oficial e exata ao segundo; tudo antes dela é, no melhor caso,
+Observado. Então o painel foi construído para ser impecavelmente honesto, e por isso dizia
+<em>cota desconhecida</em> em quase todo lugar — mandando o usuário de volta para a interface
+web que o recurso existia para substituir.</p>
+
+<p>A descoberta era verdadeira sobre <em>transcrições</em> e falsa sobre <em>os provedores</em>.
+As duas CLIs respondem uma pergunta de uso ao vivo em um protocolo suportado —
+<code>get_usage</code> no canal de controle stream-json do Claude Code,
+<code>account/rateLimits/read</code> no <code>codex app-server</code>. Essas respostas são
+Oficiais, e o painel honesto virou um painel útil sem nunca ter precisado maquiar um
+número.</p>
+
+<figure class="fig">
+  <img src="../img/accounts.png" alt="A superfície de Contas mostrando duas contas Claude com mostradores de cota restante, contagens regressivas de reset, e um aviso de que dois diretórios compartilham uma assinatura.">
+  <figcaption><b>A procedência fica no cartão, não em rodapé.</b> Cada leitura carrega o próprio
+  rótulo e a própria idade. <em>Os endereços de e-mail desta figura foram substituídos por
+  <code>you@example.com</code>; nada mais foi alterado.</em></figcaption>
+</figure>
+
+<h3>Na evidência de uma missão</h3>
+
+<p>Uma <a href="page:missions">missão</a> é concluída com base em evidência, e evidência é o
+resultado de um comando real ou de uma checagem real de arquivo. Um critério que ninguém
+consegue automatizar é um critério <strong>Manual</strong>, e a evidência dele lê
+<em>confirmado por {quem}</em> em vez de <em>passou</em>. A distinção sobrevive até o banco de
+dados, em vez de viver só na tela.</p>
+
+<h3>Em uma estimativa que tem permissão de existir</h3>
+
+<p>A <em>cota implícita</em> é aprendida a partir de qualquer porcentagem oficial que o provedor
+dê — se uma leitura diz 29% usado e declara os tokens por trás disso, o total pode ser inferido.
+Ela é rotulada como Estimada, e existe justamente para que o plano B pare de precisar da recusa
+que ele está lá para evitar.</p>
+
+<h2>Por que o rótulo viaja com o valor</h2>
+
+<p>Um quadro <code>Usage</code> no <a href="page:session-log">log da sessão</a> carrega a
+confiança dentro do quadro. Ela não é recalculada quando uma tela renderiza e não é anexada pela
+superfície que por acaso está exibindo.</p>
+
+<p>A razão é chata e decisiva: um nível decidido na camada de UI é um nível que duas telas
+diferentes podem decidir de formas diferentes. No momento em que as Métricas e o painel de
+Contas discordarem sobre se um número é oficial, os dois viram indignos de confiança — não só o
+que está errado.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">O que o produto não vai fazer</span>
+  <p>Ele não vai mostrar uma estimativa com o mesmo peso de uma medição. Ele não vai preencher
+  um desconhecido com um padrão plausível. Ele não vai traduzir as palavras de um agente e
+  apresentá-las como se o agente tivesse falado no seu idioma. E ele não vai relatar uma
+  proteção como aplicada quando o provedor não concordou em rodar o hook.</p>
+</div>
+
+<h2>A falha honesta que isso produz</h2>
+
+<p>Ser rigoroso com procedência significa que a interface às vezes tem que dizer que não sabe.
+Uma conta Codex logada na 0.149.1 não escreve identidade nenhuma, então não há nome para
+mostrar — e o produto diz que o nome é desconhecido em vez de inventar um a partir do diretório
+em que ela mora.</p>
+
+<p>Essa é a troca. Um produto que nunca diz <em>desconhecido</em> não é um produto que sempre
+sabe.</p>
+
+<div class="callout">
+  <span class="callout__title">No código</span>
+  <p><code>session/event.rs</code> define <code>Confidence</code> e o comentário explicando por
+  que ela viaja com o número; <code>accounts/quota.rs</code> é onde ela trabalha mais;
+  <code>notify/</code> aplica ela às cinco fontes de notificação.</p>
+</div>
