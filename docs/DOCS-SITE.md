@@ -81,10 +81,6 @@ msedge --headless=new --disable-gpu --hide-scrollbars \
 
 Proven working on this machine on 2026-08-25.
 
-## Status
-
-See the checklist at the bottom of this file, rewritten as work lands.
-
 ---
 
 ## What was built
@@ -152,5 +148,10 @@ clicking a button.
   publishing is outward-facing and the account carries two unrelated projects
   called `jarvis` and `jarvis-guardian`. Pick a name that cannot be confused
   with those.
+- **The demo data.** `Projetos/Aurora` is a real repository created for the
+  figures, and `Projetos/Aurora-agent-reconcile-fix` is a real worktree of it
+  created for the Worktrees figure. Both are safe to delete — remove the
+  worktree from inside the app so its project row is archived properly.
+
 - **B-DOC1 in `BLOCKERS.md`** — an unanswered AnyDesk remote-access request
   that appeared during this session. Read that one first.

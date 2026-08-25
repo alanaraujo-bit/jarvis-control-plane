@@ -1,0 +1,10 @@
+/* The root document is a redirect. It paints the app's own background so the
+   moment before the redirect lands is not a white flash. */
+html {
+  background: #0c0c0d;
+}
+@media (prefers-color-scheme: light) {
+  html {
+    background: #f7f7f5;
+  }
+}

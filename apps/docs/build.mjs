@@ -359,24 +359,44 @@ for (const locale of LOCALES) {
   );
 }
 
-// The root document picks a language and gets out of the way.
+// The root document picks a language and gets out of the way. Both its script
+// and its style are external, so the production content security policy can
+// stay script-src 'self' — an inline script here works from file:// and is
+// blocked once it is served, which is the worst shape a bug can have.
 writeFileSync(
   join(DIST, "index.html"),
   `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>J.A.R.V.I.S. — Documentation</title>
 <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<style>html{background:#0C0C0D}</style>
-<script>
-  var pt = (navigator.languages || [navigator.language || "en"]).some(function (l) {
-    return String(l).toLowerCase().indexOf("pt") === 0;
-  });
-  location.replace((pt ? "pt-BR" : "${DEFAULT_LOCALE}") + "/overview.html");
-</script>
+<link rel="stylesheet" href="./assets/root.css">
+<script src="./assets/pick-locale.js"></script>
 </head>
 <body><noscript><a href="./${DEFAULT_LOCALE}/overview.html">Documentation</a> ·
 <a href="./pt-BR/overview.html">Documentação</a></noscript></body></html>`,
 );
+
+// ---------------------------------------------------------------------------
+// The output must carry no inline script or style anywhere. This is checked
+// rather than trusted because the failure is invisible locally: file:// has no
+// content security policy, so an inline script works perfectly right up until
+// it is served.
+// ---------------------------------------------------------------------------
+
+for (const rel of ["index.html", ...LOCALES.flatMap((l) => pages.map((p) => join(l, `${p.slug}.html`)))]) {
+  const file = join(DIST, rel);
+  if (!existsSync(file)) continue;
+  const html = readFileSync(file, "utf8");
+  // Written without backslash escapes on purpose. This file emits pages from
+  // template literals, and a backslash escape inside one is consumed before it
+  // lands — twice already in this build, once turning a word boundary into a
+  // real backspace character. A literal space is unambiguous.
+  if (/<script(?![^>]*[ ]src=)[^>]*>/.test(html)) warn(`${rel}: has an inline <script> — CSP would block it`);
+  if (/<style[^>]*>/.test(html)) warn(`${rel}: has an inline <style> — CSP would block it`);
+  if (/[ ]on(click|load|error|focus|submit)=/.test(html)) {
+    warn(`${rel}: has an inline event handler — CSP would block it`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Report
