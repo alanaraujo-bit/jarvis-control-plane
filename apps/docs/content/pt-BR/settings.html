@@ -1,1 +1,129 @@
-<p>TODO</p>
+<p>Oito seções como destinos: um mapa fixo à esquerda, uma seção à direita. Ordenadas por quanto
+são acessadas, não alfabeticamente.</p>
+
+<figure class="fig">
+  <img src="../img/settings-appearance.png" alt="A tela de Configurações com oito seções listadas à esquerda e Aparência aberta à direita, mostrando controles de tema e idioma.">
+  <figcaption>Toda seção é alcançável pelo nome na paleta de comandos. <em>Reexaminar</em> cai em
+  Ambiente, e não em onde quer que você estivesse por último.</figcaption>
+</figure>
+
+<h2>As oito seções</h2>
+
+<div class="defs">
+  <div>
+    <dt>Aparência</dt>
+    <dd>Tema (escuro, claro, sistema) e idioma (English, Português). Os dois são criados
+    independentemente — o claro não é uma inversão do escuro.</dd>
+  </div>
+  <div>
+    <dt>Terminal</dt>
+    <dd>Tamanho do texto e histórico guardado. Os dois aplicam <strong>no lugar</strong> em
+    terminais em execução.</dd>
+  </div>
+  <div>
+    <dt>Autonomia</dt>
+    <dd>O perfil padrão global e o limite de turnos do piloto automático.
+    Veja <a href="page:autonomy">Autonomia</a>.</dd>
+  </div>
+  <div>
+    <dt>Proteções</dt>
+    <dd>Uma linha por operação sensível que o núcleo informa.
+    Veja <a href="page:guardrails">Proteções</a>.</dd>
+  </div>
+  <div>
+    <dt>Notificações</dt>
+    <dd>Três interruptores e um botão de teste que dispara o caminho real.
+    Veja <a href="page:notifications">Notificações</a>.</dd>
+  </div>
+  <div>
+    <dt>Celular</dt>
+    <dd>Pareamento, e o que é enviado — declarado <em>antes</em> de você conectar.
+    Veja <a href="page:local-first">Local em primeiro lugar</a>.</dd>
+  </div>
+  <div>
+    <dt>Ambiente</dt>
+    <dd>O que foi encontrado nesta máquina: Git, Node, pnpm, Claude Code, Codex, GitHub CLI, com
+    versões.</dd>
+  </div>
+  <div>
+    <dt>Atualizações</dt>
+    <dd>Em que versão você está e se existe uma mais nova.
+    Veja <a href="page:distribution">Distribuição e atualizações</a>.</dd>
+  </div>
+</div>
+
+<h3>Por que Autonomia fica acima de Proteções</h3>
+
+<p>Quanto um agente faz sozinho é a pergunta mais ampla. O que ele nunca pode fazer é a cerca em
+volta dessa resposta. Ler a cerca primeiro não faz sentido.</p>
+
+<h3>Por que Proteções é uma seção própria</h3>
+
+<p>Ela é uma linha por operação que o núcleo informa — <strong>uma lista livre para crescer sem
+que esta tela seja tocada</strong>. Uma seção que consegue ficar mais longa sozinha não divide
+página com mais nada, ou ela acaba empurrando tudo abaixo dela para fora da vista.</p>
+
+<h2>Um projeto tem configurações próprias</h2>
+
+<p>A área de trabalho do projeto tem uma área <strong>Configurações</strong> hospedando os
+controles de autonomia e proteção com escopo de projeto. Esses painéis são <em>literalmente os
+mesmos componentes</em> dos globais, recebendo um id de projeto — e é por isso que os dois nunca
+conseguem divergir em comportamento ou em texto.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">O painel que tinha um parâmetro e nunca recebeu</span>
+  <p>O painel de proteções aceitava um id de projeto desde que as proteções foram entregues e
+  <strong>nunca tinha recebido um</strong>, porque as Configurações globais só renderizam quando
+  nenhum projeto está aberto e estruturalmente não conseguem hospedar um controle com escopo de
+  projeto. A capacidade existia; o lugar de usar ela não.</p>
+</div>
+
+<h2>A auditoria, e o que ela achou</h2>
+
+<p>Três valores que o produto usava, mostrava na tela, e não dava a ninguém jeito de mudar:</p>
+
+<ul>
+  <li><strong>Os dois níveis superiores da cadeia de autonomia.</strong> Resolvidos projeto →
+  global → padrão, com nenhum dos dois de cima alcançável.</li>
+  <li><strong>O limite de turnos do piloto automático.</strong> O painel exibia <em>turno 3 de
+  24</em> enquanto 24 era uma constante no código.</li>
+  <li><strong>Tamanho de texto e histórico do terminal.</strong> Fixos no código.</li>
+</ul>
+
+<p>Todos agora são configurações, e <strong>nenhum deles era um recurso novo</strong> — eram
+coisas que o produto já fazia, tornadas ajustáveis.</p>
+
+<h2>Os limites são aplicados no núcleo</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Duas direções, dois comportamentos</span>
+  <p><strong>Fora da faixa na entrada é recusado</strong>, para que um valor guardado seja sempre
+  um que alguém poderia ter escolhido. A superfície desenha um controle deslizante, então um valor
+  fora da faixa deveria ser impossível — que é exatamente por que ele não é confiado: um comando
+  alcançável pelo webview é alcançável por qualquer bug dentro dele.</p>
+  <p><strong>Fora da faixa na saída é limitado</strong>, para que a linha de uma versão antiga não
+  consiga produzir um terminal inutilizável ou um orçamento zero que falha toda execução antes de
+  ela começar.</p>
+</div>
+
+<p>Sem valor é <em>ausência de linha</em>, e um valor que não consegue ser interpretado é lido
+como sem valor em vez de derrubar a tela.</p>
+
+<h2>Sem acordeões dentro de uma seção</h2>
+
+<p>A coluna da esquerda já responde <em>clique e mais opções abrem</em>. Um segundo nível de
+esconder enterra mais, não menos.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verificado na build real</span>
+  <p>Todas as oito seções, escuro e claro, os dois idiomas, a 1440 / 1086 / 746 / 606 px. Quatro
+  defeitos existiam <strong>só na tela e não na folha de estilo</strong>: a seção flutuando a
+  215px do mapa dela, a linha selecionada invisível no tema claro, o chip ativo fora da tela na
+  faixa estreita, e <em>todo painel perguntando ao viewport qual era a largura dele</em> quando o
+  painel é 344px mais estreito que a janela.</p>
+  <p>O alinhamento dos controles foi conferido <strong>amostrando pixels em vez de a olho</strong>:
+  os cinco controles de configuração compartilham uma borda esquerda em x=581.</p>
+</div>
+
+<p><a href="page:settings-reference">A referência de configurações</a> lista toda configuração com
+seu padrão, seus limites, e o que acontece no momento em que você a muda.</p>

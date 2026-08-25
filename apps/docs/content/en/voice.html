@@ -1,1 +1,83 @@
-<p>TODO</p>
+<p>Dictation into a running agent. Not a voice-command surface — an <em>input method</em> for a
+session you are already in, because the thing people actually want is to describe a change out
+loud instead of typing three paragraphs.</p>
+
+<h2>Entirely local</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">No cloud, no key, no account</span>
+  <p>whisper.cpp is bundled and spawned as a local process. There is no speech API, nothing to
+  configure, and <strong>your audio never leaves the machine</strong>. The model is downloaded
+  once through the app's own interface — about 490 MB — and hash-verified before it is used.</p>
+</div>
+
+<h2>Primed with your project's own vocabulary</h2>
+
+<p>A generic dictation tool gets the proper nouns wrong, every time, and those are exactly the
+words that matter in a prompt about your code. So the transcriber is primed with the project's
+own vocabulary: its file names, its branch.</p>
+
+<p>This was verified rather than assumed — the same recorded sentence, transcribed twice, with
+and without priming. It fixes precisely the proper nouns the generic pass gets wrong.</p>
+
+<h2>Live captions while you speak</h2>
+
+<p>A warm transcription server is polled roughly every second, and the result is folded through a
+commit-and-tail split so that <strong>the caption only ever grows and never rewrites a settled
+word</strong>. Words that are committed stay put; the volatile tail breathes.</p>
+
+<p>What actually gets <em>typed</em> is untouched by this: it is still one complete, unstreamed
+pass when you stop. The captions are for you while you talk; the transcription is for the
+prompt.</p>
+
+<h2>It types, it does not submit</h2>
+
+<p>The text lands in the prompt and stays there. You edit it and press Enter. The same rule
+governs <a href="page:notebook">sending a note</a> and
+<a href="page:terminal">pasting an image</a> — pressing Enter is yours, always.</p>
+
+<h2>Two bugs a real microphone found</h2>
+
+<p>Both of these are invisible to a test suite and obvious within ten seconds of a real
+headset:</p>
+
+<div class="defs">
+  <div>
+    <dt>PSReadLine's audible bell</dt>
+    <dd>Typing into a PowerShell prompt made it beep. Irritating in a way nobody notices until
+    they hear it, and nobody hears it in CI.</dd>
+  </div>
+  <div>
+    <dt>UTF-8 split across chunks</dt>
+    <dd>Dictated accents garbled specifically inside Claude Code's own TUI, because a multi-byte
+    character was being split across two writes. Fine in a shell, broken in the one place it
+    mattered.</dd>
+  </div>
+</div>
+
+<p>Both are fixed and proven against real infrastructure.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">A process that outlived the app</span>
+  <p>The streaming server survived a forced kill of the application and kept running. Fixed with
+  the same Windows job-object containment that <a href="page:terminal">agent processes</a>
+  already use — nothing this product starts should be able to outlive it.</p>
+</div>
+
+<h2>What is still unverified</h2>
+
+<div class="callout">
+  <span class="callout__title">One live pass, by ear, is still owed</span>
+  <p>Voice has been driven end to end for real once with a real headset, and the streaming path
+  has been driven live through the installed app using a synthetic-audio bypass — this machine
+  has no microphone attached. What has <strong>not</strong> happened is a single pass confirming,
+  by ear, all of: the start/finish sound cues, both bug fixes above, <em>and</em> the live
+  captions together, on a real microphone.</p>
+  <p>It is recorded as owed rather than quietly assumed. See
+  <a href="page:not-built">What is not built</a>.</p>
+</div>
+
+<h2>A missing microphone</h2>
+
+<p>Reported honestly rather than hanging. A feature that silently does nothing when the hardware
+is absent is indistinguishable from a feature that is broken.</p>

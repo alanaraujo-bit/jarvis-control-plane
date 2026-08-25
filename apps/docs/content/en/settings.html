@@ -1,1 +1,127 @@
-<p>TODO</p>
+<p>Eight sections as destinations: a fixed map on the left, one section on the right. Ordered by
+how often they are reached, not alphabetically.</p>
+
+<figure class="fig">
+  <img src="../img/settings-appearance.png" alt="The Settings screen with eight sections listed on the left and Appearance open on the right, showing theme and language controls.">
+  <figcaption>Every section is reachable by name from the command palette. <em>Rescan</em> lands
+  on Environment rather than wherever you happened to be last.</figcaption>
+</figure>
+
+<h2>The eight sections</h2>
+
+<div class="defs">
+  <div>
+    <dt>Appearance</dt>
+    <dd>Theme (dark, light, system) and language (English, Português). Both are authored
+    independently — light is not an inversion of dark.</dd>
+  </div>
+  <div>
+    <dt>Terminal</dt>
+    <dd>Type size and scrollback. Both apply <strong>in place</strong> to running terminals.</dd>
+  </div>
+  <div>
+    <dt>Autonomy</dt>
+    <dd>The global default profile and the autopilot's turn budget.
+    See <a href="page:autonomy">Autonomy</a>.</dd>
+  </div>
+  <div>
+    <dt>Guardrails</dt>
+    <dd>One row per sensitive operation the core reports.
+    See <a href="page:guardrails">Guardrails</a>.</dd>
+  </div>
+  <div>
+    <dt>Notifications</dt>
+    <dd>Three switches and a test button that fires the real path.
+    See <a href="page:notifications">Notifications</a>.</dd>
+  </div>
+  <div>
+    <dt>Phone</dt>
+    <dd>Pairing, and what is sent — stated <em>before</em> you connect.
+    See <a href="page:local-first">Local-first</a>.</dd>
+  </div>
+  <div>
+    <dt>Environment</dt>
+    <dd>What was found on this machine: Git, Node, pnpm, Claude Code, Codex, GitHub CLI, with
+    versions.</dd>
+  </div>
+  <div>
+    <dt>Updates</dt>
+    <dd>Which version you are on and whether a newer one exists.
+    See <a href="page:distribution">Distribution and updates</a>.</dd>
+  </div>
+</div>
+
+<h3>Why Autonomy sits above Guardrails</h3>
+
+<p>How much an agent does on its own is the broader question. What it may never do is the fence
+around that answer. Reading the fence first makes no sense.</p>
+
+<h3>Why Guardrails is its own section</h3>
+
+<p>It is one row per operation the core reports — <strong>a list free to grow without this screen
+being touched</strong>. A section that can get longer on its own does not share a page with
+anything else, or it will eventually push everything below it out of sight.</p>
+
+<h2>A project has settings of its own</h2>
+
+<p>The project workspace has a <strong>Settings</strong> area hosting the project-scoped autonomy
+and guardrail controls. Those panels are <em>literally the same components</em> as the global
+ones, given a project id — which is why the two can never drift apart in behaviour or in
+wording.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The panel that had a parameter and never received it</span>
+  <p>The guardrail panel had accepted a project id since guardrails shipped and had
+  <strong>never once been given one</strong>, because global Settings renders only when no project
+  is open and structurally cannot host a project-scoped control. The capability existed; the place
+  to use it did not.</p>
+</div>
+
+<h2>The audit, and what it found</h2>
+
+<p>Three values the product used, showed on screen, and gave nobody a way to change:</p>
+
+<ul>
+  <li><strong>The two upper levels of the autonomy chain.</strong> Resolved project → global →
+  default, with neither of the upper two reachable.</li>
+  <li><strong>The autopilot turn budget.</strong> The panel rendered <em>turn 3 of 24</em> while
+  24 was a constant in the source.</li>
+  <li><strong>Terminal type size and scrollback.</strong> Hard-coded.</li>
+</ul>
+
+<p>All are now settings, and <strong>none of them were new features</strong> — they were things
+the product already did, made adjustable.</p>
+
+<h2>Bounds are enforced in the core</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Two directions, two behaviours</span>
+  <p><strong>Out of range on the way in is refused</strong>, so a stored value is always one
+  somebody could have chosen. The surface renders a slider, so an out-of-range value should be
+  impossible — which is exactly why it is not trusted: a command reachable from the webview is
+  reachable from any bug in it.</p>
+  <p><strong>Out of range on the way out is clamped</strong>, so an older build's row cannot
+  produce an unusable terminal or a zero budget that fails every run before it starts.</p>
+</div>
+
+<p>Unset is <em>no row</em>, and a value that will not parse reads as unset rather than failing
+the screen.</p>
+
+<h2>No accordions inside a section</h2>
+
+<p>The left column already answers <em>click and more options open</em>. A second level of hiding
+buries more, not less.</p>
+
+<div class="callout" data-kind="good">
+  <span class="callout__title">Verified in the real build</span>
+  <p>All eight sections, dark and light, both languages, at 1440 / 1086 / 746 / 606 px. Four
+  defects existed <strong>only on screen and not in the stylesheet</strong>: the section floating
+  215px from its map, the selected row invisible in the light theme, the active chip off-screen in
+  the narrow strip, and <em>every panel asking the viewport how wide it was</em> when the pane is
+  344px narrower than the window.</p>
+  <p>Control alignment was checked by <strong>sampling pixels rather than by eye</strong>: all
+  five settings controls share one left edge at x=581.</p>
+</div>
+
+<p><a href="page:settings-reference">The settings reference</a> lists every setting with its
+default, its bounds, and what happens the moment you change it.</p>

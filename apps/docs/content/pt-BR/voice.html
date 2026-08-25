@@ -1,1 +1,85 @@
-<p>TODO</p>
+<p>Ditado dentro de um agente em execução. Não é uma superfície de comandos por voz — é um
+<em>método de entrada</em> para uma sessão em que você já está, porque o que as pessoas de fato
+querem é descrever uma mudança em voz alta em vez de digitar três parágrafos.</p>
+
+<h2>Inteiramente local</h2>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Sem nuvem, sem chave, sem conta</span>
+  <p>O whisper.cpp vem junto e é iniciado como processo local. Não existe API de fala, não há nada
+  para configurar, e <strong>seu áudio nunca sai da máquina</strong>. O modelo é baixado uma vez
+  pela própria interface do app — cerca de 490 MB — e verificado por hash antes de ser usado.</p>
+</div>
+
+<h2>Preparado com o vocabulário do seu próprio projeto</h2>
+
+<p>Uma ferramenta genérica de ditado erra os nomes próprios, toda vez, e são exatamente essas as
+palavras que importam num prompt sobre o seu código. Então o transcritor é preparado com o
+vocabulário do próprio projeto: os nomes de arquivo dele, o branch dele.</p>
+
+<p>Isso foi verificado, não presumido — a mesma frase gravada, transcrita duas vezes, com e sem a
+preparação. Ela conserta precisamente os nomes próprios que a passada genérica erra.</p>
+
+<h2>Legendas ao vivo enquanto você fala</h2>
+
+<p>Um servidor de transcrição já aquecido é consultado a cada segundo aproximadamente, e o
+resultado é dobrado por uma divisão entre confirmado e provisório, para que <strong>a legenda só
+cresça e nunca reescreva uma palavra já assentada</strong>. Palavras confirmadas ficam onde estão;
+a cauda provisória respira.</p>
+
+<p>O que de fato é <em>digitado</em> fica intocado por isso: continua sendo uma passada completa e
+não transmitida quando você para. As legendas são para você enquanto fala; a transcrição é para o
+prompt.</p>
+
+<h2>Ele digita, não envia</h2>
+
+<p>O texto cai no prompt e fica lá. Você edita e aperta Enter. A mesma regra governa
+<a href="page:notebook">enviar uma nota</a> e <a href="page:terminal">colar uma imagem</a> —
+apertar Enter é seu, sempre.</p>
+
+<h2>Dois bugs que um microfone de verdade encontrou</h2>
+
+<p>Os dois são invisíveis para uma suíte de testes e óbvios em dez segundos com um headset
+real:</p>
+
+<div class="defs">
+  <div>
+    <dt>O bipe audível do PSReadLine</dt>
+    <dd>Digitar num prompt do PowerShell fazia ele apitar. Irritante de um jeito que ninguém nota
+    até ouvir, e ninguém ouve em integração contínua.</dd>
+  </div>
+  <div>
+    <dt>UTF-8 partido entre blocos</dt>
+    <dd>Acentos ditados embaralhavam especificamente dentro da TUI do próprio Claude Code, porque
+    um caractere de vários bytes estava sendo partido entre duas escritas. Certo num shell,
+    quebrado no único lugar que importava.</dd>
+  </div>
+</div>
+
+<p>Os dois estão corrigidos e provados contra infraestrutura real.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Um processo que sobreviveu ao app</span>
+  <p>O servidor de transmissão sobreviveu a um encerramento forçado do aplicativo e continuou
+  rodando. Corrigido com a mesma contenção por job object do Windows que os
+  <a href="page:terminal">processos de agente</a> já usam — nada que este produto inicia deveria
+  conseguir sobreviver a ele.</p>
+</div>
+
+<h2>O que ainda não foi verificado</h2>
+
+<div class="callout">
+  <span class="callout__title">Uma passada ao vivo, de ouvido, ainda está devendo</span>
+  <p>A voz foi dirigida de ponta a ponta de verdade uma vez com um headset real, e o caminho de
+  transmissão foi dirigido ao vivo pelo app instalado usando um desvio de áudio sintético — esta
+  máquina não tem microfone conectado. O que <strong>não</strong> aconteceu foi uma única passada
+  confirmando, de ouvido, tudo junto: os sinais sonoros de início e fim, os dois bugs corrigidos
+  acima, <em>e</em> as legendas ao vivo, num microfone real.</p>
+  <p>Isso está registrado como dívida em vez de silenciosamente presumido. Veja
+  <a href="page:not-built">O que não está pronto</a>.</p>
+</div>
+
+<h2>Um microfone ausente</h2>
+
+<p>Informado honestamente em vez de travar. Um recurso que silenciosamente não faz nada quando o
+hardware está ausente é indistinguível de um recurso quebrado.</p>
