@@ -31,6 +31,7 @@ export const ptBR: Record<MessageKey, string> = {
   "nav.projects": "Projetos",
   "nav.missions": "Missões",
   "nav.activity": "Atividade",
+  "nav.friends": "Amigos",
   "nav.analytics": "Métricas",
   "nav.accounts": "Contas",
   "nav.settings": "Configurações",

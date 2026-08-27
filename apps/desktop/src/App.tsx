@@ -19,6 +19,7 @@ import { usePreferences } from "./surfaces/settings/usePreferences";
 import { invoke } from "./app/platform";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
+import { Friends } from "./surfaces/social/Friends";
 import { History } from "./surfaces/history/History";
 import { kindOf } from "./surfaces/history/format";
 import { Analytics } from "./surfaces/analytics/Analytics";
@@ -56,6 +57,7 @@ const IMPLEMENTED: SurfaceId[] = [
   "projects",
   "missions",
   "activity",
+  "friends",
   "history",
   "analytics",
   "accounts",
@@ -624,6 +626,8 @@ export function App() {
               <Projects onOpen={(project) => openProjectDirect(project)} />
             ) : surface === "activity" ? (
               <Activity />
+            ) : surface === "friends" ? (
+              <Friends />
             ) : surface === "history" ? (
               <History
                 // Routed through the *same* path Global Search uses to reopen a

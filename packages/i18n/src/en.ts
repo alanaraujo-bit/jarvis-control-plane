@@ -30,6 +30,7 @@ export const en = {
   "nav.projects": "Projects",
   "nav.missions": "Missions",
   "nav.activity": "Activity",
+  "nav.friends": "Friends",
   "nav.analytics": "Analytics",
   "nav.accounts": "Accounts",
   "nav.settings": "Settings",

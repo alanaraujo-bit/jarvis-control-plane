@@ -29,6 +29,7 @@ mod review;
 mod search;
 mod session;
 mod settings;
+mod social;
 mod voice;
 mod window;
 mod worktrees;
@@ -340,6 +341,11 @@ pub fn run() {
             relay::relay_status,
             relay::relay_pair,
             relay::relay_unpair,
+            social::social_report,
+            social::social_heartbeat,
+            social::social_create_profile,
+            social::social_request_friend,
+            social::social_accept_friend,
             notify::commands::notifications_centre,
             notify::commands::notifications_attention,
             notify::commands::notifications_mark_seen,
