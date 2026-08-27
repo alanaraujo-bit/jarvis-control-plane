@@ -964,6 +964,7 @@ export const ptBR: Record<MessageKey, string> = {
 
   "identity.google.soon": "Em breve",
   "identity.google.unavailable": "Entrar com o Google chega quando o J.A.R.V.I.S. estiver registrado no Google. Uma conta local funciona hoje e depois se liga ao Google.",
+  "identity.google.failed": "O login com Google não terminou. Confira o navegador e tente de novo.",
 
   "identity.skip.hint": "O J.A.R.V.I.S. funciona por inteiro sem conta. De um jeito ou de outro, tudo continua nesta máquina.",
 

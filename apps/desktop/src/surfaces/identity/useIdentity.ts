@@ -92,6 +92,7 @@ interface IdentityState {
   closeAuth: () => void;
   signIn: (email: string, password: string) => Promise<SignInOutcome>;
   signUp: (displayName: string, email: string, password: string) => Promise<SignUpOutcome>;
+  googleSignIn: () => Promise<void>;
   signOut: () => Promise<void>;
   skip: () => Promise<void>;
   /** Replace the report after a call that changed it (profile edits, delete). */
@@ -177,6 +178,12 @@ export const useIdentity = create<IdentityState>((set, get) => ({
       await applyCarried(outcome.carried, localeSetter ?? undefined);
     }
     return outcome;
+  },
+
+  googleSignIn: async () => {
+    const outcome = await invoke<{ report: IdentityReport; carried: Carried }>("identity_google_sign_in");
+    set({ report: outcome.report, authOpen: false });
+    await applyCarried(outcome.carried, localeSetter ?? undefined);
   },
 
   signOut: async () => {

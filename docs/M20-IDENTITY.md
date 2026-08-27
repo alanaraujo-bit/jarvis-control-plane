@@ -90,6 +90,15 @@ Deliberadamente **não** construído: o fluxo loopback/PKCE inteiro. A forma do
 redirect e se loopback é permitido dependem do tipo de client que ainda não
 existe — um subsistema não testável é pior do que uma função claramente marcada.
 
+### Atualização — Google e sincronização, 2026-08-27
+
+B7 foi resolvido com um cliente Web e callback no `social-api` de produção.
+O navegador do sistema faz o consentimento; o backend troca e verifica o token
+do Google, entrega ao desktop uma sessão revogável de 90 dias e guarda no
+Postgres as preferências carregadas e snapshots sanitizados das cotas. Tokens
+dos provedores de IA e diretórios locais de configuração não atravessam essa
+fronteira.
+
 ---
 
 ## 6.1 Argon2 é rápido o bastante aqui — medido, não suposto

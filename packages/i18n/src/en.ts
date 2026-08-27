@@ -1046,6 +1046,7 @@ export const en = {
   // does not work yet, and it says which — see B6 and §81.
   "identity.google.soon": "Soon",
   "identity.google.unavailable": "Google sign-in arrives once J.A.R.V.I.S. is registered with Google. A local account works today, and links to Google later.",
+  "identity.google.failed": "Google sign-in did not finish. Check the browser and try again.",
 
   "identity.skip.hint": "J.A.R.V.I.S. works completely without an account. Everything stays on this machine either way.",
 

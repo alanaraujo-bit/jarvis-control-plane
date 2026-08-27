@@ -29,6 +29,16 @@ pub fn identity_report(state: State<'_, AppState>) -> Result<IdentityReport> {
 }
 
 #[tauri::command]
+pub async fn identity_google_sign_in(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<super::cloud::GoogleSignIn> {
+    let outcome = super::cloud::sign_in(app, std::sync::Arc::clone(&state.db)).await?;
+    sync_live(&state);
+    Ok(outcome)
+}
+
+#[tauri::command]
 pub fn identity_sign_up(
     state: State<'_, AppState>,
     display_name: String,
@@ -57,6 +67,7 @@ pub fn identity_sign_in(
 
 #[tauri::command]
 pub fn identity_sign_out(state: State<'_, AppState>) -> Result<IdentityReport> {
+    super::cloud::sign_out(&state.db);
     super::sign_out(&state.db)
 }
 
@@ -83,7 +94,9 @@ pub fn identity_remember(
     value: serde_json::Value,
 ) -> Result<()> {
     let text = serde_json::to_string(&value).map_err(|e| e.to_string())?;
-    prefs::remember(&state.db, &key, &text)
+    prefs::remember(&state.db, &key, &text)?;
+    super::cloud::push_preference(&state.db, &key, &value);
+    Ok(())
 }
 
 #[tauri::command]

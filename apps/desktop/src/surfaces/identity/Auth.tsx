@@ -61,6 +61,7 @@ export function Auth() {
   const report = useIdentity((state) => state.report);
   const signIn = useIdentity((state) => state.signIn);
   const signUp = useIdentity((state) => state.signUp);
+  const googleSignIn = useIdentity((state) => state.googleSignIn);
   const skip = useIdentity((state) => state.skip);
   const closeAuth = useIdentity((state) => state.closeAuth);
 
@@ -203,6 +204,20 @@ export function Auth() {
 
   const now = Date.now();
 
+  const enterWithGoogle = async () => {
+    if (!report?.googleAvailable || busy) return;
+    setBusy(true);
+    setError(null);
+    setGoogleWhy(false);
+    try {
+      await googleSignIn();
+    } catch {
+      setError({ key: "identity.google.failed" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="auth">
       {/* Ambient light. Three neutral washes on their own slow paths, plus a
@@ -268,14 +283,12 @@ export function Auth() {
             <button
               type="button"
               className="auth__google"
-              // Present, and honestly unavailable (§81). It is not hidden,
-              // because it is coming; it is not enabled, because it does not
-              // work yet; and clicking says which. See B6.
               aria-disabled={!report?.googleAvailable}
-              onClick={() => setGoogleWhy((open) => !open)}
+              disabled={busy}
+              onClick={() => report?.googleAvailable ? void enterWithGoogle() : setGoogleWhy((open) => !open)}
             >
               <GoogleMark />
-              {t("identity.action.google")}
+              {busy ? t("identity.action.working") : t("identity.action.google")}
               {!report?.googleAvailable && <span className="auth__soon">{t("identity.google.soon")}</span>}
             </button>
             <div className="auth__why" data-open={googleWhy || undefined}>

@@ -37,6 +37,7 @@
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use super::Result;
 use crate::db::Database;
@@ -110,6 +111,22 @@ pub fn put_raw(db: &Database, account_id: &str, key: &str, value: &str) -> Resul
         Ok(())
     })
     .map_err(|e| e.to_string())
+}
+
+/// All carried values, decoded back to JSON for the sync API.
+pub fn all(db: &Database, account_id: &str) -> HashMap<String, serde_json::Value> {
+    let mut values = HashMap::new();
+    for key in std::iter::once(THEME_KEY)
+        .chain(std::iter::once(LOCALE_KEY))
+        .chain(MACHINE_CARRIED.iter().copied())
+    {
+        if let Some(raw) = raw(db, account_id, key) {
+            if let Ok(value) = serde_json::from_str(&raw) {
+                values.insert(key.to_string(), value);
+            }
+        }
+    }
+    values
 }
 
 fn machine_raw(db: &Database, key: &str) -> Option<String> {

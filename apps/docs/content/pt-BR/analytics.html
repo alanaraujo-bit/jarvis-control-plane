@@ -1,68 +1,128 @@
-<p>Quanto o trabalho custou, em tokens e no seu próprio tempo, somado a partir dos mesmos
-<a href="page:session-log">logs de sessão</a> que todo o resto lê.</p>
+<p>Quando você trabalhou, quanto custou, e quanto disso aconteceu enquanto ninguém olhava —
+somado a partir dos mesmos <a href="page:session-log">logs de sessão</a> que todo o resto lê,
+mais as próprias transcrições do provedor.</p>
 
 <figure class="fig">
-  <img src="../img/analytics.png" alt="A tela de Métricas mostrando tempo humano, tempo de execução dos agentes, sessões e arquivos alterados, depois totais de token, depois barras divididas por provedor, modelo, projeto e dia.">
-  <figcaption><b>Alavancagem humana primeiro, tokens depois.</b> Os quatro números do topo são os
-  que respondem se isso está funcionando; as contagens de token respondem quanto
-  custou.</figcaption>
+  <img src="../img/analytics.png" alt="A tela de Métricas: um calendário de atividade diária em âmbar graduado ao lado de quatro números — ofensiva atual, maior ofensiva, dias trabalhados e tokens — depois a linha de alavancagem humana, depois gráficos por hora do dia, projeto e modelo.">
+  <figcaption><b>O calendário é a tela, e também é o filtro.</b> Todos os outros números
+  respondem "quanto"; só o calendário responde "quando", que é a pergunta com que você
+  chega. <em>Os nomes de projeto desta figura foram substituídos por nomes
+  genéricos.</em></figcaption>
 </figure>
+
+<h2>O calendário</h2>
+
+<p>Uma célula por dia, graduada por quanto passou por ela. Clicar num dia escopa a tela inteira
+para ele; clicar de novo, ou no chip lá em cima, solta. O calendário nunca se escopa — ele é a
+figura e o controle ao mesmo tempo, e um controle que se apaga ao ser usado não deixa caminho de
+volta.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Dia sem histórico não é dia de folga</span>
+  <p>Células anteriores ao primeiro turno já registrado são desenhadas como <strong>contorno
+  vazio</strong>, não como dia parado. Numa faixa de 90 dias sobre duas semanas de dado, a versão
+  óbvia inventa setenta e tantos dias ociosos que nunca existiram. É a mesma regra de
+  <a href="page:confidence">Oficial e Observado</a>, aplicada a uma forma em vez de a um
+  número.</p>
+</div>
+
+<p>A rampa é âmbar em quatro intensidades, em escala de raiz quadrada. Uma linear deixaria um
+único dia enorme achatar duas semanas de trabalho real na banda mais pálida.</p>
+
+<h2>Dias trabalhados</h2>
+
+<div class="defs">
+  <div>
+    <dt>Ofensiva atual</dt>
+    <dd>Dias seguidos com trabalho registrado. Uma sequência que terminou <em>ontem</em> ainda
+    conta como a que você está, para não aparecer quebrada toda madrugada, antes do primeiro
+    turno do dia.</dd>
+  </div>
+  <div>
+    <dt>Maior ofensiva</dt>
+    <dd>A maior sequência já registrada, com as datas entre as quais ela correu.</dd>
+  </div>
+  <div>
+    <dt>Dias trabalhados</dt>
+    <dd><em>n</em> dos dias da faixa — dito como fração e não como porcentagem, porque "20 de 30"
+    diz uma coisa que "67%" esconde.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Ofensiva, sem cobrança</span>
+  <p>Não há meta, não há objetivo, e não há nada que te repreenda por uma lacuna. Um turno basta
+  para o dia contar — qualquer regra com número seria este produto decidindo quanto trabalho
+  conta como trabalho. A magnitude não se perde; é o que o sombreado do calendário carrega. Dia
+  de folga é dia de folga, e a tela diz isso.</p>
+</div>
 
 <h2>Alavancagem humana</h2>
 
 <div class="defs">
   <div>
     <dt>Tempo humano ativo</dt>
-    <dd>Os minutos em que você de fato digitou em uma sessão. <strong>Medido a partir de interação
-    real</strong>, não inferido de quanto tempo uma janela ficou aberta.</dd>
+    <dd>Os minutos em que você de fato digitou em uma sessão. <strong>Medido a partir de
+    interação real</strong>, não inferido de quanto tempo uma janela ficou aberta.</dd>
   </div>
   <div>
     <dt>Execução de agentes</dt>
     <dd>Quanto tempo as sessões ficaram ativas.</dd>
   </div>
-  <div>
-    <dt>Sessões · Arquivos alterados</dt>
-    <dd>O volume de trabalho, a partir dos quadros <code>FileChange</code> que a Revisão já
-    lê.</dd>
-  </div>
 </div>
 
-<p>A razão entre os dois primeiros é o número que este produto existe para mover. Ele é declarado
+<p>A razão entre os dois é o número que este produto existe para mover. Ele é declarado
 simplesmente em vez de virar uma pontuação, porque uma pontuação precisaria de uma escala com a
 qual ninguém concordou.</p>
 
-<h2>Tokens</h2>
-
-<p>Entrada, saída, cache lido e cache escrito, depois divididos por provedor, modelo, projeto e
-dia. Todos eles são <span class="badge" data-t="official">Oficiais</span> — o próprio objeto
-<code>usage</code> do provedor, somado a partir de quadros <code>Usage</code>.</p>
-
-<p>Nada aqui é estimado. Se um número não pode ser sustentado por uma declaração do provedor, ele
-não é mostrado como se pudesse. Veja <a href="page:confidence">Oficial e Observado</a>.</p>
-
-<h2>Notas sobre o desenho dos gráficos</h2>
-
-<div class="callout" data-kind="key">
-  <span class="callout__title">Um matiz só, de propósito</span>
-  <p>As barras usam uma cor só porque <strong>cada linha já está nomeada ao lado dela</strong>: a
-  barra carrega magnitude, o rótulo carrega identidade. Colorir por posição codificaria o
-  comprimento duas vezes, também como matiz — a mesma informação duas vezes, num canal que depois
-  não pode ser usado para mais nada.</p>
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Ela diz até onde consegue enxergar</span>
+  <p>Tokens alcançam tão longe quanto as transcrições do provedor. <strong>Atenção e tempo de
+  sessão só alcançam até quando o J.A.R.V.I.S. começou a olhar</strong> — nada registrava
+  digitação antes disso. Por isso a linha carrega a data de que é medida. Uma razão calculada
+  sobre trinta dias de tokens e dois dias de atenção seria o número mais lisonjeiro da tela e o
+  menos verdadeiro.</p>
 </div>
 
-<p>E uma divisão de categoria única não desenha barra nenhuma. Um retângulo de largura total
-repetindo o número que está do lado dele não é um gráfico; é decoração que aprendeu a parecer
-dado.</p>
+<h2>De onde vem o histórico</h2>
 
-<h2>Períodos</h2>
+<p>As Métricas só contavam o que o próprio J.A.R.V.I.S. viu acontecer, o que numa instalação nova
+é nada. O provedor guarda as próprias transcrições, e elas têm o mesmo trabalho — então, no
+primeiro lançamento, uma passagem em segundo plano lê essas transcrições e recupera o histórico
+de tokens que sempre esteve no disco.</p>
 
-<p>7, 30 e 90 dias. Longo o bastante para uma semana lenta não parecer um colapso, curto o
-bastante para o que você mudou mês passado ainda estar visível nos números.</p>
+<p>Ela roda uma vez, é retomável, fica fora do caminho de inicialização e é segura de repetir:
+todo turno carrega o identificador do próprio provedor, e uma transcrição de sessão que este
+produto rodou nunca é lida, porque aqueles turnos já estão registrados. Nada é inventado — nem
+sessões, nem projetos. Um turno recuperado carrega a pasta em que aconteceu como um rótulo
+simples, e é por isso que um projeto que você nunca abriu aqui ainda pode aparecer pelo nome.</p>
+
+<h2>Hora do dia, projeto, modelo</h2>
+
+<p>Tokens por hora do dia local, depois por projeto, modelo e provedor. Todos eles são
+<span class="badge" data-t="official">Oficiais</span> — o próprio objeto <code>usage</code> do
+provedor. Nada aqui é estimado; um número que não pode ser sustentado por uma declaração do
+provedor não é mostrado como se pudesse.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">Uma cor só, de propósito</span>
+  <p>As barras usam uma cor só porque <strong>cada linha já está nomeada ao lado dela</strong>: a
+  barra carrega magnitude, o rótulo carrega identidade. Colorir por posição codificaria o
+  comprimento duas vezes — a mesma informação, num canal que depois não serve para mais
+  nada.</p>
+</div>
+
+<h2>Faixas</h2>
+
+<p>7, 30 e 90 dias. Longo o bastante para que uma semana fraca não pareça um colapso, curto o
+bastante para que o que você mudou no mês passado ainda apareça. Os dias são agrupados
+<strong>no seu próprio fuso</strong>, então o trabalho de uma noite cai na noite em que você o
+fez.</p>
 
 <div class="cards">
   <a class="card" href="page:accounts">
     <strong>Contas e cota</strong>
-    <span>O que sobrou em vez do que foi gasto — a outra metade da mesma pergunta.</span>
+    <span>O que resta em vez do que foi gasto — a outra metade da mesma pergunta.</span>
   </a>
   <a class="card" href="page:activity">
     <strong>Atividade</strong>

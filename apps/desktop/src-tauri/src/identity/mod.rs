@@ -43,6 +43,7 @@
 //! password clears it.
 
 pub mod commands;
+pub mod cloud;
 pub mod prefs;
 
 #[cfg(test)]
@@ -301,9 +302,7 @@ pub fn report(db: &Database) -> Result<IdentityReport> {
         account,
         known,
         prompted: crate::settings::get_or(db, PROMPTED_KEY, false),
-        // B7. When a Google client id exists this becomes a real check for it,
-        // and the button stops explaining itself.
-        google_available: false,
+        google_available: true,
     })
 }
 
@@ -406,7 +405,7 @@ pub fn sign_up(
 /// the auth screen, which decides what to draw from exactly that pair, stayed
 /// exactly where it was over an account that had just been created correctly.
 /// Being signed in *is* the offer having been made and answered.
-fn seat(db: &Database, account_id: &str) -> Result<()> {
+pub(crate) fn seat(db: &Database, account_id: &str) -> Result<()> {
     mark_prompted(db)?;
     let now = now_ms();
     db.with(|conn| {
@@ -422,6 +421,44 @@ fn seat(db: &Database, account_id: &str) -> Result<()> {
     .map_err(|e| e.to_string())?;
     crate::settings::set(db, SIGNED_IN_KEY, &account_id.to_string())?;
     prefs::apply_to_machine(db, account_id)
+}
+
+/// Link Google's stable account to the local-first identity row.
+///
+/// A pre-existing password account with the same verified address is linked
+/// in place so its local preferences survive. A first-time Google account uses
+/// the server UUID, which keeps support logs and sync records easy to correlate.
+pub fn upsert_google(
+    db: &Database,
+    remote_id: &str,
+    email: &str,
+    display_name: &str,
+) -> Result<String> {
+    let email = normalise_email(email);
+    let name = display_name.trim();
+    if !looks_like_email(&email) || name.is_empty() {
+        return Err("identity.googleInvalidProfile".into());
+    }
+    if let Some(existing) = find_by_email(db, &email)? {
+        db.with(|conn| {
+            conn.execute(
+                "UPDATE identity_accounts SET display_name=?2,auth_provider='google',updated_at=?3 WHERE id=?1",
+                params![&existing.id, name, now_ms()],
+            )?;
+            Ok(())
+        }).map_err(|error| error.to_string())?;
+        return Ok(existing.id);
+    }
+    let now = now_ms();
+    db.with(|conn| {
+        conn.execute(
+            "INSERT INTO identity_accounts(id,email,display_name,password_hash,auth_provider,created_at,updated_at) VALUES(?1,?2,?3,NULL,'google',?4,?4)",
+            params![remote_id, &email, name, now],
+        )?;
+        Ok(())
+    }).map_err(|error| error.to_string())?;
+    prefs::adopt_machine_settings(db, remote_id)?;
+    Ok(remote_id.to_string())
 }
 
 pub fn sign_in(db: &Database, email: &str, password: &str) -> Result<SignInOutcome> {

@@ -291,8 +291,13 @@ started — an update check that fails against a URL that looks right.
 ---
 
 ## B7 — A Google OAuth client, for "Continue with Google" (M20)
-**Status:** Blocked. Needs a credential only you can create; the button is
-already on the screen and already says why it does not work yet.
+**Status:** Resolved em 2026-08-27.
+
+O cliente Web foi criado com o callback de produção, as credenciais foram
+instaladas no `social-api` e o segredo foi selado no Railway. O fluxo usa o
+navegador do sistema, valida o token Google no backend, cria uma sessão
+revogável e sincroniza preferências e snapshots sanitizados de cota no
+Postgres. Nenhuma credencial dos provedores de IA é enviada ao servidor.
 
 Signing in with Google was asked for explicitly, and the button ships **visible
 and honestly unavailable** — the same treatment push notifications get, and the

@@ -1,11 +1,61 @@
-<p>What the work cost, in tokens and in your own time, folded from the same
-<a href="page:session-log">session logs</a> everything else reads.</p>
+<p>When you have been working, what it cost, and how much of it happened while nobody was
+watching — folded from the same <a href="page:session-log">session logs</a> everything else
+reads, plus the provider's own transcripts.</p>
 
 <figure class="fig">
-  <img src="../img/analytics.png" alt="The Analytics screen showing human time, agent runtime, sessions and files changed, then token totals, then bars broken down by provider, model, project and day.">
-  <figcaption><b>Human leverage first, tokens second.</b> The four numbers at the top are the
-  ones that answer whether this is working; the token counts answer what it cost.</figcaption>
+  <img src="../img/analytics.png" alt="The Analytics screen: a calendar of daily activity in graded amber beside four figures — current run, longest run, days worked and tokens — then a human-leverage row, then charts for time of day, project and model.">
+  <figcaption><b>The calendar is the screen, and it is also the filter.</b> Every other figure
+  answers "how much"; only the calendar answers "when", which is the question you actually
+  arrive with. <em>Project names in this figure were replaced with generic
+  ones.</em></figcaption>
 </figure>
+
+<h2>The calendar</h2>
+
+<p>One cell per day, graded by how much passed through it. Clicking a day scopes the whole
+screen to it; clicking it again, or the chip at the top, lets go. The calendar itself never
+scopes — it is the picture and the control at once, and a control that erases itself when used
+leaves no way back.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A day with no history is not a day off</span>
+  <p>Cells from before the first turn anyone recorded are drawn as an <strong>empty
+  outline</strong>, not as a quiet day. On a 90-day range over a fortnight of data, the obvious
+  version invents seventy-odd idle days that never happened. This is the same rule as
+  <a href="page:confidence">Official and Observed</a>, applied to a shape instead of a
+  number.</p>
+</div>
+
+<p>The ramp is amber at four strengths, on a square-root scale. A linear one would let a single
+enormous day flatten a fortnight of real work into the palest band.</p>
+
+<h2>Days worked</h2>
+
+<div class="defs">
+  <div>
+    <dt>Current run</dt>
+    <dd>Consecutive days with work recorded. A run that ended <em>yesterday</em> still counts as
+    the one you are on, so it does not read as broken every midnight before the day's first
+    turn.</dd>
+  </div>
+  <div>
+    <dt>Longest run</dt>
+    <dd>The longest such stretch on record, with the dates it ran between.</dd>
+  </div>
+  <div>
+    <dt>Days worked</dt>
+    <dd><em>n</em> of the days in range — stated as a fraction rather than a percentage, because
+    "20 of 30" says something "67%" hides.</dd>
+  </div>
+</div>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">A streak, without the nagging</span>
+  <p>There is no target, no goal, and nothing that tells you off for a gap. One turn is enough
+  for a day to count — any rule with a number in it would be this product deciding how much work
+  counts as work. The magnitude is not lost; it is what the calendar's shading carries. A quiet
+  day is a day off, and the screen says so.</p>
+</div>
 
 <h2>Human leverage</h2>
 
@@ -19,25 +69,38 @@
     <dt>Agent runtime</dt>
     <dd>How long sessions were active.</dd>
   </div>
-  <div>
-    <dt>Sessions · Files changed</dt>
-    <dd>The volume of work, from the <code>FileChange</code> frames Review already reads.</dd>
-  </div>
 </div>
 
-<p>The ratio between the first two is the number this product exists to move. It is stated
-plainly rather than turned into a score, because a score would need a scale nobody agreed on.</p>
+<p>The ratio between them is the number this product exists to move. It is stated plainly rather
+than turned into a score, because a score would need a scale nobody agreed on.</p>
 
-<h2>Tokens</h2>
+<div class="callout" data-kind="warn">
+  <span class="callout__title">It says how far back it can see</span>
+  <p>Tokens reach as far back as the provider's transcripts do. <strong>Attention and session
+  lifetimes only reach back to when J.A.R.V.I.S. was first watching</strong> — nothing recorded
+  keystrokes before that. So the row carries the date it is measured from. A ratio computed over
+  thirty days of tokens and two days of attention would be the most flattering figure on the
+  screen and the least true.</p>
+</div>
 
-<p>Input, output, cache read and cache written, then broken down by provider, model, project and
-day. Every one of these is <span class="badge" data-t="official">Official</span> — the provider's
-own <code>usage</code> object, folded from <code>Usage</code> frames.</p>
+<h2>Where the history comes from</h2>
 
-<p>Nothing here is estimated. If a number cannot be sourced from a provider statement, it is not
-shown as though it could. See <a href="page:confidence">Official and Observed</a>.</p>
+<p>Analytics used to count only what J.A.R.V.I.S. itself watched happen, which on a new install
+is nothing. The provider keeps its own transcripts, and they hold the same work — so on first
+launch a background pass reads them and recovers the token history that was always on disk.</p>
 
-<h2>Notes on the chart design</h2>
+<p>It runs once, resumably, off the startup path, and it is safe to repeat: every turn carries
+the provider's own identifier, and a transcript belonging to a session this product ran is never
+read at all, because those turns are already recorded. Nothing is invented — no sessions, no
+projects. A recovered turn carries the folder it happened in as a plain label, which is why a
+project you have never opened here can still appear by name.</p>
+
+<h2>Time of day, project, model</h2>
+
+<p>Tokens by hour of the local day, then by project, model and provider. Every one of these is
+<span class="badge" data-t="official">Official</span> — the provider's own <code>usage</code>
+object. Nothing here is estimated; a figure that cannot be sourced from a provider statement is
+not shown as though it could.</p>
 
 <div class="callout" data-kind="key">
   <span class="callout__title">One hue, on purpose</span>
@@ -47,14 +110,11 @@ shown as though it could. See <a href="page:confidence">Official and Observed</a
   else.</p>
 </div>
 
-<p>And a single-category breakdown drops its bar entirely. A full-width rectangle restating the
-number sitting next to it is not a chart; it is decoration that has learned to look like
-data.</p>
-
 <h2>Ranges</h2>
 
 <p>7, 30 and 90 days. Long enough that a slow week does not read as a collapse, short enough that
-what you changed last month is still visible in the numbers.</p>
+what you changed last month is still visible. Days are bucketed in <strong>your own time
+zone</strong>, so an evening's work lands on the evening you did it.</p>
 
 <div class="cards">
   <a class="card" href="page:accounts">

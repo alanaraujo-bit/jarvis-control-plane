@@ -2046,3 +2046,150 @@ at 0/0/0 closed and 20/31.5/63.3 open.
 The fourth is the one worth keeping: **none of these were visible in the code.**
 Each file reads correctly on its own, and the whole thing compiled and passed
 every test through all four.
+
+---
+
+## D49 — An identity you only check when asked is an identity you cannot trust
+
+Alan reported two Claude accounts showing identical statistics, and never being
+able to actually use the second one. The product already had the check that
+should have caught it — `same_subscription`, shipped with M13 — and it had been
+sitting there failing silently for eleven hours.
+
+### The measurement that decided it
+
+A brand-new, empty `CLAUDE_CONFIG_DIR`, and the ordinary command:
+
+```
+$ claude auth login --claudeai
+Opening browser to sign in…
+Paste code here if prompted > Login successful.
+```
+
+About one second, and **it asked nothing**. The browser already held a claude.ai
+session, the flow accepted it, and the new directory was signed into the account
+that was already there. No flag forces the account chooser — `--email` only
+pre-fills a page that never appears.
+
+So the obvious way to add a second account adds a second *directory* on the
+**first account**. Both cards then draw one allowance, both dials move together,
+and nothing on screen says so.
+
+### Why the guard could not fire
+
+It keyed on the e-mail address, and identity was only re-read when somebody
+pressed *Check now*. The adopted account's row still said
+`alanvitoraraujo1@icloud.com` from before that directory changed hands. Two
+different strings, no twin detected, one subscription presented as two.
+
+The card made it worse by carrying one freshness stamp for two facts with two
+lifetimes: a quota reading refreshed every few minutes was read as vouching for
+the name printed above it.
+
+### What that rules out
+
+**A label is not an identity.** The subscription key is now the provider's own
+`accountUuid` — the same string in every directory signed into one account,
+immune to an alias, a rename or a change of casing — with e-mail only as the
+fallback where no uuid is published. It decides in *both* directions: differing
+uuids mean different accounts however the e-mails read.
+
+**A freshness gate must compare the thing, not the clock.** The first version
+compared file modification times and was wrong in a way only the real machine
+shows: Claude Code rewrites `.claude.json` about every ten minutes and
+`.credentials.json` on every token refresh. Keyed on mtime the gate would have
+opened on nearly every paint — and `load("cached")` runs after every rename,
+pause and remove, so pausing an account would have frozen the window. Reading
+`oauthAccount` and comparing costs a file read inside the process, and is exact.
+
+**Absence is not a statement.** Found by running the diagnostic against the real
+registry: Codex 0.149.1 stopped writing `id_token_claims`, so a directory that
+was plainly signed in reported no e-mail — and the first version wrote that
+`None` over the known address, read it as *"this directory now belongs to
+somebody else"*, and discarded the account's entire quota history. Every
+refresh. Silently. `subscription_since` may now only move on a positive
+statement that the account changed, never on the absence of one. The same branch
+is what stops every existing installation losing its history the first time the
+uuid column is filled in.
+
+**What the product still cannot do is make the browser ask.** The claude.ai
+session is not ours. So it says so before the click, hands over the
+authorisation URL for a private window, and takes the pasted code back through
+the CLI's stdin — measured, because the CLI blocks there waiting for it, and a
+recommendation to use a private window without somewhere to put the code would
+have left the login hanging for ever.
+
+---
+
+## D50 — Metrics over a history the product never witnessed
+
+Alan's verdict on the Analytics screen was that it was generic. It was, and the
+reason was not the design.
+
+### The measurement that decided it
+
+| source | days | usage-bearing turns |
+|---|---|---|
+| `usage_samples` in the database | **2** | 889 |
+| the provider's transcripts on disk | **20** | **45,487** |
+
+The product could only ever count what it had watched happen. Everything before
+it was installed was sitting in `~/.claude/projects/**.jsonl`, in the same
+format the tailer already parses, invisible to the screen.
+
+Over two days, a calendar and a streak are decoration. Over twenty days with
+real gaps in them, they *are* the screen. So the first half of this work is not
+a surface at all — it is recovering the history, and the design decisions
+downstream of it only became possible once the data existed.
+
+### What makes it safe to write numbers people read
+
+Two independent guards, because this writes figures somebody will quote:
+
+1. Every usage-bearing line carries the provider's own `uuid`, stored under a
+   unique index, so `INSERT OR IGNORE` makes a second walk a no-op.
+2. A transcript whose session *this product ran* is never walked at all — those
+   turns are already recorded by the live tailer, with no uuid for guard 1 to
+   match. Measured: 7 of 207 overlap, and the file name is the session id.
+
+Proven on the real corpus rather than argued: 199 files, 29,251 rows, and a
+second walk that added nothing.
+
+**It invents nothing.** No `sessions` rows, no `projects` rows — the corpus
+spans 35 folders against 3 registered projects, and putting folders somebody
+never opened here into their project list would be worse than the gap it closes.
+The name travels on the sample instead. And no `account_id`, which a test pins:
+history recovered from disk was not spent under any account this product knows
+about, and if it leaked into `accounts::quota` twenty days of other work would
+land inside somebody's five-hour window.
+
+### A calendar is read by a person, so it is in their time
+
+Day bucketing was UTC. Alan is at UTC−3, so everything he did after 21:00
+appeared on the *following* day — the corpus scan showed a `2026-08-27` bucket
+that was the evening of the 26th. On an unlabelled sparkline that is invisible;
+on a dated calendar it is simply wrong, and the person whose evening it was is
+the one reading it. `accounts::quota::daily_tokens` stays in UTC deliberately:
+it feeds fourteen bars with no dates on them, where consistency with the
+provider's quota windows matters more than a convention nobody can see.
+
+### A streak that does not nag
+
+Alan asked for a streak *and* for the screen to be healthy, and those pull
+against each other — §52 is explicit that metrics are information, not
+gamification. The resolution: current and longest are stated as facts, with no
+target, no goal and no warning about breaking one. **One turn** makes a day
+count, because any rule with a number in it would be this product deciding how
+much work counts as work; the magnitude is not thrown away, it is what the
+calendar's shading carries. The current run accepts *yesterday* as its end, or
+it would read as broken every midnight — the product telling somebody off for
+the crime of being early in the day. The line under "days worked" says *a day
+off is a day off*.
+
+### And a figure that says how far it can see
+
+Tokens now reach back twenty days; attention and session lifetimes still only
+reach back to when J.A.R.V.I.S. was first running. A leverage ratio computed
+over thirty days of one and two days of the other would be the most flattering
+number on the screen and the least true, so the row carries the date it is
+measured from.

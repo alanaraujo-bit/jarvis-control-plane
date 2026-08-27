@@ -288,6 +288,7 @@ pub fn run() {
             brain::brain_delete_note,
             brain::brain_promote_note,
             identity::commands::identity_report,
+            identity::commands::identity_google_sign_in,
             identity::commands::identity_sign_up,
             identity::commands::identity_sign_in,
             identity::commands::identity_sign_out,

@@ -981,10 +981,11 @@ real destination rather than a delay before the same wall.
       that is advice and never a gate, a "did you mean gmail.com?" for the
       typo that is invisible because the address is well-formed, and a Caps Lock
       warning the browser is the only thing that knows about.
-- [x] **Continue with Google** — present, badged, honestly disabled, and it says
-      why when clicked (B7). The loopback/PKCE flow is deliberately absent: its
-      shape depends on a credential that does not exist yet, and an untested
-      subsystem built on a guess is worse than one marked gap.
+- [x] **Continue with Google** — external-browser OAuth through the production
+      API, with Google token verification, revocable 90-day sessions and the
+      client secret sealed on Railway. Preferences and quota snapshots persist
+      in Postgres; provider credentials and local configuration paths never
+      leave the desktop. B7 is resolved.
 - [x] An Account section in Settings — profile, password, what the account
       carries, and a delete that asks for the password first.
 

@@ -175,7 +175,9 @@ pub async fn accounts_refresh(
     //
     // Reading quota must not change state. The surface still says an account
     // is nearing its limit and which one has more room; deciding is a click.
-    report(&state, project_id.as_deref())
+    let report = report(&state, project_id.as_deref())?;
+    crate::identity::cloud::push_quota(&state.db, &report);
+    Ok(report)
 }
 
 /// Ask one account's provider for its quota, now.
@@ -193,7 +195,9 @@ pub async fn account_refresh_live(
     if let Some(account) = super::get(&state.db, &account_id)? {
         super::live::refresh_all(&state.db, std::slice::from_ref(&account));
     }
-    report(&state, project_id.as_deref())
+    let report = report(&state, project_id.as_deref())?;
+    crate::identity::cloud::push_quota(&state.db, &report);
+    Ok(report)
 }
 
 #[tauri::command]
