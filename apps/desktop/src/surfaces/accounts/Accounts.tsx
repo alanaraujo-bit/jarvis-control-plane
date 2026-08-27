@@ -41,6 +41,7 @@ import type { MessageKey } from "@jarvis/i18n";
 import { useI18n, useT } from "../../app/i18n";
 import {
   useAccounts,
+  type Account,
   type AccountCard,
   type AutoSwitchPolicy,
   type LiveReading,
@@ -575,6 +576,48 @@ function LiveStamp({ card, now }: { card: AccountCard; now: number }) {
   );
 }
 
+/**
+ * When this directory was last asked *who* it is, as opposed to how much is left.
+ *
+ * Two facts with two lifetimes, and the card used to show only one of them. A
+ * quota reading refreshes every few minutes; an identity only changes when
+ * somebody signs in or out, so it was read far less often — and the fresh
+ * "read just now" beside the dial was taken to vouch for the name above it.
+ * On this machine that gap ran to eleven hours: the card said
+ * `alanvitoraraujo1@icloud.com`, the directory had been signed into a different
+ * account, and nothing on screen was wrong enough to notice.
+ *
+ * Silent while the answer is recent, which is the ordinary case now that a
+ * stale identity is re-read on sight. It speaks when the last *attempt* failed,
+ * or when a confirmed identity has aged past the point of being worth trusting
+ * without a word.
+ */
+function IdentityStamp({ account, now }: { account: Account; now: number }) {
+  const t = useT();
+  if (!account.signedIn || account.checkedAt === null) return null;
+
+  const failedSince =
+    account.identityAttemptedAt !== null && account.identityAttemptedAt > account.checkedAt;
+  const age = now - account.checkedAt;
+  if (!failedSince && age < IDENTITY_QUIET_MS) return null;
+
+  return (
+    <div className="accounts__stamp" data-tone={failedSince ? "warn" : "idle"}>
+      {failedSince && <AlertTriangle size={11} aria-hidden="true" />}
+      <span>{t("accounts.identityAge", { age: readingAge(account.checkedAt, now, t) })}</span>
+    </div>
+  );
+}
+
+/**
+ * How old a confirmed identity may be before the card mentions it.
+ *
+ * An hour: long enough that the line is not on screen during ordinary use, and
+ * short enough that a directory somebody signed into something else this
+ * morning does not go unremarked all afternoon.
+ */
+const IDENTITY_QUIET_MS = 60 * 60 * 1000;
+
 function AccountCardView({
   card,
   now,
@@ -593,6 +636,32 @@ function AccountCardView({
   const t = useT();
   const { locale } = useI18n();
   const { account, quota } = card;
+  const signOut = useAccounts((state) => state.signOut);
+  const beginSignIn = useAccounts((state) => state.beginSignIn);
+  const [switching, setSwitching] = useState(false);
+
+  /**
+   * Put a *different* account into this directory.
+   *
+   * Signing out first is the load-bearing half. Signing in again over a
+   * directory that is already authenticated is what produced the collision in
+   * the first place — the flow finds a valid session and returns immediately —
+   * so the provider has to be told to forget this one before it will ask
+   * anybody anything.
+   */
+  const useDifferentAccount = async () => {
+    setSwitching(true);
+    try {
+      await signOut(account.id);
+      await beginSignIn(account.id);
+    } catch {
+      // `signOut` already put the reason in the store's error slot, which the
+      // screen renders; failing here must not leave the button spinning.
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   // A provider that just told us nobody is signed in here has said more than
   // "we have not checked". Seen on screen: a card whose body read "not signed
   // in" wearing a "Not verified" badge, which are two different claims about
@@ -670,10 +739,30 @@ function AccountCardView({
           number needs to know they are one number *before* they start planning
           around them — a footnote under the gauge arrives too late. */}
       {sharesWith.length > 0 && (
-        <p className="accounts__shared">
+        <div className="accounts__shared">
           <Users size={13} strokeWidth={1.9} aria-hidden="true" />
-          {t("accounts.sharedSubscription", { name: sharesWith.join(", ") })}
-        </p>
+          <div className="accounts__shared-text">
+            <p>{t("accounts.sharedSubscription", { name: sharesWith.join(", ") })}</p>
+            {/* Saying "these are the same account" and leaving the person with
+                no way to change it would be an accurate dead end. The adopted
+                directory is excluded on purpose: it is the machine's own login,
+                very possibly the session they are working in right now, and a
+                quota panel must not log them out of it. */}
+            {!account.adopted && (
+              <button
+                type="button"
+                className="accounts__button accounts__shared-action"
+                onClick={() => void useDifferentAccount()}
+                disabled={switching}
+              >
+                <LogIn size={13} />
+                {switching
+                  ? t("accounts.openingLogin")
+                  : t("accounts.sharedSubscription.useAnother")}
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {binding ? (
@@ -768,6 +857,7 @@ function AccountCardView({
       )}
 
       <LiveStamp card={card} now={now} />
+      <IdentityStamp account={account} now={now} />
       <AccountActions card={card} canPause={canPause} />
     </article>
   );
@@ -901,6 +991,22 @@ function AddAccount({ provider, onClose }: { provider: ProviderId; onClose: () =
         <h2>{t("accounts.add.title")}</h2>
         <p>{t("accounts.add.body")}</p>
       </div>
+      {/* The single most useful sentence on this form.
+          Measured, not assumed: `claude auth login` in a brand-new empty
+          configuration directory returned "Login successful" in about a second,
+          having asked nothing, because the browser was already holding a
+          claude.ai session. The obvious way to add a second account therefore
+          adds a second directory on the *first* account — two cards, one
+          allowance, both dials moving together — and the person has no way to
+          know until they notice the numbers are identical.
+          This product cannot fix the browser's session. It can say so before
+          the click instead of after. */}
+      {provider === "claude-code" && (
+        <p className="accounts__add-warning">
+          <ShieldAlert size={14} strokeWidth={1.9} aria-hidden="true" />
+          <span>{t("accounts.add.browserSessionWarning")}</span>
+        </p>
+      )}
       <label>
         <span>{t("accounts.label")}</span>
         <input
@@ -937,6 +1043,126 @@ function AddAccount({ provider, onClose }: { provider: ProviderId; onClose: () =
   );
 }
 
+/**
+ * The authorisation link, while a provider login is running.
+ *
+ * This exists because of the one thing that cannot be automated away: the CLI
+ * opens the browser itself, and that browser signs the new directory into the
+ * account it is already holding without offering a choice. The link it prints
+ * is the same authorisation URL — opened in a private window, where no session
+ * exists, it presents the account chooser.
+ *
+ * So the panel is not decoration around a spinner. It is the only route to a
+ * genuinely different account that does not involve signing out of claude.ai
+ * everywhere, and it is worth the space it takes.
+ */
+function SignInProgress() {
+  const t = useT();
+  const signIn = useAccounts((state) => state.signIn);
+  const dismiss = useAccounts((state) => state.dismissSignIn);
+  const submitCode = useAccounts((state) => state.submitSignInCode);
+  const [copied, setCopied] = useState(false);
+  const [code, setCode] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  if (!signIn) return null;
+
+  const submit = async () => {
+    const value = code.trim();
+    if (!value) return;
+    setSending(true);
+    try {
+      await submitCode(signIn.accountId, value);
+      setCode("");
+    } catch {
+      // The reason is already in the store's error slot, which the screen
+      // renders. Most likely: the CLI finished on its own while the code was
+      // being typed, so there is nothing left waiting for it.
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!signIn.url) return;
+    try {
+      await navigator.clipboard.writeText(signIn.url);
+      setCopied(true);
+    } catch {
+      // A clipboard the webview refused is not worth an error banner: the URL
+      // is on screen and selectable, which is the fallback anyway.
+    }
+  };
+
+  return (
+    <section className="accounts__signin" aria-live="polite">
+      <div className="accounts__signin-head">
+        <LogIn size={14} strokeWidth={1.9} aria-hidden="true" />
+        <h2>{t("accounts.signInProgress.title")}</h2>
+        <button
+          type="button"
+          className="accounts__icon-button"
+          onClick={dismiss}
+          aria-label={t("common.dismiss")}
+        >
+          <X size={13} />
+        </button>
+      </div>
+      <p>{t("accounts.signInProgress.body")}</p>
+      {signIn.url ? (
+        <>
+          <div className="accounts__signin-link">
+            <code>{signIn.url}</code>
+            <button type="button" className="accounts__button" onClick={() => void copy()}>
+              {copied ? <Check size={13} /> : <Ticket size={13} />}
+              {copied ? t("accounts.signInProgress.copied") : t("accounts.signInProgress.copy")}
+            </button>
+          </div>
+          {/* Not optional decoration — the flow does not complete without it.
+              Measured: the CLI prints the link, prints "Paste code here if
+              prompted", and then waits on stdin. When the browser completed the
+              login by itself this box is simply never used and the panel
+              closes; when the person used a private window, this is the only
+              way the code gets back to the provider. */}
+          <form
+            className="accounts__signin-code"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <label>
+              <span>{t("accounts.signInProgress.codeLabel")}</span>
+              <input
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder={t("accounts.signInProgress.codePlaceholder")}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <button
+              type="submit"
+              className="accounts__button accounts__button--primary"
+              disabled={!code.trim() || sending}
+            >
+              {t("accounts.signInProgress.submitCode")}
+            </button>
+          </form>
+        </>
+      ) : (
+        <p className="accounts__signin-waiting">{t("accounts.signInProgress.waiting")}</p>
+      )}
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // The screen
 // ---------------------------------------------------------------------------
@@ -950,6 +1176,7 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
   const load = useAccounts((state) => state.load);
   const ensureFresh = useAccounts((state) => state.ensureFresh);
   const setAutoSwitch = useAccounts((state) => state.setAutoSwitch);
+  const watchSignIn = useAccounts((state) => state.watchSignIn);
   const [provider, setProvider] = useState<ProviderId>("claude-code");
   const [adding, setAdding] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -965,6 +1192,23 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
   useEffect(() => {
     void load("cached", projectId).then(() => ensureFresh(30_000));
   }, [load, ensureFresh, projectId]);
+
+  // A login finishes in a browser, minutes after the command that started it
+  // returned. Without this the screen never hears about the outcome — which is
+  // how a directory that had just been signed into an account another card
+  // already held went on looking like a separate account.
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void watchSignIn().then((unlisten) => {
+      if (cancelled) unlisten();
+      else stop = unlisten;
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [watchSignIn]);
 
   /**
    * Tick only when a label would actually change.
@@ -1025,6 +1269,32 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
         (account) => account.label || account.email || t("accounts.unnamed"),
       ),
     [report, t],
+  );
+
+  /**
+   * The core's own verdict, preferred over the one derived above.
+   *
+   * `shared_with` is decided by `accounts::same_subscription` — the same rule
+   * the rotation obeys when it refuses to move work onto a twin. Deriving the
+   * sentence separately here left two implementations of one claim, and the
+   * card is asserting something strong enough that it should not be able to
+   * disagree with what the switch does. The local derivation stays as the
+   * fallback for a report from a core that has not been rebuilt yet.
+   */
+  const sharedNames = useCallback(
+    (card: AccountCard): string[] => {
+      const byId = new Map(
+        (report?.accounts ?? []).map((other) => [
+          other.account.id,
+          other.account.label || other.account.email || t("accounts.unnamed"),
+        ]),
+      );
+      const fromCore = (card.sharedWith ?? [])
+        .map((id) => byId.get(id))
+        .filter((name): name is string => Boolean(name));
+      return fromCore.length > 0 ? fromCore : (shared.get(card.account.id) ?? []);
+    },
+    [report, shared, t],
   );
 
   return (
@@ -1112,6 +1382,7 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
 
         {error && <div className="accounts__error">{t("accounts.error")}</div>}
         {adding && <AddAccount provider={provider} onClose={() => setAdding(false)} />}
+        <SignInProgress />
 
         {loading && !report ? (
           <div className="accounts__loading">{t("common.loading")}</div>
@@ -1127,7 +1398,7 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
                 key={card.account.id}
                 card={card}
                 now={now}
-                sharesWith={shared.get(card.account.id) ?? []}
+                sharesWith={sharedNames(card)}
                 canPause={
                   card.account.paused ||
                   !card.account.active ||

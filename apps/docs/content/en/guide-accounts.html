@@ -13,6 +13,19 @@ of stopping.</p>
     <strong>Add another</strong>
     <p><em>Add account</em> creates a new configuration directory and starts the provider's own
     sign-in. That opens a browser and you complete the OAuth flow.</p>
+    <div class="callout" data-kind="warn">
+      <span class="callout__title">The browser will not ask which account to use</span>
+      <p>If you are already signed in to claude.ai in that browser, the flow accepts that session
+      and returns "Login successful" in about a second, having asked nothing. The new directory is
+      then signed into the account you already had — a second card, the same allowance, both dials
+      moving together.</p>
+      <p>So J.A.R.V.I.S. hands you the <strong>authorisation link</strong> the CLI prints. Open it
+      in a <strong>private window</strong>, where no session exists and the account chooser
+      appears. That is the reliable way to reach a genuinely different account.</p>
+      <p>That flow ends by giving you a <strong>code</strong> rather than returning to the app, so
+      the panel has a box to paste it into. Leave it empty when the browser signed in by itself —
+      the box is only used when the provider is actually waiting for a code.</p>
+    </div>
     <div class="callout" data-kind="key">
       <span class="callout__title">This product never sees a password or a token</span>
       <p>Sign-in happens entirely inside the provider's CLI. Afterwards J.A.R.V.I.S. asks the
@@ -24,10 +37,19 @@ of stopping.</p>
 
   <li>
     <strong>Check for twins</strong>
-    <p>If two cards show identical statistics under different names, they are probably
-    <strong>one subscription drawn twice</strong> — the same email signed in to two directories.
-    The product detects this, keyed on <em>email</em> rather than organisation, and says so on
-    both cards above the dial.</p>
+    <p>If two cards show identical statistics under different names, they are
+    <strong>one subscription drawn twice</strong> — one account signed in to two directories.
+    The product detects this and says so on both cards, above the dial, with a button that signs
+    that directory out so a different account can go into it.</p>
+    <p>The check is keyed on the provider's own <strong>account identifier</strong>, falling back
+    to the email address where a provider publishes none. Not on organisation: a Team plan puts
+    several people's separate allowances under one org. And not on email alone, which is what it
+    used to be — an email is a label, and a directory that had been signed into somebody else
+    still carried the old address, so two cards on one allowance compared as different accounts
+    and nothing was said. The identifier is the same string in every directory signed into one
+    account, whatever the labels read.</p>
+    <p>Identity is also re-read whenever the provider's own files change, so a sign-in you did in
+    a terminal shows up the next time you open this screen rather than at the next manual check.</p>
     <p>It does not prevent it. Two directories on one account is legitimate. It just makes sure
     you are not looking at a lie.</p>
     <figure class="fig">

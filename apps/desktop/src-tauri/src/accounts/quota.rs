@@ -362,19 +362,25 @@ pub struct AccountQuota {
 }
 
 /// The latest thing the provider said about one window.
+///
+/// `since` is the account's `subscription_since`: a directory that has been
+/// signed into a different account since has a history that belongs to somebody
+/// else, and reading a refusal from it would park a perfectly healthy account
+/// as exhausted on the strength of a stranger's window.
 fn latest_event(
     db: &Database,
     account_id: &str,
     window: &str,
+    since: i64,
 ) -> Option<(i64, String, Option<i64>, Option<f64>, Option<String>)> {
     db.with(|conn| {
         Ok(conn
             .query_row(
                 "SELECT ts_ms, status, resets_at_ms, percent, detail
                    FROM account_limit_events
-                  WHERE account_id = ?1 AND window = ?2
+                  WHERE account_id = ?1 AND window = ?2 AND ts_ms >= ?3
                   ORDER BY ts_ms DESC LIMIT 1",
-                params![account_id, window],
+                params![account_id, window, since],
                 |row| {
                     Ok((
                         row.get(0)?,
@@ -397,6 +403,10 @@ fn latest_event(
 /// dwarf everything else in a long session, and counting them would make every
 /// account look near its limit after twenty minutes. Cache *writes* are counted
 /// because they are billed as input.
+///
+/// `from` is clamped to the account's `subscription_since` by every caller, so
+/// spend recorded while the directory belonged to another account never lands
+/// in this one's window.
 fn tokens_between(db: &Database, account_id: &str, from: i64, to: i64) -> i64 {
     db.with(|conn| {
         Ok(conn
@@ -449,16 +459,18 @@ fn calibration(
     account_id: &str,
     window: &str,
     length_ms: i64,
+    since: i64,
 ) -> (Option<i64>, i64) {
     let rejections: Vec<i64> = db
         .with(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT ts_ms FROM account_limit_events
                   WHERE account_id = ?1 AND window = ?2 AND status = 'rejected'
+                    AND ts_ms >= ?3
                   ORDER BY ts_ms DESC LIMIT 12",
             )?;
             let rows: rusqlite::Result<Vec<i64>> = stmt
-                .query_map(params![account_id, window], |r| r.get(0))?
+                .query_map(params![account_id, window, since], |r| r.get(0))?
                 .collect();
             Ok(rows?)
         })
@@ -466,7 +478,7 @@ fn calibration(
 
     let mut totals: Vec<i64> = rejections
         .iter()
-        .map(|at| tokens_between(db, account_id, at - length_ms, *at))
+        .map(|at| tokens_between(db, account_id, (at - length_ms).max(since), *at))
         .filter(|t| *t > 0)
         .collect();
     totals.sort_unstable();
@@ -494,16 +506,23 @@ fn calibration(
 /// implied allowance wins, for the same reason `calibration` takes the smallest
 /// refusal — the number decides when to leave an account, and leaving early is
 /// free while leaving late costs a refused turn.
-fn implied_allowance(db: &Database, account_id: &str, window: &str, length_ms: i64) -> Option<i64> {
+fn implied_allowance(
+    db: &Database,
+    account_id: &str,
+    window: &str,
+    length_ms: i64,
+    since: i64,
+) -> Option<i64> {
     let samples: Vec<(i64, f64, Option<i64>)> = db
         .with(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT ts_ms, percent, resets_at_ms FROM account_limit_events
                   WHERE account_id = ?1 AND window = ?2 AND percent >= 10
+                    AND ts_ms >= ?3
                   ORDER BY ts_ms DESC LIMIT 16",
             )?;
             let rows: rusqlite::Result<Vec<(i64, f64, Option<i64>)>> = stmt
-                .query_map(params![account_id, window], |r| {
+                .query_map(params![account_id, window, since], |r| {
                     Ok((r.get(0)?, r.get(1)?, r.get(2)?))
                 })?
                 .collect();
@@ -518,7 +537,7 @@ fn implied_allowance(db: &Database, account_id: &str, window: &str, length_ms: i
             // displayed window is — otherwise the token sum and the percentage
             // would be describing different spans of time.
             let start = window_start(resets_at, length_ms, ts);
-            let tokens = tokens_between(db, account_id, start, ts + 1);
+            let tokens = tokens_between(db, account_id, start.max(since), ts + 1);
             (tokens > 0).then(|| (tokens as f64 / (percent / 100.0)) as i64)
         })
         .filter(|allowance| *allowance > 0)
@@ -538,7 +557,7 @@ pub const HISTORY_DAYS: i64 = 14;
 /// day-boundary convention across the product rather than two that disagree by
 /// a few hours; a sparkline is read for its shape, and the shape does not
 /// change when the boundary moves.
-fn daily_tokens(db: &Database, account_id: &str, now: i64) -> Vec<i64> {
+fn daily_tokens(db: &Database, account_id: &str, now: i64, owned_since: i64) -> Vec<i64> {
     let since = now - HISTORY_DAYS * 86_400_000;
     let day_of = |ts: i64| ((ts - since) / 86_400_000).clamp(0, HISTORY_DAYS - 1) as usize;
 
@@ -551,7 +570,7 @@ fn daily_tokens(db: &Database, account_id: &str, now: i64) -> Vec<i64> {
                FROM usage_samples
               WHERE account_id = ?1 AND ts_ms >= ?2",
         )?;
-        let rows = stmt.query_map(params![account_id, since], |row| {
+        let rows = stmt.query_map(params![account_id, since.max(owned_since)], |row| {
             Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
         })?;
         for row in rows.flatten() {
@@ -587,7 +606,10 @@ fn window_cost(db: &Database, account_id: &str, since: i64) -> Option<f64> {
 /// Build one window's picture from everything known about it.
 fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> QuotaWindow {
     let length = window_length_ms(window).unwrap_or(FIVE_HOUR_MS);
-    let latest = latest_event(db, &account.id, window);
+    // Everything this window is built from is bounded below by the moment this
+    // directory started belonging to the subscription it is signed into now.
+    let owned_since = account.subscription_since;
+    let latest = latest_event(db, &account.id, window, owned_since);
 
     let (event_ts, status, resets_at_ms, official_percent, _detail) = match latest {
         Some(v) => (Some(v.0), v.1, v.2, v.3, v.4),
@@ -601,12 +623,13 @@ fn build_window(db: &Database, account: &Account, window: &str, now: i64) -> Quo
     let exhausted = status == "rejected" && resets_at_ms.map(|r| r > now).unwrap_or(true);
 
     let start = window_start(resets_at_ms, length, now);
-    let tokens = tokens_between(db, &account.id, start, now + 1);
-    let (refusal_calibration, calibration_samples) = calibration(db, &account.id, window, length);
+    let tokens = tokens_between(db, &account.id, start.max(owned_since), now + 1);
+    let (refusal_calibration, calibration_samples) =
+        calibration(db, &account.id, window, length, owned_since);
     // A refusal is the sharper measurement — it is the allowance being hit, not
     // divided into — so it wins where both exist.
-    let calibration_tokens =
-        refusal_calibration.or_else(|| implied_allowance(db, &account.id, window, length));
+    let calibration_tokens = refusal_calibration
+        .or_else(|| implied_allowance(db, &account.id, window, length, owned_since));
 
     // Order matters and encodes §28. An official percentage wins; a stale one
     // is not used to describe the window we are in now.
@@ -683,8 +706,9 @@ pub fn for_account(db: &Database, account: &Account) -> AccountQuota {
                 .query_row(
                     "SELECT detail FROM account_limit_events
                       WHERE account_id = ?1 AND status = 'rejected' AND detail IS NOT NULL
+                        AND ts_ms >= ?2
                       ORDER BY ts_ms DESC LIMIT 1",
-                    [&account.id],
+                    params![&account.id, account.subscription_since],
                     |row| row.get::<_, Option<String>>(0),
                 )
                 .optional()?
@@ -708,7 +732,7 @@ pub fn for_account(db: &Database, account: &Account) -> AccountQuota {
         })
         .unwrap_or(0);
 
-    let history = daily_tokens(db, &account.id, now);
+    let history = daily_tokens(db, &account.id, now, account.subscription_since);
     let live = super::live::stored(db, &account.id);
 
     // A live reading is the sharpest statement of exhaustion there is: the
@@ -745,11 +769,20 @@ pub fn for_account(db: &Database, account: &Account) -> AccountQuota {
         windows,
         recovers_at_ms,
         refusal_detail,
-        tokens_today: tokens_between(db, &account.id, now - 24 * 60 * 60 * 1000, now + 1),
+        tokens_today: tokens_between(
+            db,
+            &account.id,
+            (now - 24 * 60 * 60 * 1000).max(account.subscription_since),
+            now + 1,
+        ),
         live_sessions,
         window_tokens: history.iter().sum(),
         daily_tokens: history,
-        window_cost_usd: window_cost(db, &account.id, now - HISTORY_DAYS * 86_400_000),
+        window_cost_usd: window_cost(
+            db,
+            &account.id,
+            (now - HISTORY_DAYS * 86_400_000).max(account.subscription_since),
+        ),
         live_stale: super::live::is_stale(live.as_ref(), now),
         live,
     }

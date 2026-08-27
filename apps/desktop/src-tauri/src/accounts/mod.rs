@@ -81,13 +81,37 @@ pub struct Account {
     /// and will not delete.
     pub adopted: bool,
     pub email: Option<String>,
+    /// The provider's own identifier for the subscription behind this
+    /// directory, where it publishes one.
+    ///
+    /// This is what makes "are these two cards the same allowance?" answerable
+    /// rather than guessed. An e-mail is a label — it changes, it has aliases,
+    /// it is written in whatever casing the person typed — while this string is
+    /// identical in every directory signed into one account. `None` for Codex,
+    /// which publishes no equivalent, and for any directory not signed in.
+    pub account_uuid: Option<String>,
     pub org_id: Option<String>,
     pub org_name: Option<String>,
     /// `pro`, `max`, `team`… exactly as the provider spells it.
     pub plan: Option<String>,
     /// Whether the last identity check found credentials that work.
     pub signed_in: bool,
+    /// When an identity was last successfully **read**.
     pub checked_at: Option<i64>,
+    /// When an identity read was last **attempted**, successfully or not.
+    ///
+    /// Separate from `checked_at` because a failed read used to be silent: the
+    /// function returned early without writing anything, so "the CLI could not
+    /// answer" and "nothing has changed" were one state. A card that cannot
+    /// tell them apart shows a confident identity that has not been verified
+    /// since some hour it does not name.
+    pub identity_attempted_at: Option<i64>,
+    /// When this row's current subscription was first seen on it.
+    ///
+    /// Quota history before this instant belongs to whoever was signed into the
+    /// directory before, and is excluded from every window, calibration and
+    /// sparkline this account draws. See migration 18.
+    pub subscription_since: i64,
     /// The account new sessions on this provider start on.
     pub active: bool,
     /// Taken out of the rotation by the user — a decision, not a measurement.
@@ -159,28 +183,50 @@ pub fn transcript_root(provider: &str, config_dir: &Path) -> Option<PathBuf> {
 /// The subscription an account draws on, as a comparable key.
 ///
 /// An account in this product is a configuration directory, and **two
-/// directories can be signed into the same provider account**. That is a
-/// legitimate thing to want — different MCP servers, different permissions,
-/// different settings — and it is also invisible: the two rows show the same
-/// allowance because there is only one, and nothing on screen says so.
+/// directories can be signed into the same provider account**. That is not a
+/// corner case, it is what happens by default: `claude auth login` in an empty
+/// directory reuses the claude.ai session the browser already holds and returns
+/// "Login successful" in about a second, having asked nothing. Add a second
+/// account the obvious way and you get a second directory on the *first*
+/// account — two cards, two names, one allowance, both dials moving together.
 ///
-/// The key is the **email**, not `org_id`. It is tempting to use the org
-/// because a personal org maps one-to-one onto a Pro account, and on this
-/// machine it happens to give the right answer. On a Team plan several
-/// different people share one `org_id` with separate allowances, and keying on
-/// it would declare unrelated colleagues to be the same subscription — a wrong
-/// answer that gets worse the larger the team.
+/// Two keys, in order of authority:
 ///
-/// **An unknown email is not a match.** Codex 0.149.1 stopped writing
-/// `id_token_claims`, which leaves accounts with no email at all (see
-/// `live::identity`); treating `None == None` would make every nameless
-/// account a twin of every other one. Absent means unknown, never same.
-pub fn subscription_key(account: &Account) -> Option<(String, String)> {
-    let email = account.email.as_deref()?.trim().to_lowercase();
-    if email.is_empty() {
-        return None;
-    }
-    Some((account.provider.clone(), email))
+/// * **`Uuid`** — the provider's own identifier for the account, read from
+///   `oauthAccount.accountUuid`. Where both sides have one it decides on its
+///   own and overrides e-mail: it is the same string in every directory signed
+///   into one account, and it survives an alias, a rename and a change of
+///   casing that would each defeat the e-mail comparison.
+/// * **`Email`** — the fallback where a uuid is not published, which is every
+///   Codex account and any directory whose config has not been written yet.
+///   Not `org_id`: a personal organisation maps one-to-one onto a Pro account
+///   and would be right on this machine, but a Team plan puts several people's
+///   separate allowances under one org, and calling colleagues twins is a wrong
+///   answer that gets worse the larger the team.
+///
+/// **Absent is unknown, never same.** Codex 0.149.1 stopped writing
+/// `id_token_claims`, which leaves accounts with no e-mail at all (see
+/// `live::identity`); treating `None == None` would make every nameless account
+/// a twin of every other one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubscriptionKey {
+    Uuid(String),
+    Email(String),
+}
+
+/// The strongest key this account can be compared by, with its provider.
+pub fn subscription_key(account: &Account) -> Option<(String, SubscriptionKey)> {
+    let clean = |value: &Option<String>| {
+        value
+            .as_deref()
+            .map(|v| v.trim().to_lowercase())
+            .filter(|v| !v.is_empty())
+    };
+    let key = match clean(&account.account_uuid) {
+        Some(uuid) => SubscriptionKey::Uuid(uuid),
+        None => SubscriptionKey::Email(clean(&account.email)?),
+    };
+    Some((account.provider.clone(), key))
 }
 
 /// Whether two accounts are two views of one allowance.
@@ -188,11 +234,37 @@ pub fn subscription_key(account: &Account) -> Option<(String, String)> {
 /// Derived on every call rather than stored in a column: the adopted row is
 /// read with the ambient environment, so signing `~/.claude` into a different
 /// account changes the answer without anything in this product being told.
+///
+/// A uuid on **both** sides is the whole answer, including when it says *no*.
+/// Two directories on one subscription always agree on it, so differing uuids
+/// mean different accounts however the e-mails read — which is the case that
+/// matters when one row's e-mail is stale and the other's is current.
 pub fn same_subscription(a: &Account, b: &Account) -> bool {
+    if a.provider != b.provider {
+        return false;
+    }
     match (subscription_key(a), subscription_key(b)) {
-        (Some(x), Some(y)) => x == y,
+        (Some((_, x)), Some((_, y))) => match (&x, &y) {
+            (SubscriptionKey::Uuid(_), SubscriptionKey::Uuid(_)) => x == y,
+            // One side has a uuid and the other does not, or neither does:
+            // e-mail is the only shared ground there is.
+            _ => match (
+                a.email.as_deref().map(str::trim).filter(|v| !v.is_empty()),
+                b.email.as_deref().map(str::trim).filter(|v| !v.is_empty()),
+            ) {
+                (Some(x), Some(y)) => x.eq_ignore_ascii_case(y),
+                _ => false,
+            },
+        },
         _ => false,
     }
+}
+
+/// Every account on the same subscription as this one.
+pub fn twins_of<'a>(account: &Account, all: &'a [Account]) -> Vec<&'a Account> {
+    all.iter()
+        .filter(|other| other.id != account.id && same_subscription(account, other))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +276,8 @@ pub fn same_subscription(a: &Account, b: &Account) -> bool {
 pub struct Identity {
     pub signed_in: bool,
     pub email: Option<String>,
+    /// `oauthAccount.accountUuid`, where the provider writes one.
+    pub account_uuid: Option<String>,
     pub org_id: Option<String>,
     pub org_name: Option<String>,
     pub plan: Option<String>,
@@ -228,6 +302,9 @@ pub fn parse_claude_identity(json: &str) -> Option<Identity> {
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false),
         email: text("email"),
+        // `auth status` does not publish it; `read_identity` fills it in from
+        // the config file, and only when the two agree on the e-mail.
+        account_uuid: None,
         org_id: text("orgId"),
         org_name: text("orgName"),
         plan: text("subscriptionType"),
@@ -265,10 +342,149 @@ pub fn parse_codex_identity(json: &str) -> Option<Identity> {
     Some(Identity {
         signed_in: has_api_key || has_tokens,
         email: text(claims, "email"),
+        // Codex publishes no stable account identifier of its own, so its
+        // accounts are compared by e-mail alone. Absent stays unknown, never
+        // "same as the other nameless one" — see `same_subscription`.
+        account_uuid: None,
         org_id: text(auth, "organization_id"),
         org_name: None,
         plan: text(auth, "chatgpt_plan_type"),
     })
+}
+
+/// Where Claude Code keeps the non-secret half of an account's config.
+///
+/// **The adopted account's file is not inside its config directory.** With
+/// `CLAUDE_CONFIG_DIR` set, `.claude.json` travels with the directory; with it
+/// unset — which is exactly how the adopted account is run, deliberately, see
+/// `session_env` — the file stays at `$HOME/.claude.json` and the one inside
+/// `~/.claude` is a small unrelated stub with no `oauthAccount` in it. Measured
+/// on this machine: 87 KB with the account against 343 bytes without.
+///
+/// Joining `config_dir` unconditionally would therefore read the stub, find no
+/// uuid, fall back to the e-mail, and quietly reinstate the very bug this
+/// exists to close.
+pub fn claude_identity_file(config_dir: &Path, adopted: bool) -> Option<PathBuf> {
+    if adopted {
+        Some(home()?.join(".claude.json"))
+    } else {
+        Some(config_dir.join(".claude.json"))
+    }
+}
+
+/// Read `oauthAccount` out of a Claude Code config file.
+///
+/// Identity, not credentials: this file holds the account's e-mail, uuid and
+/// organisation beside a large amount of unrelated UI state, and no token. The
+/// tokens live in `.credentials.json`, which this product never opens (§60/§61).
+pub fn parse_claude_oauth_account(json: &str) -> Option<(Option<String>, Option<String>)> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    let account = value.get("oauthAccount").filter(|v| !v.is_null())?;
+    let text = |key: &str| {
+        account
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    Some((text("accountUuid"), text("emailAddress")))
+}
+
+/// Whether this account's stored identity disagrees with what is on disk.
+///
+/// This is the gate in front of every identity read, and it decides whether the
+/// cheap path stays cheap. It answers by **comparing the identity itself**, not
+/// by looking at modification times.
+///
+/// The mtime version of this was written first and was wrong in a way that only
+/// the real machine shows. Claude Code rewrites `.claude.json` roughly every ten
+/// minutes while a session is running — the `.claude.json.backup.*` files in a
+/// live account directory are stamped exactly 600 seconds apart — and it
+/// rewrites `.credentials.json` on every token refresh. Neither is an identity
+/// change. Keyed on mtime, the gate would open on essentially every panel paint
+/// and on every mutation the surface makes (`load("cached")` runs after rename,
+/// pause, remove, activate), spawning a CLI per account each time. Pausing an
+/// account would freeze the window.
+///
+/// Reading the config file and comparing `oauthAccount` costs a file read and a
+/// JSON parse, runs entirely in this process, and is *exact*: it is true when
+/// the account really has changed and false when a file was merely touched.
+/// `claude auth status` stays the authority on `signed_in` and the
+/// organisation — this only decides whether it is worth asking.
+pub fn identity_is_stale(account: &Account) -> bool {
+    if account.checked_at.is_none() {
+        return true;
+    }
+    let dir = Path::new(&account.config_dir);
+    match account.provider.as_str() {
+        "claude-code" => {
+            // A directory the row believes is signed in, with no credentials
+            // beside it, has been signed out somewhere else.
+            if account.signed_in && !dir.join(".credentials.json").exists() {
+                return true;
+            }
+            let Some(file) = claude_identity_file(dir, account.adopted) else {
+                return false;
+            };
+            let Ok(text) = std::fs::read_to_string(file) else {
+                // No config to compare against. Nothing here contradicts the
+                // row, and asking a CLI on every paint to be told the same is
+                // the cost this gate exists to avoid.
+                return false;
+            };
+            match parse_claude_oauth_account(&text) {
+                Some((uuid, email)) => !claude_identity_matches(account, &uuid, &email),
+                // The file names nobody. That contradicts a row that claims an
+                // identity, and agrees with one that does not.
+                None => account.signed_in,
+            }
+        }
+        "codex" => match std::fs::read_to_string(dir.join("auth.json"))
+            .ok()
+            .and_then(|text| parse_codex_identity(&text))
+        {
+            Some(identity) => {
+                identity.signed_in != account.signed_in
+                    || !same_text(&identity.email, &account.email)
+            }
+            None => account.signed_in,
+        },
+        _ => false,
+    }
+}
+
+/// Whether the row already says what the config file says.
+///
+/// The uuid decides when both sides have one; otherwise the e-mail does. A
+/// backfill — a row that had an e-mail and now gains the uuid for the same
+/// account — must read as a *match*, or every existing installation would be
+/// told its directory changed hands on the first launch after upgrading.
+fn claude_identity_matches(
+    account: &Account,
+    uuid: &Option<String>,
+    email: &Option<String>,
+) -> bool {
+    if !same_text(email, &account.email) {
+        return false;
+    }
+    match (uuid, &account.account_uuid) {
+        (Some(disk), Some(stored)) => disk.eq_ignore_ascii_case(stored),
+        // The uuid is present on disk and missing from the row: the e-mails
+        // agree, so this is the same account with a column to fill in, and a
+        // refresh is worth one CLI start exactly once.
+        (Some(_), None) => false,
+        _ => true,
+    }
+}
+
+/// Case-insensitive equality where absent equals absent.
+fn same_text(a: &Option<String>, b: &Option<String>) -> bool {
+    let clean = |v: &Option<String>| {
+        v.as_deref()
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+    };
+    clean(a) == clean(b)
 }
 
 /// Ask a configuration directory who it is signed in as.
@@ -276,6 +492,14 @@ pub fn parse_codex_identity(json: &str) -> Option<Identity> {
 /// Never fails a caller: an unknown identity is `None`, which the surface shows
 /// as "not checked" rather than as "signed out". Guessing the difference is
 /// exactly what §28 forbids one level up.
+///
+/// Two sources for Claude Code, and the order matters. `claude auth status`
+/// is authoritative for *whether* the directory is signed in and for the
+/// organisation, because it is the provider answering a question rather than a
+/// file that may predate a logout. The uuid comes from the config file, which
+/// is the only place it is published — and is accepted **only when the two
+/// agree on the e-mail**, so a config file left behind by a previous account
+/// can never attach the wrong subscription to a directory.
 pub fn read_identity(provider: &str, config_dir: &Path, adopted: bool) -> Option<Identity> {
     match provider {
         "claude-code" => {
@@ -286,13 +510,32 @@ pub fn read_identity(provider: &str, config_dir: &Path, adopted: bool) -> Option
                 )
             });
             let out = crate::envscan::run_tool("claude", &["auth", "status", "--json"], env)?;
-            parse_claude_identity(&out)
+            let mut identity = parse_claude_identity(&out)?;
+            identity.account_uuid = claude_account_uuid(config_dir, adopted, &identity);
+            Some(identity)
         }
         "codex" => {
             let text = std::fs::read_to_string(config_dir.join("auth.json")).ok()?;
             parse_codex_identity(&text)
         }
         _ => None,
+    }
+}
+
+/// The uuid for a directory, when the config file describes the same account
+/// the provider just named.
+fn claude_account_uuid(config_dir: &Path, adopted: bool, identity: &Identity) -> Option<String> {
+    if !identity.signed_in {
+        return None;
+    }
+    let file = claude_identity_file(config_dir, adopted)?;
+    let text = std::fs::read_to_string(file).ok()?;
+    let (uuid, email) = parse_claude_oauth_account(&text)?;
+    match (&identity.email, &email) {
+        // Both named an e-mail and they differ: the file is describing somebody
+        // else, so its uuid is not this directory's.
+        (Some(status), Some(config)) if !status.eq_ignore_ascii_case(config) => None,
+        _ => uuid,
     }
 }
 
@@ -315,11 +558,14 @@ fn row_to_account(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
         config_dir: row.get("config_dir")?,
         adopted: row.get::<_, i64>("adopted")? != 0,
         email: row.get("email")?,
+        account_uuid: row.get("account_uuid")?,
         org_id: row.get("org_id")?,
         org_name: row.get("org_name")?,
         plan: row.get("plan")?,
         signed_in: row.get::<_, i64>("signed_in")? != 0,
         checked_at: row.get("checked_at")?,
+        identity_attempted_at: row.get("identity_attempted_at")?,
+        subscription_since: row.get("subscription_since")?,
         active: row.get::<_, i64>("active")? != 0,
         paused: row.get::<_, i64>("paused")? != 0,
         position: row.get("position")?,
@@ -328,9 +574,10 @@ fn row_to_account(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
     })
 }
 
-const SELECT: &str = "SELECT id, provider, label, config_dir, adopted, email, org_id, org_name,
-                             plan, signed_in, checked_at, active, paused, position, created_at,
-                             last_used_at
+const SELECT: &str = "SELECT id, provider, label, config_dir, adopted, email, account_uuid,
+                             org_id, org_name, plan, signed_in, checked_at,
+                             identity_attempted_at, subscription_since, active, paused, position,
+                             created_at, last_used_at
                       FROM provider_accounts";
 
 pub fn list(db: &Database) -> Result<Vec<Account>> {
@@ -423,20 +670,28 @@ pub fn adopt_machine_account(db: &Database, provider: &str) -> Result<Option<Str
         )?;
         conn.execute(
             "INSERT INTO provider_accounts
-                 (id, provider, label, config_dir, adopted, email, org_id, org_name, plan,
-                  signed_in, checked_at, active, paused, position, created_at)
-             VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, ?12, ?13)",
+                 (id, provider, label, config_dir, adopted, email, account_uuid, org_id, org_name,
+                  plan, signed_in, checked_at, identity_attempted_at, subscription_since,
+                  active, paused, position, created_at)
+             VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0, ?15, ?16)",
             params![
                 id,
                 provider,
                 label,
                 dir_text,
                 identity.email,
+                identity.account_uuid,
                 identity.org_id,
                 identity.org_name,
                 identity.plan,
                 identity.signed_in as i64,
                 observed_identity.as_ref().map(|_| ts),
+                ts,
+                // The machine account is adopted, not created: whatever it has
+                // already spent this week was spent on the account it is signed
+                // into now, and hiding that history would understate the very
+                // window the person opened the screen to read.
+                0,
                 (count == 0) as i64,
                 count,
                 ts,
@@ -477,8 +732,8 @@ pub fn create(db: &Database, provider: &str, data_dir: &Path, label: &str) -> Re
         conn.execute(
             "INSERT INTO provider_accounts
                  (id, provider, label, config_dir, adopted, signed_in, active, paused,
-                  position, created_at)
-             VALUES (?1, ?2, ?3, ?4, 0, 0, ?5, 0, ?6, ?7)",
+                  position, created_at, subscription_since)
+             VALUES (?1, ?2, ?3, ?4, 0, 0, ?5, 0, ?6, ?7, ?7)",
             params![
                 id,
                 provider,
@@ -606,28 +861,91 @@ pub fn remove(db: &Database, id: &str) -> Result<()> {
 /// Cheap enough to run when the Accounts screen opens, and the only way the
 /// product ever learns that a sign-in it invited actually completed — the
 /// provider's login happens in a browser and tells us nothing.
+///
+/// The attempt is stamped whether or not it succeeds. Before, a failed read
+/// returned early having written nothing, so a card kept showing an identity
+/// from hours ago with no way to know it had not been confirmed since; on this
+/// machine the adopted account read `alanvitoraraujo1@icloud.com` for eleven
+/// hours after the directory had been signed into a different account, which is
+/// what let two cards on one subscription look like two subscriptions.
 pub fn refresh_identity(db: &Database, id: &str) -> Result<Option<Account>> {
     let Some(account) = get(db, id)? else {
         return Ok(None);
     };
-    let Some(identity) = read_identity(
+    let ts = now_ms();
+    let observed = read_identity(
         &account.provider,
         Path::new(&account.config_dir),
         account.adopted,
-    ) else {
-        return Ok(Some(account));
+    );
+
+    let Some(identity) = observed else {
+        // The question could not be put — the CLI is missing, mid-upgrade, or
+        // was interrupted. Record that we tried and leave the last known
+        // identity alone; the surface says when it was last confirmed.
+        db.with(|conn| {
+            conn.execute(
+                "UPDATE provider_accounts SET identity_attempted_at = ?2 WHERE id = ?1",
+                params![id, ts],
+            )?;
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
+        return get(db, id);
     };
-    let ts = now_ms();
+
+    // A provider that has stopped naming the account has not renamed it.
+    //
+    // Codex 0.149.1 stopped writing `id_token_claims`, so `read_identity`
+    // returns no e-mail for a directory that is plainly signed in and whose
+    // e-mail this product already knows. Overwriting the known value with
+    // nothing loses the only key a Codex account can be compared by — and, in
+    // the version of this function before the guard below, it also read as
+    // "this directory now belongs to somebody else" and wiped the account's
+    // quota history. Caught by running the diagnostic against the real
+    // registry, where the Codex card lost its address on every refresh.
+    //
+    // So an absent field is treated the way it is treated everywhere else in
+    // this module: unknown, not a statement. A directory the provider says is
+    // signed *out* is a statement, and clears both.
+    let keep = |fresh: Option<String>, known: &Option<String>| -> Option<String> {
+        match (fresh, identity.signed_in) {
+            (Some(value), _) => Some(value),
+            (None, true) => known.clone(),
+            (None, false) => None,
+        }
+    };
+    let email = keep(identity.email.clone(), &account.email);
+    let account_uuid = keep(identity.account_uuid.clone(), &account.account_uuid);
+
+    // Has the directory changed hands? Compare on the same rule the surface
+    // groups by, so "this is a different subscription now" and "these two cards
+    // are one subscription" can never disagree.
+    let before = account.clone();
+    let after = Account {
+        email: email.clone(),
+        account_uuid: account_uuid.clone(),
+        ..account.clone()
+    };
+    // **Both sides must be known.** `changed` moves `subscription_since` and
+    // drops the cached reading, which is irreversible for the history it
+    // excludes, so it may only fire on a positive statement that this is a
+    // different account — never on the absence of one.
+    let changed = subscription_key(&before).is_some()
+        && subscription_key(&after).is_some()
+        && !same_subscription(&before, &after);
+    let had_identity = subscription_key(&before).is_some();
 
     db.with(|conn| {
         conn.execute(
             "UPDATE provider_accounts
-                SET email = ?2, org_id = ?3, org_name = ?4, plan = ?5, signed_in = ?6,
-                    checked_at = ?7
+                SET email = ?2, account_uuid = ?3, org_id = ?4, org_name = ?5, plan = ?6,
+                    signed_in = ?7, checked_at = ?8, identity_attempted_at = ?8
               WHERE id = ?1",
             params![
                 id,
-                identity.email,
+                email,
+                account_uuid,
                 identity.org_id,
                 identity.org_name,
                 identity.plan,
@@ -637,17 +955,99 @@ pub fn refresh_identity(db: &Database, id: &str) -> Result<Option<Account>> {
         )?;
         // An account the user never named takes the identity's own name once
         // one arrives. A label they *did* choose is theirs and is left alone.
-        if let Some(email) = identity.email.as_deref() {
+        if let Some(email) = email.as_deref() {
             conn.execute(
                 "UPDATE provider_accounts SET label = ?2 WHERE id = ?1 AND label = ''",
                 params![id, email],
+            )?;
+            // A label that is just the *previous* identity's address was never
+            // a name anybody chose — it was filled in by the branch above — and
+            // leaving it in place after the directory changes hands is how a
+            // card ends up titled `alanvitoraraujo1@icloud.com` with a
+            // different address printed underneath it. Found exactly that way.
+            // A label the person typed does not match this test and survives.
+            if let Some(previous) = before.email.as_deref() {
+                if before.label.eq_ignore_ascii_case(previous.trim()) {
+                    conn.execute(
+                        "UPDATE provider_accounts SET label = ?2 WHERE id = ?1",
+                        params![id, email],
+                    )?;
+                }
+            }
+        }
+        if changed {
+            // Both halves of "this directory changed hands" or neither: a
+            // moved boundary with the old reading still cached, or a dropped
+            // reading with the old history still counted, are each worse than
+            // the state before.
+            let tx = conn.unchecked_transaction()?;
+            // Everything recorded against this row until now was somebody
+            // else's allowance. Drawing this account's window over it would
+            // report one person's spend as another's — the "it merged my two
+            // accounts" failure, arriving through the back door.
+            tx.execute(
+                "UPDATE provider_accounts SET subscription_since = ?2 WHERE id = ?1",
+                params![id, ts],
+            )?;
+            // The cached reading describes the previous account. Dropping it
+            // leaves the card honestly blank until the next probe rather than
+            // confidently wrong.
+            tx.execute(
+                "DELETE FROM account_live_readings WHERE account_id = ?1",
+                params![id],
+            )?;
+            tx.commit()?;
+        }
+        // A directory that has never had an identity starts its history here,
+        // so a row adopted before this column existed does not inherit "0".
+        if !had_identity && identity.signed_in {
+            conn.execute(
+                "UPDATE provider_accounts SET subscription_since = ?2
+                  WHERE id = ?1 AND subscription_since = 0",
+                params![id, ts],
             )?;
         }
         Ok(())
     })
     .map_err(|e| e.to_string())?;
 
+    if changed {
+        tracing::info!(
+            account = %id,
+            "provider account directory is signed into a different subscription; \
+             its earlier quota history no longer counts towards it"
+        );
+    }
+
     get(db, id)
+}
+
+/// Re-read identity only when something on disk says it may have changed.
+///
+/// This is the one that runs on every report. A login done outside this product
+/// writes `.credentials.json` and `.claude.json`; comparing their timestamps to
+/// `checked_at` turns "we find out when the person presses Check now" into "we
+/// find out the next time they look at the screen", for the cost of a `stat`.
+pub fn refresh_identity_if_stale(db: &Database, account: &Account) -> Result<Option<Account>> {
+    if identity_is_stale(account) {
+        refresh_identity(db, &account.id)
+    } else {
+        Ok(Some(account.clone()))
+    }
+}
+
+/// Re-read every account of one provider.
+///
+/// Used after a sign-in, and it is deliberately *every* account rather than the
+/// one that signed in. The interesting outcome of a login is often about a
+/// different row: signing directory B into the account directory A already
+/// holds is invisible from B alone, and is the single most likely way to end up
+/// with two cards drawing one allowance.
+pub fn refresh_provider_identities(db: &Database, provider: &str) {
+    let Ok(accounts) = list(db) else { return };
+    for account in accounts.iter().filter(|a| a.provider == provider) {
+        let _ = refresh_identity(db, &account.id);
+    }
 }
 
 /// Record that a session started on this account.

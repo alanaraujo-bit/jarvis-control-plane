@@ -178,6 +178,16 @@ pub fn run() {
                 Arc::new(std::sync::atomic::AtomicBool::new(false)),
             );
 
+            // Analytics could only ever count what this product watched happen,
+            // which on a fresh install is nothing and on this machine was two
+            // days — while the provider's own transcripts held twenty days of
+            // the same work. This recovers it once, the same way and for the
+            // same reasons as the search backfill above (M22).
+            analytics::backfill::spawn(
+                Arc::clone(&db),
+                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            );
+
             // Every session recorded before Session History existed is
             // untitled, because nothing ever wrote `sessions.title` (§88).
             // This gives each one a title derived from the first thing typed
@@ -237,6 +247,8 @@ pub fn run() {
             accounts::commands::account_set_active,
             accounts::commands::account_set_auto_switch,
             accounts::commands::account_begin_sign_in,
+            accounts::commands::account_sign_out,
+            accounts::commands::account_submit_sign_in_code,
             onboarding::onboarding_status,
             onboarding::onboarding_mark_seen,
             project::list_projects,

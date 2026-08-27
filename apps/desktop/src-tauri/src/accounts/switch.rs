@@ -37,6 +37,47 @@ pub fn sign_in_command(account: &Account, email: Option<&str>) -> Result<std::pr
     Ok(command)
 }
 
+/// Sign one configuration directory out, leaving the directory itself in place.
+pub fn sign_out_command(account: &Account) -> Result<std::process::Command> {
+    let (bin, args): (&str, Vec<&str>) = match account.provider.as_str() {
+        "claude-code" => ("claude", vec!["auth", "logout"]),
+        "codex" => ("codex", vec!["logout"]),
+        _ => return Err("accounts.unknownProvider".into()),
+    };
+    let mut command = crate::envscan::tool_command(bin, &args)
+        .ok_or_else(|| "accounts.providerMissing".to_string())?;
+    if !account.adopted {
+        if let Some(key) = super::config_env_key(&account.provider) {
+            command.env(key, &account.config_dir);
+        }
+    }
+    Ok(command)
+}
+
+/// The authorisation link out of a line the provider's login printed.
+///
+/// Worth having because it is the difference between "sign in again and hope"
+/// and a person being able to choose. The CLI opens a browser itself, and that
+/// browser carries an existing claude.ai session which the flow accepts without
+/// asking — so the same link, opened in a private window, is the only ordinary
+/// route to a *different* account.
+///
+/// Matched by shape rather than by the sentence around it: the surrounding
+/// prose is English-only, versioned, and none of this product's business, while
+/// the URL is a stable contract with an OAuth endpoint. Trailing punctuation is
+/// trimmed so a link at the end of a sentence still opens.
+pub fn authorize_url(line: &str) -> Option<String> {
+    let start = line.find("https://")?;
+    let rest = &line[start..];
+    let end = rest
+        .find(char::is_whitespace)
+        .unwrap_or(rest.len());
+    let url = rest[..end].trim_end_matches(['.', ',', ')', '"', '\'']);
+    let looks_like_authorisation =
+        url.contains("/oauth/") || url.contains("/authorize") || url.contains("code_challenge");
+    looks_like_authorisation.then(|| url.to_string())
+}
+
 /// When J.A.R.V.I.S. may move new work away from an account.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

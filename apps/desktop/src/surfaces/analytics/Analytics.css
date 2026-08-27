@@ -1,194 +1,579 @@
-.an { height: 100%; overflow-y: auto; }
+/* Analytics (§52, §53, M22).
+ *
+ * The intensity ramp is the one real design decision in this file. GitHub's
+ * green was the reference Alan gave and is deliberately *not* what this uses:
+ * the product has one accent, amber, and a second signal colour appearing on a
+ * single screen would read as a status rather than as a quantity. So the ramp
+ * runs from the page's own inset — a day that happened but is not being
+ * counted — up through amber at increasing strength and opacity.
+ *
+ * Level -1 is its own thing and matters more than it looks: it is a day that
+ * predates any recorded history. Drawn as an outline with no fill, so ninety
+ * days of window over a fortnight of data reads as "nothing recorded here"
+ * rather than as seventy-six days of idleness that never happened. */
+
+:root,
+:root[data-theme="dark"] {
+  --an-cell-empty: rgba(255, 255, 255, 0.045);
+  --an-cell-absent: transparent;
+  --an-cell-absent-border: rgba(255, 255, 255, 0.05);
+  --an-l1: rgba(217, 165, 92, 0.26);
+  --an-l2: rgba(217, 165, 92, 0.48);
+  --an-l3: rgba(217, 165, 92, 0.72);
+  --an-l4: #d9a55c;
+  --an-grid-line: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="light"] {
+  --an-cell-empty: rgba(16, 16, 12, 0.06);
+  --an-cell-absent: transparent;
+  --an-cell-absent-border: rgba(16, 16, 12, 0.08);
+  --an-l1: rgba(154, 106, 30, 0.22);
+  --an-l2: rgba(154, 106, 30, 0.44);
+  --an-l3: rgba(154, 106, 30, 0.7);
+  --an-l4: #9a6a1e;
+  --an-grid-line: rgba(16, 16, 12, 0.07);
+}
+
+.an {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.an--loading {
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
 
 .an__inner {
-  max-width: 880px;
+  width: min(100%, 1120px);
   margin: 0 auto;
   padding: var(--space-10) var(--space-9) var(--space-12);
   display: flex;
   flex-direction: column;
-  gap: var(--space-9);
-}
-
-.an__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: var(--space-6);
 }
 
-.an__title {
+/* ---- Header ------------------------------------------------------------- */
+
+.an__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-7);
+}
+
+.an__header h1 {
   font-size: var(--text-xl);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tighter);
 }
 
-/* ---- Time range ---------------------------------------------------------- */
-.an__window {
+.an__header p {
+  margin-top: var(--space-2);
+  max-width: 62ch;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.an__windows {
+  flex: none;
   display: inline-flex;
   padding: 2px;
   gap: 2px;
-  background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  background: var(--bg-inset);
 }
 
-.an__window-option {
-  height: 22px;
+.an__windows button {
+  height: 24px;
   padding: 0 var(--space-5);
   border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
-  transition:
-    background-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+  font-size: var(--text-micro);
+  transition: color var(--duration-fast) var(--ease-out);
 }
-.an__window-option[data-active] {
-  background: var(--bg-overlay);
+
+.an__windows button[data-active] {
   color: var(--text-primary);
+  background: var(--bg-overlay);
   box-shadow: var(--shadow-sm);
 }
 
-.an__section { display: flex; flex-direction: column; gap: var(--space-5); }
+/* ---- Cards -------------------------------------------------------------- */
 
-.an__section-title {
-  font-size: var(--text-xs);
+.an__card {
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.an__card--hero {
+  background: var(--bg-raised);
+}
+
+.an__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.an__card-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+
+.an__card-head h2 svg { color: var(--text-tertiary); }
+
+.an__hint {
+  color: var(--text-disabled);
+  font-size: var(--text-micro);
 }
 
 .an__note {
+  margin-top: var(--space-5);
+  color: var(--text-tertiary);
   font-size: var(--text-xs);
   line-height: var(--leading-relaxed);
-  color: var(--text-disabled);
-  max-width: 68ch;
 }
 
-/* ---- Stat tiles ----------------------------------------------------------
-   The number is the chart. A two-bar chart of human vs agent time would say
-   less than the two numbers side by side. */
-.an__leverage {
+/* The selected day, and the way back out of it. */
+.an__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 24px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-full);
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: var(--text-micro);
+}
+
+.an__chip:hover { background: var(--bg-active); }
+
+/* ---- Calendar ----------------------------------------------------------- */
+
+/* The calendar sizes itself to the card rather than to a fixed cell.
+ *
+ * The first version used GitHub's 13px squares, and on a 30-day window that is
+ * five columns — a hundred pixels of calendar marooned in a thousand-pixel
+ * card, which reads as a rendering bug rather than as a month. Seen on screen
+ * in the first QA pass and fixed here.
+ *
+ * So the week count drives a fraction-based grid: fewer weeks means bigger
+ * cells, and past seven weeks the cells are large enough to carry their own
+ * date, at which point it stops being a heatmap with a tooltip and becomes a
+ * calendar you can read. `aspect-ratio` keeps them square at every size. */
+
+.an-cal {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-4);
+}
+
+.an-cal__weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, var(--an-cell));
+  gap: var(--an-gap);
+  /* Clears the month strip so the rows line up with the grid beside them. */
+  margin-top: calc(14px + var(--space-2));
+  color: var(--text-disabled);
+  font-size: var(--text-micro);
+  text-align: right;
+}
+
+.an-cal__weekdays span {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* The cell is a fixed size, not a fraction.
+ *
+ * Second QA pass: fractions stretched five columns across a thousand-pixel
+ * card, leaving 46px squares stranded in 200px columns with holes between them,
+ * and at ninety days the cells stopped being square altogether — width came
+ * from the column, height from `max-height`. A calendar has a natural size; the
+ * card is what should adapt, and it does, by putting the figures beside it. */
+.an-cal {
+  --an-cell: 22px;
+  --an-gap: 4px;
+}
+
+.an-cal[data-roomy] {
+  --an-cell: 40px;
+  --an-gap: 6px;
+}
+
+/* The month strip and the grid scroll *together*, from one box.
+ *
+ * Giving each its own `overflow-x` put a scrollbar between the heading and the
+ * first row and hid the month names behind it — seen on screen, and the reason
+ * the strip looked like a stray grey rule in the QA shot. Ninety days on a
+ * narrow window is wider than the card, so the scrolling still has to happen;
+ * it just has to happen once, around both. */
+.an-cal__body {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.an-cal__months,
+.an-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--an-weeks), var(--an-cell));
+  gap: var(--an-gap);
+  width: max-content;
+}
+
+.an-cal__months {
+  height: 14px;
+  margin-bottom: var(--space-2);
+  color: var(--text-disabled);
+  font-size: var(--text-micro);
+}
+
+.an-cal__months span { white-space: nowrap; }
+
+.an-cal__week {
+  display: grid;
+  grid-template-rows: repeat(7, var(--an-cell));
+  gap: var(--an-gap);
+}
+
+/* Calendar on the left at its natural size, the figures beside it. The card is
+   what adapts to the window; the calendar keeps the proportions that make it
+   readable. */
+.an__hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-9);
+}
+
+.an__hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+@media (max-width: 980px) {
+  .an__hero { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
+}
+
+.an-cal__cell {
+  width: var(--an-cell);
+  height: var(--an-cell);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  background: var(--an-cell-empty);
+  color: var(--text-disabled);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.an-cal[data-roomy] .an-cal__cell { border-radius: var(--radius-sm); }
+
+/* The date has to stay readable across the whole ramp. Grey on a pale amber is
+   the worst case and needs lifting; on the two strong bands the text flips to
+   the ink the accent buttons already use. */
+.an-cal__cell[data-level="1"],
+.an-cal__cell[data-level="2"] { color: var(--text-secondary); }
+
+.an-cal__cell[data-level="3"],
+.an-cal__cell[data-level="4"] { color: var(--text-on-accent); }
+
+.an-cal__cell--pad { background: transparent; }
+
+/* A day from before anything was recorded. Not a quiet day — an unknown one. */
+.an-cal__cell[data-level="-1"] {
+  background: var(--an-cell-absent);
+  box-shadow: inset 0 0 0 1px var(--an-cell-absent-border);
+}
+
+.an-cal__cell[data-level="1"] { background: var(--an-l1); }
+.an-cal__cell[data-level="2"] { background: var(--an-l2); }
+.an-cal__cell[data-level="3"] { background: var(--an-l3); }
+.an-cal__cell[data-level="4"] { background: var(--an-l4); }
+
+.an-cal__cell:not(:disabled):hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.an-cal__cell:not(:disabled):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--border-focus);
+}
+
+.an-cal__cell[data-selected] {
+  box-shadow: 0 0 0 2px var(--accent);
+  transform: scale(1.2);
+}
+
+.an-cal__legend {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: var(--space-5);
+  color: var(--text-disabled);
+  font-size: var(--text-micro);
+}
+
+.an-cal__legend > span:first-child { margin-right: var(--space-2); }
+.an-cal__legend > span:last-child { margin-left: var(--space-2); }
+
+.an-cal__key {
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius-xs);
+  background: var(--an-cell-empty);
+}
+
+.an-cal__key[data-level="1"] { background: var(--an-l1); }
+.an-cal__key[data-level="2"] { background: var(--an-l2); }
+.an-cal__key[data-level="3"] { background: var(--an-l3); }
+.an-cal__key[data-level="4"] { background: var(--an-l4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .an-cal__cell { transition: none; }
+  .an-cal__cell:not(:disabled):hover,
+  .an-cal__cell[data-selected] { transform: none; }
+}
+
+/* ---- Stat row ----------------------------------------------------------- */
+
+.an__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-5);
 }
 
 .an__stat {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-6);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--bg-surface);
 }
 
 .an__stat-label {
-  font-size: var(--text-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
   color: var(--text-tertiary);
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
 }
 
-.an__stat-value {
-  font-size: var(--text-xl);
-  font-weight: var(--weight-medium);
-  font-variant-numeric: tabular-nums;
+.an__stat-label svg { color: var(--text-disabled); }
+
+.an__stat strong {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tighter);
-  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Agent time is the one figure the section exists to make visible (§53). */
-.an__stat--accent .an__stat-value { color: var(--accent); }
+.an__stat-note {
+  min-height: 1em;
+  color: var(--text-disabled);
+  font-size: var(--text-micro);
+}
 
-/* ---- Magnitude bars ------------------------------------------------------
-   One hue for every row: the row label carries identity, the length carries
-   magnitude. Colouring by rank would double-encode the length as hue. */
-.an__bars {
-  list-style: none;
+/* ---- Leverage ----------------------------------------------------------- */
+
+.an__leverage {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-7);
+}
+
+.an__leverage > div {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
-.an__bar-row {
-  display: grid;
-  grid-template-columns: minmax(80px, 150px) 1fr auto 12px;
+.an__leverage > div:last-child { text-align: right; }
+
+.an__leverage span {
+  color: var(--text-tertiary);
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.an__leverage strong {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.an__leverage strong[data-accent] { color: var(--accent); }
+
+/* The ratio is the point of the section, so it is the biggest thing in it. */
+.an__leverage-ratio {
   align-items: center;
+  padding: 0 var(--space-6);
+  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.an__leverage-ratio strong {
+  font-size: var(--text-2xl);
+  color: var(--accent);
+}
+
+/* ---- Rhythm ------------------------------------------------------------- */
+
+.an-rhythm__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 96px;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--an-grid-line);
+}
+
+.an-rhythm__slot {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.an-rhythm__bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background: var(--an-l3);
+}
+
+/* An hour with nothing in it keeps a sliver so the axis reads as continuous,
+   but in the empty colour — a two-pixel amber stub would claim work. */
+.an-rhythm__bar[data-empty] { background: var(--an-cell-empty); }
+
+.an-rhythm__axis {
+  position: relative;
+  height: 14px;
+  margin-top: var(--space-2);
+}
+
+.an-rhythm__axis span {
+  position: absolute;
+  color: var(--text-disabled);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Bars --------------------------------------------------------------- */
+
+.an__columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--space-5);
 }
 
-.an__bar-label {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+.an-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.an-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 8rem) 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.an-bars__label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
-.an__bar-track {
+.an-bars__track {
   height: 6px;
   border-radius: var(--radius-full);
-  background: var(--bg-inset);
+  background: var(--an-cell-empty);
   overflow: hidden;
 }
 
-.an__bar-fill {
+.an-bars__fill {
   display: block;
   height: 100%;
-  /* Rounded on the free end only, anchored to the baseline. */
-  border-radius: 0 var(--radius-full) var(--radius-full) 0;
-  background: var(--accent);
-  transition: width var(--duration-slow) var(--ease-out);
+  border-radius: var(--radius-full);
+  background: var(--an-l3);
+  transition: width var(--duration-base) var(--ease-out);
+}
+
+.an-bars__value {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Provenance, never decoration: a figure the provider stated and one this
+   product inferred must not look alike (§28). */
+.an-bars__value[data-confidence="estimated"],
+.an-bars__value[data-confidence="unknown"] {
+  color: var(--text-disabled);
+  font-style: italic;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .an__bar-fill { transition: none; }
+  .an-bars__fill { transition: none; }
 }
 
-.an__bar-value {
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-tertiary);
-  text-align: right;
-}
+/* ---- Empty -------------------------------------------------------------- */
 
-/* A tilde marks a figure that is not straight from the provider (§28). */
-.an__bar-confidence {
-  font-size: var(--text-micro);
-  color: var(--state-warning);
-  text-align: center;
-}
-.an__bar-confidence[data-confidence="official"] { color: transparent; }
-
-/* ---- Empty --------------------------------------------------------------- */
 .an__empty {
-  padding: var(--space-11) var(--space-8);
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-8);
   border: 1px dashed var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  text-align: center;
 }
 
-.an__empty-title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
-  color: var(--text-secondary);
-}
+.an__empty p { color: var(--text-secondary); font-size: var(--text-md); }
+.an__empty span { color: var(--text-tertiary); font-size: var(--text-sm); }
 
-.an__empty-body {
-  max-width: 52ch;
-  margin: var(--space-4) auto 0;
-  font-size: var(--text-base);
-  line-height: var(--leading-relaxed);
-  color: var(--text-tertiary);
-  text-wrap: pretty;
-}
-
-/* A lone category has nothing to compare against: the label and the number say
-   everything a full-width bar would, so the bar is dropped entirely. */
-.an__bar-row[data-plain] .an__bar-value {
-  font-family: var(--font-ui);
-  font-size: var(--text-base);
-  color: var(--text-primary);
+@media (max-width: 860px) {
+  .an__header { flex-direction: column; }
+  .an__leverage { grid-template-columns: 1fr; gap: var(--space-5); }
+  .an__leverage > div:last-child { text-align: left; }
+  .an__leverage-ratio {
+    align-items: flex-start;
+    padding: var(--space-5) 0;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+  }
 }

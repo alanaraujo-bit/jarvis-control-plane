@@ -608,6 +608,11 @@
   font-size: var(--text-micro);
 }
 .accounts__stamp svg { flex: none; }
+/* The identity line, when it has something to say, sits directly under the
+   quota line. Two facts with two lifetimes — see `IdentityStamp` — so two rows,
+   but one block: the full stamp margin between them reads as two unrelated
+   sections rather than as a footer. */
+.accounts__stamp + .accounts__stamp { margin-top: var(--space-2); }
 .accounts__stamp[data-tone="warn"] { color: var(--state-warning); }
 .accounts__stamp[data-stale] { opacity: 0.7; }
 .accounts__stamp-official {
@@ -837,10 +842,172 @@
   line-height: 1.45;
 }
 
-.accounts__shared svg {
+.accounts__shared > svg {
   flex: none;
   margin-top: 1px;
   color: var(--state-warning);
+}
+
+.accounts__shared-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.accounts__shared-text p {
+  margin: 0;
+}
+
+/* The way out, next to the diagnosis. A notice that says "these two cards are
+   one account" and stops there is accurate and useless — this is the button
+   that puts a different account into the directory. */
+.accounts__shared-action {
+  align-self: flex-start;
+}
+
+/* ---- Before the login, and during it -------------------------------------
+   The provider's sign-in reuses the browser's existing claude.ai session and
+   never asks which account to use, so adding a second account silently adds a
+   second directory on the first one. Both of these say so — one before the
+   click, one while the browser is open with the link that leads somewhere
+   else. */
+/* Spans the whole form, under the introduction and above the fields.
+   `.accounts__add` is a three-column grid, so without this the warning becomes
+   one cell and shoulders the name field into the third column — seen on screen
+   in the first QA pass, with the sentence floating between two inputs. It is
+   the most useful sentence on the form; it gets the full width and it comes
+   before anything the person types. */
+.accounts__add-warning {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.accounts__add-warning svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--state-warning);
+}
+
+.accounts__signin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+}
+
+.accounts__signin-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.accounts__signin-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.accounts__signin-head svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.accounts__signin p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+/* The URL is long and must never widen the card. It scrolls inside its own
+   box rather than pushing the layout, and stays selectable for the case where
+   the clipboard is refused. */
+.accounts__signin-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.accounts__signin-link code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  user-select: all;
+}
+
+.accounts__signin-waiting {
+  font-style: italic;
+}
+
+/* Where the code from the browser goes. The flow does not complete without it
+   when the person used a private window: the CLI waits on stdin. */
+.accounts__signin-code {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.accounts__signin-code label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.accounts__signin-code label span {
+  color: var(--text-tertiary);
+  font-size: var(--text-micro);
+}
+
+.accounts__signin-code input {
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.accounts__signin-code input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .accounts__signin-link,
+  .accounts__signin-code {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 /* In the meta line the same fact is a tag, not a sentence — it is what the eye

@@ -553,6 +553,8 @@ export const en = {
   // wondering which number is real.
   "accounts.sharedSubscription": "Same subscription as {name}. One allowance, shown twice — moving work between them gains nothing.",
   "accounts.sharedSubscription.badge": "Shared allowance",
+  "accounts.sharedSubscription.useAnother": "Sign in with a different account",
+  "accounts.identityAge": "Identity confirmed {age}",
   "accounts.unnamed": "Unnamed account",
   "accounts.identityMissing": "Identity not available",
   "accounts.signIn": "Sign in",
@@ -598,6 +600,17 @@ export const en = {
   "accounts.emailOptional": "Email (optional, pre-fills Claude login)",
   "accounts.continueToLogin": "Continue to sign in",
   "accounts.openingLogin": "Opening sign-in…",
+  "accounts.add.browserSessionWarning":
+    "The provider's sign-in reuses whatever account your browser is already signed into on claude.ai — it will not ask which one. To add a genuinely different account, open the link on the next screen in a private window.",
+  "accounts.signInProgress.title": "Waiting for the provider's sign-in",
+  "accounts.signInProgress.body":
+    "A browser has been opened. If it signed straight in without asking, it used the account that was already open there — open this link in a private window instead to choose a different one.",
+  "accounts.signInProgress.waiting": "Waiting for the link…",
+  "accounts.signInProgress.copy": "Copy link",
+  "accounts.signInProgress.copied": "Copied",
+  "accounts.signInProgress.codeLabel": "Code from the browser",
+  "accounts.signInProgress.codePlaceholder": "Paste it here",
+  "accounts.signInProgress.submitCode": "Finish sign-in",
   "accounts.empty.title": "No account for this provider",
   "accounts.empty.body": "Add one to give new sessions an isolated, persistent sign-in.",
   "accounts.refresh": "Check now",
@@ -683,6 +696,42 @@ export const en = {
   "analytics.confidence.observed": "Measured by J.A.R.V.I.S.",
   "analytics.confidence.estimated": "Estimated",
   "analytics.confidence.unknown": "Unknown provenance",
+  "analytics.subtitle": "Your work as it was actually recorded, back to {from}.",
+  "analytics.windowShort": "{days}d",
+  "analytics.days": "{count} days",
+  "analytics.days_one": "{count} day",
+  "analytics.filesChangedCount": "{count} files touched",
+  "analytics.filesChangedCount_one": "{count} file touched",
+  // ---- The calendar --------------------------------------------------------
+  "analytics.calendar.title": "Days worked",
+  "analytics.calendar.label": "Calendar of daily activity",
+  "analytics.calendar.hint": "Click a day to see only it",
+  "analytics.calendar.less": "less",
+  "analytics.calendar.more": "more",
+  "analytics.calendar.busy": "{date} — {tokens} tokens over {turns} turns",
+  "analytics.calendar.idle": "{date} — nothing recorded",
+  // Said differently from an idle day on purpose: a day before any history
+  // exists is unknown, not quiet, and drawing them alike would invent weeks of
+  // laziness that never happened.
+  "analytics.calendar.noHistory": "{date} — before any history was recorded",
+  // ---- Days worked ---------------------------------------------------------
+  "analytics.streak.current": "Current run",
+  // No target, no encouragement, no warning about breaking it (§52). It says
+  // what is true and stops.
+  "analytics.streak.currentNote": "Consecutive days with work recorded",
+  "analytics.streak.longest": "Longest run",
+  "analytics.streak.longestRange": "{from} — {to}",
+  "analytics.streak.active": "Days worked",
+  "analytics.streak.activeOf": "{active} of {total}",
+  "analytics.streak.activeNote": "Days off are days off",
+  // ---- Leverage ------------------------------------------------------------
+  "analytics.leverage.ratio": "agent time per minute of yours",
+  "analytics.leverage.notYet": "Not enough attention recorded yet",
+  "analytics.leverage.since": "Measured since {from}",
+  // ---- Rhythm --------------------------------------------------------------
+  "analytics.rhythm.title": "When you work",
+  "analytics.rhythm.hour": "{hour}:00 — {tokens} tokens over {turns} turns",
+  "analytics.rhythm.note": "Tokens by hour of the day, in your own time zone.",
 
   // ---- Activity (§48) ------------------------------------------------------
   "activity.title": "Activity",

@@ -13,6 +13,19 @@ parar.</p>
     <strong>Adicione outra</strong>
     <p><em>Adicionar conta</em> cria um diretório de configuração novo e inicia o login do próprio
     provedor. Isso abre um navegador e você completa o fluxo OAuth.</p>
+    <div class="callout" data-kind="warn">
+      <span class="callout__title">O navegador não vai perguntar qual conta usar</span>
+      <p>Se você já está logado no claude.ai naquele navegador, o fluxo aceita essa sessão e
+      responde "Login successful" em cerca de um segundo, sem perguntar nada. O diretório novo
+      fica logado na conta que você já tinha — um segundo cartão, a mesma cota, os dois
+      mostradores andando juntos.</p>
+      <p>Por isso o J.A.R.V.I.S. te entrega o <strong>link de autorização</strong> que a CLI
+      imprime. Abra ele numa <strong>janela anônima</strong>, onde não existe sessão e o seletor
+      de conta aparece. É o jeito confiável de chegar numa conta realmente diferente.</p>
+      <p>Esse fluxo termina te dando um <strong>código</strong> em vez de voltar para o app, então
+      o painel tem um campo para colar. Deixe vazio quando o navegador entrar sozinho — o campo
+      só é usado quando o provedor está mesmo esperando um código.</p>
+    </div>
     <div class="callout" data-kind="key">
       <span class="callout__title">Este produto nunca vê uma senha ou um token</span>
       <p>O login acontece inteiramente dentro da CLI do provedor. Depois o J.A.R.V.I.S. pergunta ao
@@ -24,10 +37,20 @@ parar.</p>
 
   <li>
     <strong>Cheque se há gêmeas</strong>
-    <p>Se dois cartões mostram estatísticas idênticas sob nomes diferentes, provavelmente são
-    <strong>uma assinatura só desenhada duas vezes</strong> — o mesmo e-mail logado em dois
-    diretórios. O produto detecta isso, chaveado por <em>e-mail</em> e não por organização, e diz
-    nos dois cartões, acima do mostrador.</p>
+    <p>Se dois cartões mostram estatísticas idênticas sob nomes diferentes, são
+    <strong>uma assinatura só desenhada duas vezes</strong> — uma conta logada em dois
+    diretórios. O produto detecta isso e diz nos dois cartões, acima do mostrador, com um botão
+    que desloga aquele diretório para você colocar outra conta nele.</p>
+    <p>A checagem usa o <strong>identificador da conta</strong> do próprio provedor, caindo para o
+    e-mail onde o provedor não publica um. Não usa a organização: um plano Team põe cotas
+    separadas de várias pessoas debaixo de uma organização só. E não usa só o e-mail, que era como
+    funcionava antes — e-mail é um rótulo, e um diretório que tinha sido logado em outra pessoa
+    ainda carregava o endereço antigo, então dois cartões de uma cota só compararam como contas
+    diferentes e nada foi dito. O identificador é a mesma string em todo diretório logado numa
+    conta, independente do que os rótulos digam.</p>
+    <p>A identidade também é relida sempre que os arquivos do provedor mudam, então um login que
+    você fez num terminal aparece na próxima vez que abrir esta tela, e não só na próxima
+    verificação manual.</p>
     <p>Ele não impede. Dois diretórios em uma conta é legítimo. Ele só garante que você não está
     olhando para uma mentira.</p>
     <figure class="fig">

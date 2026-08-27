@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 17;
+pub const SCHEMA_VERSION: u32 = 19;
 
 struct Migration {
     version: u32,
@@ -834,6 +834,117 @@ const MIGRATIONS: &[Migration] = &[Migration {
         PRIMARY KEY (account_id, key)
     ) WITHOUT ROWID;
 "#,
+    },
+    Migration {
+        version: 18,
+        sql: r#"
+    -- ---- Telling two provider accounts apart (M21) ---------------------------
+    --
+    -- An account in this product is a configuration directory, and *nothing
+    -- stops two directories being signed into the same subscription*. It is not
+    -- hypothetical: `claude auth login` in an empty directory reuses whatever
+    -- claude.ai session the browser already holds, so the ordinary way to add a
+    -- second account signs it into the first one, silently, in about a second.
+    -- Both cards then draw the same dial off one allowance, which reads as a
+    -- broken meter rather than as the truth.
+    --
+    -- M13 already had the guard (`accounts::same_subscription`) and it could
+    -- not fire, because it keyed on an e-mail that was eleven hours stale. The
+    -- three columns here are what make that guard trustworthy.
+
+    -- The provider's own identifier for the subscription, from `oauthAccount`
+    -- in the provider's config. Authoritative where e-mail is merely a label:
+    -- it survives an alias, a rename and a change of casing, and it is the same
+    -- string in every directory signed into one account. Kept *additive* -- an
+    -- account with no uuid still compares by e-mail, because Codex publishes no
+    -- equivalent and an absent value must never read as "matches".
+    ALTER TABLE provider_accounts ADD COLUMN account_uuid TEXT;
+
+    -- When the identity was last *attempted*, as opposed to `checked_at`, which
+    -- from now on means the last time one was successfully read.
+    --
+    -- The two were one column, and a failed read returned early without
+    -- stamping anything -- so "the CLI could not answer" and "nothing has
+    -- changed since the last answer" were the same state, indistinguishable
+    -- forever. A card cannot say "identity not verified since 12:06" while the
+    -- only timestamp it has says the opposite.
+    ALTER TABLE provider_accounts ADD COLUMN identity_attempted_at INTEGER;
+
+    -- When this row's *current* subscription was first seen on it.
+    --
+    -- A directory can be signed out and signed back in as somebody else -- which
+    -- is exactly what happened to the machine account on this machine. When it
+    -- does, every `account_limit_events` row and every `usage_samples` row
+    -- before that moment belongs to the previous subscription, and
+    -- `quota::calibration` and `implied_allowance` learn an allowance from
+    -- them. Reading them as this account's history attributes one person's
+    -- spend to another: the exact "it merged the two accounts" failure this
+    -- migration exists to end.
+    --
+    -- Zero means "always" -- the honest default for rows that predate this
+    -- column, whose history has no known boundary in it.
+    ALTER TABLE provider_accounts ADD COLUMN subscription_since INTEGER NOT NULL DEFAULT 0;
+
+    CREATE INDEX idx_accounts_subscription ON provider_accounts (provider, account_uuid);
+"#,
+    },
+    Migration {
+        version: 19,
+        sql: r#"
+    -- ---- Recovering the history that was always on disk (M22) ----------------
+    --
+    -- Analytics could only ever see what J.A.R.V.I.S. itself watched happen.
+    -- On this machine that is two days and 889 samples, while the provider's
+    -- own transcripts hold **twenty days and 45,487 turns** of the same work,
+    -- with real gaps in it. A calendar and a streak over two days are
+    -- decorations; over twenty days of measured work they are the screen.
+    --
+    -- Same shape as D30's search backfill and for the same reasons: a
+    -- migration adds *columns*, and the walk over unbounded on-disk data
+    -- happens afterwards, off the startup path, resumable.
+
+    -- The provider's own identifier for one turn.
+    --
+    -- Every usage-bearing line in a Claude Code transcript carries `uuid`
+    -- (verified across the real corpus). Recording it makes the backfill
+    -- idempotent for free: `INSERT OR IGNORE` against the unique index below
+    -- means re-running after a crash, or shipping a build that walks the same
+    -- files again, cannot double a single token.
+    --
+    -- NULL for every row written live by the tailer, which is why the index is
+    -- partial -- those rows are deduplicated by not being walked at all (the
+    -- backfill skips any transcript whose session J.A.R.V.I.S. already ran).
+    ALTER TABLE usage_samples ADD COLUMN origin_uuid TEXT;
+    CREATE UNIQUE INDEX idx_usage_origin ON usage_samples (origin_uuid)
+        WHERE origin_uuid IS NOT NULL;
+
+    -- What to call the project a historical turn belongs to.
+    --
+    -- `project_id` references `projects`, and the transcripts cover 35
+    -- directories against 3 registered projects. Inventing project rows for
+    -- folders the person never opened here would put strangers in their
+    -- project list; leaving the attribution NULL would collapse twenty days of
+    -- history into one unlabelled heap. So the name travels with the row, read
+    -- from the `cwd` the provider recorded, and the surface reads
+    -- `COALESCE(projects.name, project_label)`.
+    ALTER TABLE usage_samples ADD COLUMN project_label TEXT;
+
+    CREATE INDEX idx_usage_day ON usage_samples (ts_ms);
+
+    -- One row per transcript already walked: the bookmark, and only a bookmark.
+    --
+    -- Keyed on the file path, with its size and modification time, so a
+    -- transcript that has since grown -- the session was resumed, or is the one
+    -- running right now -- is walked again for its new turns, while the unique
+    -- index above keeps the turns it already had from being counted twice.
+    CREATE TABLE usage_backfill_files (
+        path      TEXT PRIMARY KEY,
+        size      INTEGER NOT NULL,
+        mtime_ms  INTEGER NOT NULL,
+        turns     INTEGER NOT NULL,
+        done_at   INTEGER NOT NULL
+    ) WITHOUT ROWID;
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -956,6 +1067,8 @@ mod tests {
             // new migration added; the comments now name no blocker number, so
             // a future renumbering cannot make this happen again.
             (17, 0x3905_0f33_a709_3a14),
+            (18, 0x3ff2_979b_f471_0e66),
+            (19, 0x1085_a050_9b08_3287),
         ];
 
         for migration in MIGRATIONS {

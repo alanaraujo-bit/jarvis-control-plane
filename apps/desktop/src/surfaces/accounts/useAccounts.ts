@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { invoke, isTauri } from "../../app/platform";
 
+/** The event the core emits while a login runs. Matches `accounts::commands::SIGN_IN_EVENT`. */
+const SIGN_IN_EVENT = "accounts:signIn";
+
 export type ProviderId = "claude-code" | "codex";
 export type Confidence = "official" | "observed" | "estimated" | "unknown";
 export type AccountHealth = "ready" | "nearing" | "exhausted" | "paused" | "signedOut";
@@ -13,11 +16,32 @@ export interface Account {
   configDir: string;
   adopted: boolean;
   email: string | null;
+  /**
+   * The provider's own identifier for the subscription, where it publishes one.
+   *
+   * What makes "are these two cards one allowance?" answerable rather than
+   * guessed: it is the same string in every directory signed into one account,
+   * and it survives an alias, a rename and a change of casing that would each
+   * defeat comparing e-mail addresses. `null` for Codex, which publishes no
+   * equivalent, and for any directory not signed in.
+   */
+  accountUuid: string | null;
   orgId: string | null;
   orgName: string | null;
   plan: string | null;
   signedIn: boolean;
+  /** When an identity was last successfully read. */
   checkedAt: number | null;
+  /**
+   * When an identity read was last *attempted*.
+   *
+   * Distinct from `checkedAt` so a card can say "signed in as X, not confirmed
+   * since 12:06" instead of showing a stale identity with a fresh-looking
+   * timestamp borrowed from the quota reading beside it.
+   */
+  identityAttemptedAt: number | null;
+  /** When this directory's current subscription was first seen on it. */
+  subscriptionSince: number;
   active: boolean;
   paused: boolean;
   position: number;
@@ -114,6 +138,14 @@ export interface AccountCard {
   account: Account;
   quota: AccountQuota;
   folderTrusted: boolean | null;
+  /**
+   * Ids of the other accounts drawing on this same subscription.
+   *
+   * Decided by the core, so the sentence on the card and the rule the rotation
+   * obeys are the same rule. Empty for the ordinary case of one directory per
+   * account.
+   */
+  sharedWith: string[];
 }
 
 export interface AccountsReport {
@@ -132,6 +164,17 @@ interface AccountsState {
   refreshingAccountId: string | null;
   /** When a live refresh last completed, so two callers do not both probe. */
   lastLiveAt: number;
+  /**
+   * The provider's authorisation link while a sign-in is in flight.
+   *
+   * Kept because it is the only way to reach a *different* account. The CLI
+   * opens a browser itself, and that browser already holds a claude.ai session
+   * which the flow accepts without asking anything — measured: an empty
+   * configuration directory signs into the existing account in about a second.
+   * The same link opened in a private window is where the account chooser
+   * appears.
+   */
+  signIn: { accountId: string; url: string | null } | null;
   load: (mode?: ReadMode, projectId?: string | null) => Promise<void>;
   refreshAccount: (accountId: string) => Promise<void>;
   /** Load the cached report, then probe only if what is stored has gone stale. */
@@ -143,6 +186,13 @@ interface AccountsState {
   activate: (accountId: string) => Promise<void>;
   setAutoSwitch: (policy: AutoSwitchPolicy) => Promise<void>;
   beginSignIn: (accountId: string, email?: string) => Promise<void>;
+  /** Sign one directory out, so a different account can be signed into it. */
+  signOut: (accountId: string) => Promise<void>;
+  /** Hand the provider the code copied out of the browser. */
+  submitSignInCode: (accountId: string, code: string) => Promise<void>;
+  dismissSignIn: () => void;
+  /** Subscribe to the core's sign-in progress. Returns an unsubscribe. */
+  watchSignIn: () => Promise<() => void>;
 }
 
 /**
@@ -174,6 +224,7 @@ export const useAccounts = create<AccountsState>((set, get) => ({
   refreshing: false,
   refreshingAccountId: null,
   lastLiveAt: 0,
+  signIn: null,
   error: null,
   projectId: null,
 
@@ -276,10 +327,76 @@ export const useAccounts = create<AccountsState>((set, get) => ({
   },
 
   beginSignIn: async (accountId, email) => {
+    set({ signIn: { accountId, url: null } });
     await invoke("account_begin_sign_in", {
       accountId,
       email: email?.trim() || null,
     });
     await get().load("cached");
+  },
+
+  signOut: async (accountId) => {
+    set({ error: null });
+    try {
+      await invoke("account_sign_out", { accountId });
+      await get().load("cached");
+    } catch (cause) {
+      set({ error: String(cause) });
+      throw cause;
+    }
+  },
+
+  /**
+   * The other half of the private-window route.
+   *
+   * Measured: with the browser prevented from completing the flow,
+   * `claude auth login` prints the link, prints "Paste code here if prompted"
+   * and then waits — still running after twelve seconds. It is a
+   * paste-the-code flow, so recommending a private window without somewhere to
+   * put the code would leave the CLI blocked for ever.
+   */
+  submitSignInCode: async (accountId, code) => {
+    set({ error: null });
+    try {
+      await invoke("account_submit_sign_in_code", { accountId, code });
+    } catch (cause) {
+      set({ error: String(cause) });
+      throw cause;
+    }
+  },
+
+  dismissSignIn: () => set({ signIn: null }),
+
+  /**
+   * Follow a sign-in the core is running.
+   *
+   * The login finishes in a browser minutes after the command returned, and
+   * before this the screen never heard about it: the store reloaded the cached
+   * report immediately and then sat on it. So a directory that had just been
+   * signed into an account another card already held went on looking like a
+   * separate account until somebody pressed "Check now" — which is the state
+   * this machine was found in.
+   */
+  watchSignIn: async () => {
+    if (!isTauri()) return () => {};
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<{ accountId: string; phase: string; url: string | null }>(
+      SIGN_IN_EVENT,
+      ({ payload }) => {
+        if (payload.phase === "url") {
+          set({ signIn: { accountId: payload.accountId, url: payload.url } });
+          return;
+        }
+        if (payload.phase === "failed") {
+          set({ signIn: null });
+          return;
+        }
+        // Finished: identities have already been re-read core-side, so a plain
+        // cached read shows the outcome — including a collision with a
+        // different card, which is only visible once both have been re-read.
+        set({ signIn: null });
+        void get().load("cached");
+      },
+    );
   },
 }));

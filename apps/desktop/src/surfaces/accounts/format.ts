@@ -171,26 +171,33 @@ export function readingAge(readAtMs: number, now: number, t: Translate): string 
  * `alanvitoraraujo1@icloud.com` in different directories and showed the same
  * 74% and the same reset.
  *
- * Keyed on **email**, matching `accounts::subscription_key` in the core. Not on
- * `org_id`: a personal organisation maps one-to-one onto a Pro account and
+ * Keyed on **`accountUuid` where the provider publishes one, email otherwise**,
+ * matching `accounts::subscription_key` in the core. The uuid is what actually
+ * settles it: it is the same string in every directory signed into one account,
+ * while an email is a label — and a stale label is exactly how this went
+ * undetected. Two cards here drew one allowance for eleven hours because one of
+ * them still carried the address of whoever had been signed into that directory
+ * before, so the two strings differed and the check below found nothing to say.
+ *
+ * Not on `org_id`: a personal organisation maps one-to-one onto a Pro account and
  * would give the right answer here, but a Team plan puts several people's
  * separate allowances under one org, and calling colleagues twins is a wrong
  * answer that gets worse the bigger the team.
  *
- * An account with no email is **unknown, never same** — Codex builds exist that
- * write no identity at all, and grouping those together would make every
- * nameless account a twin of every other.
+ * An account with neither uuid nor email is **unknown, never same** — Codex
+ * builds exist that write no identity at all, and grouping those together would
+ * make every nameless account a twin of every other.
  *
  * Returns, for each account id, the display names of the other accounts on the
  * same subscription; ids with no twin are absent.
  */
-export function sharedSubscriptions<T extends { id: string; provider: string; email: string | null }>(
-  accounts: readonly T[],
-  name: (account: T) => string,
-): Map<string, string[]> {
+export function sharedSubscriptions<
+  T extends { id: string; provider: string; email: string | null; accountUuid?: string | null },
+>(accounts: readonly T[], name: (account: T) => string): Map<string, string[]> {
   const groups = new Map<string, T[]>();
   for (const account of accounts) {
-    const email = account.email?.trim().toLowerCase();
+    const email =
+      account.accountUuid?.trim().toLowerCase() || account.email?.trim().toLowerCase();
     if (!email) continue;
     const key = `${account.provider}\u0000${email}`;
     const group = groups.get(key);
