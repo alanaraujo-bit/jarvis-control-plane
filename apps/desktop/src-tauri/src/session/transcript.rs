@@ -258,30 +258,10 @@ pub fn spawn(
                             }
 
                             if let Some(account_id) = account_id.as_deref() {
-                                let before = crate::accounts::get(&db, account_id).ok().flatten();
-                                if let Some(next) = crate::accounts::switch::maybe_rotate(&db, account_id) {
-                                    if let Some(before) = before {
-                                        let estimated = crate::accounts::quota::for_account(&db, &before)
-                                            .windows
-                                            .iter()
-                                            .any(|window| {
-                                                window.confidence
-                                                    == crate::session::event::Confidence::Estimated
-                                                    && window
-                                                        .percent
-                                                        .map(|percent| {
-                                                            percent >= crate::accounts::quota::NEARING_PERCENT
-                                                        })
-                                                        .unwrap_or(false)
-                                            });
-                                        crate::accounts::switch::record_rotation(
-                                            &db,
-                                            &before,
-                                            &next,
-                                            estimated,
-                                        );
-                                    }
-                                }
+                                let _ = crate::accounts::switch::maybe_rotate_recorded(
+                                    &db,
+                                    account_id,
+                                );
                             }
                         }
                     }

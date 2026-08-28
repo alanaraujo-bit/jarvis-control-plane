@@ -14,6 +14,8 @@ export interface TokenUsage {
   cacheWrite: number | null;
   costUsd: number | null;
   model: string | null;
+  /** Provenance travels with the number; older logs may omit it. */
+  confidence?: "official" | "observed" | "estimated" | "unknown";
 }
 
 export type ConversationItem =

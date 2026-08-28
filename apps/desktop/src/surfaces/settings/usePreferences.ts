@@ -12,6 +12,7 @@ export interface Preferences {
   notificationsEnabled: boolean;
   notificationsSystem: boolean;
   notificationsSound: boolean;
+  performanceHudEnabled: boolean;
 }
 
 /**
@@ -55,6 +56,8 @@ const INITIAL: Preferences = {
   notificationsEnabled: true,
   notificationsSystem: true,
   notificationsSound: true,
+  // The HUD overlays the terminal, so the person opts in explicitly.
+  performanceHudEnabled: false,
 };
 
 let cache: Preferences = INITIAL;
@@ -143,7 +146,24 @@ export function usePreferences() {
     }
   }, []);
 
-  return { prefs, error, set, setSwitch };
+  const setPerformanceHud = useCallback(async (value: boolean) => {
+    // Browser preview is a visual harness with no core. Updating the shared
+    // cache here keeps the HUD inspectable there without pretending native
+    // metrics exist.
+    if (!isTauri()) {
+      publish({ ...cache, performanceHudEnabled: value });
+      return;
+    }
+    try {
+      publish(await invoke<Preferences>("settings_set_performance_hud", { value }));
+      remember("performance.hudEnabled", value);
+      setError(null);
+    } catch (cause) {
+      setError(String(cause));
+    }
+  }, []);
+
+  return { prefs, error, set, setSwitch, setPerformanceHud };
 }
 
 /** Read-only access, for surfaces that consume a preference but never set it. */

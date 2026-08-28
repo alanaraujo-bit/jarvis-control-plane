@@ -954,7 +954,7 @@ fn same_path(a: &str, b: &str) -> bool {
 pub fn probe(account: &Account) -> LiveStatus {
     // An account whose directory has never been signed into cannot answer, and
     // spawning a CLI to be told so costs a second per refresh for nothing.
-    if !account.adopted && !Path::new(&account.config_dir).exists() {
+    if !Path::new(&account.config_dir).exists() {
         return LiveStatus::Unavailable {
             reason: "signedOut".to_string(),
             read_at_ms: now_ms(),

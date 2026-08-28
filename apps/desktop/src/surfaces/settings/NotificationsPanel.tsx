@@ -104,7 +104,7 @@ export function NotificationsPanel() {
   );
 }
 
-function Switch({
+export function Switch({
   label,
   help,
   checked,

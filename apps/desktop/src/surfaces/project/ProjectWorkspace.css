@@ -466,6 +466,26 @@
   margin-left: var(--space-2);
 }
 
+/* Live statistics belongs to the session, so its control sits beside the
+   Terminal/Conversation and split controls. It stays visible when the HUD is
+   hidden; otherwise closing the overlay would also remove the way back. */
+.workspace__stats-button {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-left: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.workspace__stats-button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.workspace__stats-button[data-active] { color: var(--state-working); background: var(--state-working-bg); }
+.workspace__stats-button:focus-visible { outline: 1px solid var(--border-focus); outline-offset: 1px; }
+
 .workspace__split-button {
   display: grid;
   place-items: center;

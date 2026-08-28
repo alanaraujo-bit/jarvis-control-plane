@@ -660,19 +660,34 @@ fn launch(
 pub fn session_attach(
     state: State<'_, AppState>,
     session_id: String,
+    attachment_id: String,
     channel: Channel<InvokeResponseBody>,
-) -> Result<()> {
-    state.sessions.get(&session_id)?.attach(channel);
+) -> Result<Response> {
+    let log_dir = log_dir_of(&state, &session_id)?;
+    let history = state.sessions.get(&session_id)?.attach_with_replay(
+        attachment_id,
+        channel,
+        || {
+            let reader = SessionLogReader::open(&log_dir)?;
+            Ok(reader.replay_pty(REPLAY_LIMIT)?)
+        },
+    )?;
     // Someone is looking now, so a guardrail that wants a human decision has
     // one to ask (§35).
     crate::guardrail::sessions::set_attended(&state.session_dir(&session_id), true);
-    Ok(())
+    Ok(Response::new(history))
 }
 
 /// Detach the view. The session keeps running (§32).
 #[tauri::command]
-pub fn session_detach(state: State<'_, AppState>, session_id: String) -> Result<()> {
-    state.sessions.get(&session_id)?.detach();
+pub fn session_detach(
+    state: State<'_, AppState>,
+    session_id: String,
+    attachment_id: String,
+) -> Result<()> {
+    if !state.sessions.get(&session_id)?.detach(&attachment_id) {
+        return Ok(());
+    }
     // Nobody is watching any more. From here a rule that says ask has no one to
     // ask, and the guard refuses rather than leaving the agent on a prompt that
     // can never be answered (§34).

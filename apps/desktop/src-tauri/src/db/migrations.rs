@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 19;
+pub const SCHEMA_VERSION: u32 = 20;
 
 struct Migration {
     version: u32,
@@ -945,6 +945,50 @@ const MIGRATIONS: &[Migration] = &[Migration {
         done_at   INTEGER NOT NULL
     ) WITHOUT ROWID;
 "#,
+    },
+    Migration {
+        version: 20,
+        sql: r#"
+    -- ---- A clock the sync may read, and proof that a deletion happened (M23) -
+    --
+    -- `set_note_pinned` and `move_note` deliberately do **not** touch
+    -- `updated_at`: pinning is a decision about where something sits, not an
+    -- edit to it, and bumping the timestamp reorders the list under the person
+    -- who just pinned something. That is right for the screen and useless as a
+    -- sync clock -- a last-write-wins merge keyed on `updated_at` would let a
+    -- pull revert a pin, silently, because the row "had not changed".
+    --
+    -- So the two clocks are separated. `updated_at` stays exactly what it is
+    -- and the surface keeps drawing in its order; `touched_at` moves on every
+    -- mutation including the two above, and nothing except the sync reads it.
+    -- Seeded from `updated_at` so a library that predates this migration
+    -- arrives at the server with honest timestamps rather than at the epoch.
+    ALTER TABLE notebooks ADD COLUMN touched_at INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE notebook_notes ADD COLUMN touched_at INTEGER NOT NULL DEFAULT 0;
+    UPDATE notebooks SET touched_at = updated_at;
+    UPDATE notebook_notes SET touched_at = updated_at;
+
+    -- A row that was deleted, kept as the only evidence that it was.
+    --
+    -- Without this a pull cannot tell a note somebody deleted here from one it
+    -- has simply never seen, so it restores it -- and deleting the same note
+    -- again on the next machine is a loop with no exit. The tombstone is a
+    -- separate table rather than a `deleted_at` column on the two real ones
+    -- precisely so every existing query stays correct without being edited:
+    -- `notebook::report` cannot accidentally list a deleted note, because a
+    -- deleted note is still a deleted row.
+    --
+    -- Unbounded in principle, tiny in practice: one short row per deletion, for
+    -- a library sized in hundreds. Pruning would need to know that every
+    -- machine has seen the tombstone, which is a question this design cannot
+    -- answer and should not pretend to.
+    CREATE TABLE sync_tombstones (
+        kind       TEXT NOT NULL,
+        id         TEXT NOT NULL,
+        deleted_at INTEGER NOT NULL,
+        PRIMARY KEY (kind, id)
+    ) WITHOUT ROWID;
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -1069,6 +1113,7 @@ mod tests {
             (17, 0x3905_0f33_a709_3a14),
             (18, 0x3ff2_979b_f471_0e66),
             (19, 0x1085_a050_9b08_3287),
+            (20, 0xe28b_da2d_45a4_8c06),
         ];
 
         for migration in MIGRATIONS {

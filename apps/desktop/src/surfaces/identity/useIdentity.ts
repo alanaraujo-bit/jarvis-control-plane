@@ -1,7 +1,10 @@
 import { create } from "zustand";
+import { listen } from "@tauri-apps/api/event";
 import type { Locale } from "@jarvis/i18n";
+import { remember } from "../../app/identityMemory";
 import { invoke, isTauri } from "../../app/platform";
-import { applyThemePreference, type ThemePreference } from "../../app/theme";
+import { applyThemePreference, useTheme, type ThemePreference } from "../../app/theme";
+import { useNotebook } from "../notebook/useNotebook";
 import { refreshPreferences } from "../settings/usePreferences";
 
 /**
@@ -119,7 +122,54 @@ async function applyCarried(carried: Carried, setLocale?: (locale: Locale) => vo
     applyThemePreference(carried.theme as ThemePreference);
   }
   if (carried.locale && setLocale) setLocale(carried.locale as Locale);
+  else if (carried.locale === null) adopt("appearance.locale", knownLocale());
+  if (carried.theme === null) adopt("appearance.theme", useTheme.getState().preference);
   await refreshPreferences();
+}
+
+/**
+ * Give an account that has never chosen whatever this machine is already set
+ * to (M23).
+ *
+ * The theme and the locale live in `localStorage`, because the theme has to be
+ * on the document before the first paint. The core therefore cannot see them,
+ * and `identity_remember` only ever runs when one *changes* — so an account
+ * belonging to somebody who picked a theme once, months before signing up,
+ * carried nothing at all. Measured rather than theorised: `identity_settings`
+ * in production held zero rows for the only account in it.
+ *
+ * A `null` in `Carried` means "this account has never chosen", which is
+ * exactly when adopting is right and is never the same as overwriting a choice
+ * made on another machine. The same bargain `prefs::adopt_machine_settings`
+ * makes for the core's half of the preferences.
+ */
+function adopt(key: string, value: string | null) {
+  if (value) remember(key, value);
+}
+
+/** The document's language, but only when it is one this build ships. */
+function knownLocale(): Locale | null {
+  const lang = document.documentElement.lang;
+  return lang === "en" || lang === "pt-BR" ? lang : null;
+}
+
+/**
+ * Fold in a launch pull, once the core says one landed.
+ *
+ * Only fires when something actually changed — see `cloud::spawn_pull`. The
+ * notebook reloads rather than being patched, for the reason
+ * `notebook::commands` gives about a surface that keeps a second model.
+ */
+export function watchSync(setLocale?: (locale: Locale) => void) {
+  if (!isTauri()) return () => {};
+  const stopping = listen<Carried>("sync://state", async (event) => {
+    await applyCarried(event.payload, setLocale);
+    await useNotebook.getState().load();
+    await useIdentity.getState().load();
+  });
+  return () => {
+    void stopping.then((stop) => stop());
+  };
 }
 
 /**

@@ -38,14 +38,22 @@ pub async fn identity_google_sign_in(
     Ok(outcome)
 }
 
+/// Both of these are `async` where they used to be plain functions, and that is
+/// load-bearing rather than stylistic: a synchronous Tauri command runs on the
+/// main thread, so a network round trip inside one freezes the window for as
+/// long as the server takes to answer. The work happens on a blocking thread
+/// and the command awaits it — the same shape `identity_google_sign_in` has
+/// used since M20.
 #[tauri::command]
-pub fn identity_sign_up(
+pub async fn identity_sign_up(
     state: State<'_, AppState>,
     display_name: String,
     email: String,
     password: String,
 ) -> Result<SignUpOutcome> {
-    let outcome = super::sign_up(&state.db, &display_name, &email, &password)?;
+    let outcome =
+        super::cloud::sign_up(std::sync::Arc::clone(&state.db), display_name, email, password)
+            .await?;
     if matches!(outcome, SignUpOutcome::Ok { .. }) {
         sync_live(&state);
     }
@@ -53,12 +61,13 @@ pub fn identity_sign_up(
 }
 
 #[tauri::command]
-pub fn identity_sign_in(
+pub async fn identity_sign_in(
     state: State<'_, AppState>,
     email: String,
     password: String,
 ) -> Result<SignInOutcome> {
-    let outcome = super::sign_in(&state.db, &email, &password)?;
+    let outcome =
+        super::cloud::sign_in_password(std::sync::Arc::clone(&state.db), email, password).await?;
     if matches!(outcome, SignInOutcome::Ok { .. }) {
         sync_live(&state);
     }

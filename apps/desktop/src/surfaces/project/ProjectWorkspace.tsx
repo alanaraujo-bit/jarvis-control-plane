@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Columns2, GitBranch, Grid2x2, Plus, Rows2, X } from "lucide-react";
+import { ChevronLeft, Columns2, Gauge, GitBranch, Grid2x2, Plus, Rows2, X } from "lucide-react";
 import { ConversationView } from "../conversation/ConversationView";
 import { Popover } from "../../design/Popover";
 import { FilesView } from "../files/FilesView";
@@ -9,10 +9,13 @@ import { BrainView } from "../brain/BrainView";
 import { PreviewView } from "../preview/PreviewView";
 import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { AutonomyPanel } from "../settings/AutonomyPanel";
+import { usePreferences } from "../settings/usePreferences";
+import { PerformanceHud } from "../performance/PerformanceHud";
 import { HistoricalTabBadge } from "../../shell/GlobalSearch";
 import { useI18n } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
 import { listSessions, type SessionKind } from "../../app/sessions";
+import { useWorkspace } from "../../app/workspace";
 import { setVisibleSessions } from "../../app/notifications";
 import { useEnvironment } from "../environment/useEnvironment";
 import { TerminalView } from "../terminal/TerminalView";
@@ -113,6 +116,10 @@ export function ProjectWorkspace({
   focusToken,
 }: ProjectWorkspaceProps) {
   const { t, locale } = useI18n();
+  const workspace = useWorkspace((state) => state.projects[project.id]);
+  const rememberArea = useWorkspace((state) => state.setArea);
+  const rememberView = useWorkspace((state) => state.setView);
+  const { prefs, setPerformanceHud } = usePreferences();
   const { report } = useEnvironment();
   const {
     tabs,
@@ -148,14 +155,14 @@ export function ProjectWorkspace({
   const active = activeTab[project.id];
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLButtonElement | null>(null);
-  const [view, setView] = useState<"terminal" | "conversation">("terminal");
-  const [area, setArea] = useState<Area>(focusArea ?? "sessions");
+  const view = workspace?.view ?? "terminal";
+  const area = (workspace?.area as Area | undefined) ?? focusArea ?? "sessions";
   // Files and Review are mounted the first time they are opened and stay
   // mounted after that, so returning to one keeps its open files, its scroll
   // position and its selected diff. Sessions is always mounted: unmounting it
   // would tear down every terminal in the project.
   const [visited, setVisited] = useState<Set<Area>>(
-    () => new Set<Area>(focusArea ? ["sessions", focusArea] : ["sessions"]),
+    () => new Set<Area>(area === "sessions" ? ["sessions"] : ["sessions", area]),
   );
 
   // Global Search (§51) landed here pointing at a specific past session. This
@@ -165,7 +172,7 @@ export function ProjectWorkspace({
   useEffect(() => {
     if (focusSessionId && focusSessionProvider) {
       openHistorical(project.id, focusSessionId, focusSessionProvider, focusSessionTitle);
-      setView("conversation");
+      rememberView(project.id, "conversation");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, focusSessionId, focusSessionProvider, focusSessionTitle]);
@@ -182,7 +189,7 @@ export function ProjectWorkspace({
   useEffect(() => {
     if (!focusToken || !focusArea) return;
     setVisited((seen) => (seen.has(focusArea) ? seen : new Set(seen).add(focusArea)));
-    setArea(focusArea);
+    rememberArea(project.id, focusArea);
     setWantedSession(focusSessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusToken]);
@@ -201,7 +208,7 @@ export function ProjectWorkspace({
 
   const goToArea = (next: Area) => {
     setVisited((seen) => (seen.has(next) ? seen : new Set(seen).add(next)));
-    setArea(next);
+    rememberArea(project.id, next);
   };
 
   const activeTab_ = projectTabs.find((tab) => tab.sessionId === active);
@@ -436,12 +443,26 @@ export function ProjectWorkspace({
                 aria-checked={view === mode}
                 data-active={view === mode || undefined}
                 className="workspace__view-option"
-                onClick={() => setView(mode)}
+                onClick={() => rememberView(project.id, mode)}
               >
                 {mode === "terminal" ? t("view.terminal") : t("view.conversation")}
               </button>
             ))}
           </div>
+        )}
+
+        {activeTab_ && !activeTab_.historical && (
+          <button
+            type="button"
+            className="workspace__stats-button"
+            data-active={prefs.performanceHudEnabled || undefined}
+            aria-pressed={prefs.performanceHudEnabled}
+            aria-label={t("performance.toggle")}
+            title={t("performance.toggle")}
+            onClick={() => void setPerformanceHud(!prefs.performanceHudEnabled)}
+          >
+            <Gauge size={13} strokeWidth={1.9} aria-hidden="true" />
+          </button>
         )}
         </div>
 
@@ -562,6 +583,12 @@ export function ProjectWorkspace({
               )}
             </div>
           ))
+        )}
+        {prefs.performanceHudEnabled && activeTab_ && !activeTab_.historical && (
+          <PerformanceHud
+            sessionId={activeTab_.sessionId}
+            onClose={() => void setPerformanceHud(false)}
+          />
         )}
         </div>
       </div>

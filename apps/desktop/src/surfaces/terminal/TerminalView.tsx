@@ -10,7 +10,6 @@ import { useT } from "../../app/i18n";
 import { useTheme } from "../../app/theme";
 import {
   attachSession,
-  replaySession,
   resizeSession,
   pasteImage,
   writeSession,
@@ -224,15 +223,19 @@ export function TerminalView({ sessionId, autoFocus = true }: TerminalViewProps)
     const start = async () => {
       fit.fit();
 
-      // Restore history before streaming, so output cannot interleave ahead of
-      // the scrollback it belongs after.
-      const history = await replaySession(sessionId);
-      if (disposed) return;
-      if (history.length > 0) term.write(history);
-
-      detach = await attachSession(sessionId, (bytes) => {
+      // Replay and live delivery cross one atomic boundary in the core. The
+      // attachment owns its detach, so cleanup from an older mount cannot
+      // disconnect this one during rapid project/tab switching.
+      const attached = await attachSession(sessionId, (bytes) => {
         term.write(bytes);
       });
+      if (disposed) {
+        attached.detach();
+        return;
+      }
+      if (attached.history.length > 0) term.write(attached.history);
+      detach = attached.detach;
+      attached.release();
       if (disposed) {
         detach();
         return;

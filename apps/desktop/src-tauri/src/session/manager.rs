@@ -90,7 +90,15 @@ pub struct SessionInfo {
 /// A message for the session's single log-writer thread.
 enum LogCommand {
     Append { kind: EventKind, payload: Vec<u8> },
+    /// Everything sent before this command is durable when the reply arrives.
+    /// Used to make terminal replay and live attachment one gap-free boundary.
+    Barrier(Sender<()>),
     Stop,
+}
+
+struct AttachedView {
+    id: String,
+    channel: Channel<InvokeResponseBody>,
 }
 
 /// A running session.
@@ -100,8 +108,11 @@ pub struct LiveSession {
     log_tx: Sender<LogCommand>,
     /// Whether a terminal view is currently rendering this session.
     view_attached: Arc<AtomicBool>,
-    /// The UI sink. Replaced whenever a view attaches or detaches.
-    sink: Arc<Mutex<Option<Channel<InvokeResponseBody>>>>,
+    /// The UI sink and the identity of the mount that owns it. A cleanup from
+    /// an older React mount must never detach a newer one.
+    sink: Arc<Mutex<Option<AttachedView>>>,
+    /// Serialises the pump's output boundary with replay + attachment.
+    view_gate: Arc<Mutex<()>>,
     state: Arc<Mutex<SessionState>>,
     /// Set when the session ends, so background followers wind down.
     stopped: Arc<AtomicBool>,
@@ -171,16 +182,43 @@ impl LiveSession {
     ///
     /// From here on the view answers terminal queries, so the core stops
     /// standing in for it.
-    pub fn attach(&self, channel: Channel<InvokeResponseBody>) {
-        *self.sink.lock() = Some(channel);
+    pub fn attach_with_replay<F>(
+        &self,
+        attachment_id: String,
+        ui_channel: Channel<InvokeResponseBody>,
+        replay: F,
+    ) -> Result<Vec<u8>>
+    where
+        F: FnOnce() -> Result<Vec<u8>>,
+    {
+        let _boundary = self.view_gate.lock();
+        let (done_tx, done_rx) = channel();
+        self.log_tx
+            .send(LogCommand::Barrier(done_tx))
+            .map_err(|_| SessionError::Refused("session.logClosed".into()))?;
+        done_rx
+            .recv()
+            .map_err(|_| SessionError::Refused("session.logClosed".into()))?;
+        let history = replay()?;
+        *self.sink.lock() = Some(AttachedView {
+            id: attachment_id,
+            channel: ui_channel,
+        });
         self.view_attached.store(true, Ordering::SeqCst);
+        Ok(history)
     }
 
     /// Detach the view. The session keeps running and keeps logging — closing a
     /// tab must never stop an agent that is mid-task (§32).
-    pub fn detach(&self) {
-        *self.sink.lock() = None;
+    pub fn detach(&self, attachment_id: &str) -> bool {
+        let _boundary = self.view_gate.lock();
+        let mut sink = self.sink.lock();
+        if !owns_attachment(sink.as_ref().map(|view| view.id.as_str()), attachment_id) {
+            return false;
+        }
+        *sink = None;
         self.view_attached.store(false, Ordering::SeqCst);
+        true
     }
 
     pub fn kill(&self) -> Result<()> {
@@ -255,6 +293,9 @@ impl SessionManager {
                                 tracing::error!(error = %e, "failed to append to the session log");
                             }
                         }
+                        LogCommand::Barrier(done) => {
+                            let _ = done.send(());
+                        }
                         LogCommand::Stop => break,
                     }
                 }
@@ -270,6 +311,7 @@ impl SessionManager {
             log_tx: log_tx.clone(),
             view_attached: Arc::new(AtomicBool::new(false)),
             sink: Arc::new(Mutex::new(None)),
+            view_gate: Arc::new(Mutex::new(())),
             state: Arc::new(Mutex::new(SessionState::Starting)),
             stopped: Arc::new(AtomicBool::new(false)),
             watch: Arc::new(Mutex::new(None)),
@@ -290,6 +332,7 @@ fn spawn_pump(
     log_tx: Sender<LogCommand>,
 ) {
     let sink = Arc::clone(&session.sink);
+    let view_gate = Arc::clone(&session.view_gate);
     let view_attached = Arc::clone(&session.view_attached);
     let state = Arc::clone(&session.state);
     let watch = Arc::clone(&session.watch);
@@ -299,26 +342,36 @@ fn spawn_pump(
         .name(format!("session-pump-{id}"))
         .spawn(move || {
             let mut pending: Vec<u8> = Vec::with_capacity(MAX_COALESCE);
+            let mut pending_owner: Option<String> = None;
             let mut last_flush = Instant::now();
 
-            let flush = |pending: &mut Vec<u8>| {
+            let flush = |pending: &mut Vec<u8>, pending_owner: &mut Option<String>| {
                 if pending.is_empty() {
+                    *pending_owner = None;
                     return;
                 }
-                if let Some(channel) = sink.lock().as_ref() {
+                let current = sink.lock();
+                if let Some(view) = current
+                    .as_ref()
+                    .filter(|view| pending_owner.as_deref() == Some(view.id.as_str()))
+                {
                     // Raw bytes, not JSON: the webview receives an ArrayBuffer,
                     // which xterm can consume directly. Decoding to a string
                     // here would corrupt UTF-8 split across read boundaries.
-                    let _ = channel.send(InvokeResponseBody::Raw(std::mem::take(pending)));
+                    let _ = view
+                        .channel
+                        .send(InvokeResponseBody::Raw(std::mem::take(pending)));
                 } else {
                     pending.clear();
                 }
+                *pending_owner = None;
             };
 
             loop {
                 let timeout = FLUSH_INTERVAL.saturating_sub(last_flush.elapsed());
                 match rx.recv_timeout(timeout) {
                     Ok(PtyEvent::Output(bytes)) => {
+                        let _boundary = view_gate.lock();
                         // The log is authoritative and gets every byte, exactly
                         // as read, regardless of what the UI does with it.
                         let _ = log_tx.send(LogCommand::Append {
@@ -350,14 +403,22 @@ fn spawn_pump(
                             }
                         }
 
-                        pending.extend_from_slice(&bytes);
+                        let owner = sink.lock().as_ref().map(|view| view.id.clone());
+                        if pending_owner != owner {
+                            pending.clear();
+                            pending_owner = owner;
+                        }
+                        if pending_owner.is_some() {
+                            pending.extend_from_slice(&bytes);
+                        }
                         if pending.len() >= MAX_COALESCE {
-                            flush(&mut pending);
+                            flush(&mut pending, &mut pending_owner);
                             last_flush = Instant::now();
                         }
                     }
                     Ok(PtyEvent::Exited(code)) => {
-                        flush(&mut pending);
+                        let _boundary = view_gate.lock();
+                        flush(&mut pending, &mut pending_owner);
                         let _ = log_tx.send(LogCommand::Append {
                             kind: EventKind::Lifecycle,
                             payload: serde_json::to_vec(&Lifecycle::Exited { code })
@@ -374,7 +435,8 @@ fn spawn_pump(
                         break;
                     }
                     Err(RecvTimeoutError::Timeout) => {
-                        flush(&mut pending);
+                        let _boundary = view_gate.lock();
+                        flush(&mut pending, &mut pending_owner);
                         last_flush = Instant::now();
                         // Quiet for a while means the agent is waiting on us.
                         let mut current = state.lock();
@@ -383,7 +445,8 @@ fn spawn_pump(
                         }
                     }
                     Err(RecvTimeoutError::Disconnected) => {
-                        flush(&mut pending);
+                        let _boundary = view_gate.lock();
+                        flush(&mut pending, &mut pending_owner);
                         let _ = log_tx.send(LogCommand::Stop);
                         break;
                     }
@@ -392,6 +455,10 @@ fn spawn_pump(
             tracing::debug!(session = %id, "session pump finished");
         })
         .expect("spawn session pump");
+}
+
+fn owns_attachment(current: Option<&str>, requested: &str) -> bool {
+    current == Some(requested)
 }
 
 /// Naive substring search over bytes. The haystack is a single PTY read and the
@@ -419,6 +486,13 @@ mod tests {
         assert!(contains(b"prefix\x1b[6nsuffix", DSR_QUERY));
         assert!(!contains(b"\x1b[6", DSR_QUERY));
         assert!(!contains(b"", DSR_QUERY));
+    }
+
+    #[test]
+    fn a_stale_detach_cannot_own_a_newer_attachment() {
+        assert!(owns_attachment(Some("new-view"), "new-view"));
+        assert!(!owns_attachment(Some("new-view"), "old-view"));
+        assert!(!owns_attachment(None, "old-view"));
     }
 
     /// End-to-end proof that a session with **no view attached** still runs.

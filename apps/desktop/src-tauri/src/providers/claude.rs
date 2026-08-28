@@ -103,15 +103,10 @@ pub fn folder_is_trusted(cwd: &Path) -> Option<bool> {
     folder_is_trusted_in(&root, true, cwd)
 }
 
-/// Account-scoped trust lookup. The machine account keeps `.claude.json`
-/// beside its default `.claude/` directory; an explicit CLAUDE_CONFIG_DIR
-/// carries the file inside that directory (verified against 2.1.241).
-pub fn folder_is_trusted_in(config_dir: &Path, adopted: bool, cwd: &Path) -> Option<bool> {
-    let config = if adopted {
-        config_dir.parent()?.join(".claude.json")
-    } else {
-        config_dir.join(".claude.json")
-    };
+/// Account-scoped trust lookup. Every registered account uses an explicit
+/// `CLAUDE_CONFIG_DIR`; `adopted` describes its origin, not its runtime path.
+pub fn folder_is_trusted_in(config_dir: &Path, _adopted: bool, cwd: &Path) -> Option<bool> {
+    let config = config_dir.join(".claude.json");
     trusted_in(&std::fs::read_to_string(config).ok()?, cwd)
 }
 

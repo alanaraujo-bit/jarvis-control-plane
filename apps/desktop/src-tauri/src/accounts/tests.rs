@@ -79,10 +79,13 @@ fn insert_session(db: &Database, account_id: &str) {
 }
 
 #[test]
-fn an_adopted_account_keeps_provider_defaults_while_an_added_one_gets_an_override() {
+fn every_registered_account_gets_a_private_provider_root() {
     let mut adopted = account("machine", "claude-code", 0, true);
     adopted.adopted = true;
-    assert!(session_env(&adopted).is_empty());
+    assert_eq!(
+        session_env(&adopted),
+        vec![("CLAUDE_CONFIG_DIR".into(), "C:/accounts/machine".into())]
+    );
 
     let added = account("second", "claude-code", 1, false);
     assert_eq!(
@@ -227,6 +230,34 @@ fn rotation_refuses_a_second_directory_signed_into_the_same_account() {
 }
 
 #[test]
+fn rotation_chooses_the_account_with_the_most_headroom() {
+    let db = Database::open_in_memory().unwrap();
+    insert(&db, &account("a", "claude-code", 0, true));
+    insert(&db, &account("b", "claude-code", 1, false));
+    insert(&db, &account("c", "claude-code", 2, false));
+    let now = now_ms();
+    db.with(|conn| {
+        for (id, used) in [("b", 78.0), ("c", 12.0)] {
+            conn.execute(
+                "INSERT INTO account_limit_events
+                     (account_id, ts_ms, window, status, resets_at_ms, percent)
+                 VALUES (?1, ?2, 'five_hour', 'ok', ?3, ?4)",
+                rusqlite::params![id, now, now + 60 * 60 * 1_000, used],
+            )?;
+        }
+        Ok(())
+    })
+    .unwrap();
+
+    assert_eq!(
+        switch::next_available(&db, &active(&db, "claude-code").unwrap())
+            .map(|account| account.id),
+        Some("c".into()),
+        "the next position is not useful when another account has substantially more quota"
+    );
+}
+
+#[test]
 fn an_account_with_no_email_is_unknown_rather_than_everyone_else() {
     // Codex 0.149.1 stopped writing `id_token_claims`, so nameless accounts are
     // a real state. Grouping them together would strand rotation on a provider
@@ -348,21 +379,94 @@ fn rotation_skips_a_directory_on_the_same_subscription() {
     );
 }
 
-/// `.claude.json` is not inside the adopted account's configuration directory.
+/// Origin no longer changes where Claude reads account metadata.
 #[test]
-fn the_adopted_accounts_config_file_is_in_the_home_directory() {
+fn every_claude_accounts_config_file_is_inside_its_private_root() {
     let dir = std::path::Path::new("C:/Users/someone/.claude");
     let adopted = claude_identity_file(dir, true).unwrap();
-    assert!(
-        !adopted.starts_with(dir),
-        "the machine account runs with CLAUDE_CONFIG_DIR unset, so its config \
-         file stays at $HOME/.claude.json; reading the stub inside ~/.claude \
-         finds no account uuid and silently restores the bug (got {adopted:?})"
-    );
-    assert!(adopted.ends_with(".claude.json"));
+    assert_eq!(adopted, dir.join(".claude.json"));
 
     let created = claude_identity_file(dir, false).unwrap();
     assert_eq!(created, dir.join(".claude.json"));
+}
+
+#[test]
+fn codex_file_credentials_are_a_root_key_even_when_tables_exist() {
+    let root = std::env::temp_dir().join(format!(
+        "jarvis-codex-config-{}",
+        crate::session::manager::new_session_id()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("config.toml"),
+        "model = \"gpt-test\"\n[profiles.work]\nmodel = \"gpt-work\"\n",
+    )
+    .unwrap();
+
+    enforce_codex_file_credentials(&root).unwrap();
+    let text = std::fs::read_to_string(root.join("config.toml")).unwrap();
+    let key = text.find("cli_auth_credentials_store").unwrap();
+    let table = text.find("[profiles.work]").unwrap();
+    assert!(key < table, "the key must stay at TOML root scope");
+    assert!(text.contains("cli_auth_credentials_store = \"file\""));
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn importing_provider_state_copies_auth_but_not_session_history() {
+    let root = std::env::temp_dir().join(format!(
+        "jarvis-account-import-{}",
+        crate::session::manager::new_session_id()
+    ));
+    let source = root.join("source");
+    let target = root.join("target");
+    std::fs::create_dir_all(source.join("sessions")).unwrap();
+    std::fs::create_dir_all(&target).unwrap();
+    let opaque = br#"{"tokens":{"access_token":"never parsed"}}"#;
+    std::fs::write(source.join("auth.json"), opaque).unwrap();
+    std::fs::write(source.join("sessions").join("old.jsonl"), "history").unwrap();
+    std::fs::write(
+        source.join("config.toml"),
+        "cli_auth_credentials_store = \"keyring\"\n[profiles.work]\nmodel = \"x\"\n",
+    )
+    .unwrap();
+
+    copy_provider_state("codex", &source, &target).unwrap();
+    enforce_codex_file_credentials(&target).unwrap();
+    assert_eq!(std::fs::read(target.join("auth.json")).unwrap(), opaque);
+    assert!(!target.join("sessions").exists());
+    assert!(
+        std::fs::read_to_string(target.join("config.toml"))
+            .unwrap()
+            .contains("cli_auth_credentials_store = \"file\"")
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn codex_without_decoded_claims_does_not_leave_identity_permanently_stale() {
+    let root = std::env::temp_dir().join(format!(
+        "jarvis-codex-identity-{}",
+        crate::session::manager::new_session_id()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("auth.json"),
+        r#"{"tokens":{"id_token":"opaque","access_token":"opaque"}}"#,
+    )
+    .unwrap();
+    let mut row = account("codex", "codex", 0, true);
+    row.config_dir = root.to_string_lossy().to_string();
+    row.email = Some("known@example.test".into());
+    row.checked_at = Some(now_ms());
+
+    assert!(
+        !identity_is_stale(&row),
+        "an omitted claim is unknown; it cannot contradict the identity read \
+         through account/read and reopen the gate on every panel paint"
+    );
+    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

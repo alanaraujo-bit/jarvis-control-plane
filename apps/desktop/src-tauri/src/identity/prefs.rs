@@ -64,6 +64,11 @@ pub const MACHINE_CARRIED: &[&str] = &[
     crate::notify::ENABLED_KEY,
     crate::notify::SYSTEM_KEY,
     crate::notify::SOUND_KEY,
+    // The performance HUD. `usePreferences` already called `remember` for it;
+    // the call returned `identity.notCarried` into a silent `.catch`, so the
+    // switch looked like it followed the person and never did. An allowlist is
+    // only closed when both halves are closed at the same time.
+    crate::settings::PERFORMANCE_HUD_ENABLED_KEY,
 ];
 
 /// Every key an account may hold, machine-mirrored or not.

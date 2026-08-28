@@ -98,6 +98,8 @@ pub struct Preferences {
     /// while the application is behind something else.
     pub notifications_system: bool,
     pub notifications_sound: bool,
+    /// Compact live statistics over the focused session.
+    pub performance_hud_enabled: bool,
 }
 
 /// Terminal type size, in CSS pixels.
@@ -115,6 +117,8 @@ pub const DEFAULT_TERMINAL_SCROLLBACK: u32 = 20_000;
 pub const MIN_TERMINAL_SCROLLBACK: u32 = 1_000;
 pub const MAX_TERMINAL_SCROLLBACK: u32 = 100_000;
 
+pub const PERFORMANCE_HUD_ENABLED_KEY: &str = "performance.hudEnabled";
+
 #[tauri::command]
 pub fn settings_preferences(state: tauri::State<'_, crate::AppState>) -> Preferences {
     let db = &state.db;
@@ -127,7 +131,19 @@ pub fn settings_preferences(state: tauri::State<'_, crate::AppState>) -> Prefere
         notifications_enabled: get_or(db, crate::notify::ENABLED_KEY, true),
         notifications_system: get_or(db, crate::notify::SYSTEM_KEY, true),
         notifications_sound: get_or(db, crate::notify::SOUND_KEY, true),
+        // Opt-in: this panel deliberately sits over working content.
+        performance_hud_enabled: get_or(db, PERFORMANCE_HUD_ENABLED_KEY, false),
     }
+}
+
+/// Show or hide the live performance HUD.
+#[tauri::command]
+pub fn settings_set_performance_hud(
+    state: tauri::State<'_, crate::AppState>,
+    value: bool,
+) -> Result<Preferences> {
+    set(&state.db, PERFORMANCE_HUD_ENABLED_KEY, &value)?;
+    Ok(settings_preferences(state))
 }
 
 /// Turn one of the notification switches on or off (§49, §64).

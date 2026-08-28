@@ -35,6 +35,7 @@
 //! to this file and nothing else.
 
 pub mod commands;
+pub mod sync;
 
 #[cfg(test)]
 mod tests;
@@ -164,8 +165,8 @@ pub fn create_notebook(db: &Database, name: &str) -> Result<String> {
             )
             .unwrap_or(0);
         conn.execute(
-            "INSERT INTO notebooks (id, name, position, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?4)",
+            "INSERT INTO notebooks (id, name, position, created_at, updated_at, touched_at)
+             VALUES (?1, ?2, ?3, ?4, ?4, ?4)",
             params![stored, name, next, now],
         )?;
         Ok(())
@@ -183,7 +184,7 @@ pub fn rename_notebook(db: &Database, id: &str, name: &str) -> Result<()> {
     let (id, name) = (id.to_string(), name.to_string());
     db.with(move |conn| {
         conn.execute(
-            "UPDATE notebooks SET name = ?2, updated_at = ?3 WHERE id = ?1",
+            "UPDATE notebooks SET name = ?2, updated_at = ?3, touched_at = ?3 WHERE id = ?1",
             params![id, name, now_ms()],
         )?;
         Ok(())
@@ -202,7 +203,17 @@ pub fn rename_notebook(db: &Database, id: &str, name: &str) -> Result<()> {
 pub fn delete_notebook(db: &Database, id: &str) -> Result<()> {
     let id = id.to_string();
     db.with(move |conn| {
+        let now = now_ms();
+        // The notes are about to be unfiled by `ON DELETE SET NULL`, and that
+        // is an edit another machine has to hear about. Touched *before* the
+        // delete, while they can still be found by folder -- afterwards their
+        // `notebook_id` is NULL and there is nothing left to select them by.
+        conn.execute(
+            "UPDATE notebook_notes SET touched_at = ?2 WHERE notebook_id = ?1",
+            params![&id, now],
+        )?;
         conn.execute("DELETE FROM notebooks WHERE id = ?1", [&id])?;
+        sync::bury(conn, "notebook", &id, now)?;
         Ok(())
     })
     .map_err(|e| e.to_string())
@@ -226,8 +237,8 @@ pub fn create_note(db: &Database, notebook_id: Option<&str>) -> Result<String> {
         let now = now_ms();
         conn.execute(
             "INSERT INTO notebook_notes
-                 (id, notebook_id, title, body, pinned, created_at, updated_at)
-             VALUES (?1, ?2, '', '', 0, ?3, ?3)",
+                 (id, notebook_id, title, body, pinned, created_at, updated_at, touched_at)
+             VALUES (?1, ?2, '', '', 0, ?3, ?3, ?3)",
             params![stored, notebook_id, now],
         )?;
         Ok(())
@@ -246,7 +257,8 @@ pub fn update_note(db: &Database, id: &str, title: &str, body: &str) -> Result<(
     let (id, title, body) = (id.to_string(), title.to_string(), body.to_string());
     db.with(move |conn| {
         conn.execute(
-            "UPDATE notebook_notes SET title = ?2, body = ?3, updated_at = ?4 WHERE id = ?1",
+            "UPDATE notebook_notes SET title = ?2, body = ?3, updated_at = ?4, touched_at = ?4
+              WHERE id = ?1",
             params![id, title, body, now_ms()],
         )?;
         Ok(())
@@ -261,8 +273,8 @@ pub fn set_note_pinned(db: &Database, id: &str, pinned: bool) -> Result<()> {
     let id = id.to_string();
     db.with(move |conn| {
         conn.execute(
-            "UPDATE notebook_notes SET pinned = ?2 WHERE id = ?1",
-            params![id, pinned as i64],
+            "UPDATE notebook_notes SET pinned = ?2, touched_at = ?3 WHERE id = ?1",
+            params![id, pinned as i64, now_ms()],
         )?;
         Ok(())
     })
@@ -276,8 +288,8 @@ pub fn move_note(db: &Database, id: &str, notebook_id: Option<&str>) -> Result<(
     let (id, notebook_id) = (id.to_string(), notebook_id.map(str::to_string));
     db.with(move |conn| {
         conn.execute(
-            "UPDATE notebook_notes SET notebook_id = ?2 WHERE id = ?1",
-            params![id, notebook_id],
+            "UPDATE notebook_notes SET notebook_id = ?2, touched_at = ?3 WHERE id = ?1",
+            params![id, notebook_id, now_ms()],
         )?;
         Ok(())
     })
@@ -298,8 +310,8 @@ pub fn duplicate_note(db: &Database, id: &str) -> Result<String> {
         let now = now_ms();
         conn.execute(
             "INSERT INTO notebook_notes
-                 (id, notebook_id, title, body, pinned, created_at, updated_at)
-             SELECT ?1, notebook_id, title, body, 0, ?2, ?2
+                 (id, notebook_id, title, body, pinned, created_at, updated_at, touched_at)
+             SELECT ?1, notebook_id, title, body, 0, ?2, ?2, ?2
                FROM notebook_notes WHERE id = ?3",
             params![stored, now, source],
         )?;
@@ -315,6 +327,7 @@ pub fn delete_note(db: &Database, id: &str) -> Result<()> {
     let id = id.to_string();
     db.with(move |conn| {
         conn.execute("DELETE FROM notebook_notes WHERE id = ?1", [&id])?;
+        sync::bury(conn, "note", &id, now_ms())?;
         Ok(())
     })
     .map_err(|e| e.to_string())

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { projectWorkspace, useWorkspace } from "../../app/workspace";
 import {
   closeSession,
   startSession,
@@ -226,17 +227,34 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
   adopt: (projectId, sessions) =>
     set((state) => {
       if (state.tabs[projectId]?.length) return state;
-      const tabs = sessions
+      const discovered = sessions
         .filter((s) => s.live)
         .map<TerminalTab>((s, index) => ({
           sessionId: s.id,
           kind: (s.provider as SessionKind) ?? "shell",
           title: s.title ?? `${TITLES[(s.provider as SessionKind) ?? "shell"]}${index ? ` ${index + 1}` : ""}`,
         }));
+      const saved = projectWorkspace(projectId);
+      const byId = new Map(discovered.map((tab) => [tab.sessionId, tab]));
+      const tabs = [
+        ...saved.sessionOrder.map((id) => byId.get(id)).filter((tab): tab is TerminalTab => !!tab),
+        ...discovered.filter((tab) => !saved.sessionOrder.includes(tab.sessionId)),
+      ];
       if (tabs.length === 0) return state;
+      const ids = new Set(tabs.map((tab) => tab.sessionId));
+      const active =
+        saved.activeSessionId && ids.has(saved.activeSessionId)
+          ? saved.activeSessionId
+          : tabs[0].sessionId;
+      const restoredSlots = saved.paneSessionIds.filter((id) => ids.has(id));
       return {
         tabs: { ...state.tabs, [projectId]: tabs },
-        activeTab: { ...state.activeTab, [projectId]: tabs[0].sessionId },
+        activeTab: { ...state.activeTab, [projectId]: active },
+        slots: {
+          ...state.slots,
+          [projectId]: restoredSlots.length > 1 ? restoredSlots : [],
+        },
+        direction: { ...state.direction, [projectId]: saved.splitDirection },
       };
     }),
 
@@ -298,3 +316,33 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
   setDirection: (projectId, direction) =>
     set((state) => ({ direction: { ...state.direction, [projectId]: direction } })),
 }));
+
+// Session layout has one durable owner even though the terminal store remains
+// optimised for hot rendering. Every transition snapshots the affected
+// project; the workspace store coalesces writes before crossing into SQLite.
+useTerminals.subscribe((state, previous) => {
+  const projectIds = new Set([
+    ...Object.keys(state.tabs),
+    ...Object.keys(previous.tabs),
+    ...Object.keys(state.slots),
+    ...Object.keys(previous.slots),
+  ]);
+  const workspace = useWorkspace.getState();
+  for (const projectId of projectIds) {
+    if (
+      state.tabs[projectId] === previous.tabs[projectId] &&
+      state.activeTab[projectId] === previous.activeTab[projectId] &&
+      state.slots[projectId] === previous.slots[projectId] &&
+      state.direction[projectId] === previous.direction[projectId]
+    ) {
+      continue;
+    }
+    workspace.captureSessions(
+      projectId,
+      (state.tabs[projectId] ?? []).map((tab) => tab.sessionId),
+      state.activeTab[projectId],
+      state.slots[projectId] ?? [],
+      state.direction[projectId] ?? "columns",
+    );
+  }
+});

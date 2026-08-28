@@ -24,14 +24,15 @@
 //!    new work starts on the next one" — the thing this feature exists for —
 //!    is mechanically impossible with a single global credential file.
 //!
-//! ## The account already on this machine is adopted, never copied
+//! ## The account already on this machine is imported once, then isolated
 //!
-//! The first row this product creates points at the real `~/.claude`. Nothing
-//! is copied out of it, nothing is written into it, and removing that account
-//! from J.A.R.V.I.S. never deletes the directory. Accounts added afterwards get
-//! a directory of ours under the app data dir, and the person signs into it
-//! through the provider's own login flow — we never handle a password, and no
-//! secret from any of these directories is read, stored, or shown (§60/§61).
+//! Pointing the first row at the real `~/.claude` / `~/.codex` looked harmless,
+//! but made VS Code and an external terminal capable of changing J.A.R.V.I.S.'
+//! active account behind its back. The first launch now copies the minimum
+//! provider state into an app-owned directory and every provider process gets
+//! an explicit config root. The machine directory is never modified or deleted.
+//! `adopted` records the account's origin and keeps it non-removable; it no
+//! longer means "use ambient global state".
 
 pub mod commands;
 pub mod live;
@@ -77,8 +78,8 @@ pub struct Account {
     /// person debugging a stuck account needs to know which directory it is,
     /// and it is a path, not a credential.
     pub config_dir: String,
-    /// True for the machine's own directory, which this product did not create
-    /// and will not delete.
+    /// True for an account imported from the machine. Its private copy is not
+    /// removable from the UI, and the source machine directory is never touched.
     pub adopted: bool,
     pub email: Option<String>,
     /// The provider's own identifier for the subscription behind this
@@ -148,16 +149,11 @@ pub fn config_env_key(provider: &str) -> Option<&'static str> {
 
 /// Environment a session needs to run on this account.
 ///
-/// Empty for the adopted account **on purpose**: leaving the variable unset is
-/// not the same as setting it to the same path. Claude Code treats an unset
-/// `CLAUDE_CONFIG_DIR` as its own default and takes a different code path for
-/// an explicit one, and a product that always sets it would change the
-/// behaviour of the account that was working perfectly before this feature
-/// existed. The default stays the default.
+/// Every registered account gets an explicit root, including the account that
+/// was imported from the machine. An ambient root is shared mutable state: an
+/// IDE login or `codex logout` in another terminal would otherwise change the
+/// account underneath a running J.A.R.V.I.S. session.
 pub fn session_env(account: &Account) -> Vec<(String, String)> {
-    if account.adopted {
-        return Vec::new();
-    }
     match config_env_key(&account.provider) {
         Some(key) => vec![(key.to_string(), account.config_dir.clone())],
         None => Vec::new(),
@@ -354,22 +350,11 @@ pub fn parse_codex_identity(json: &str) -> Option<Identity> {
 
 /// Where Claude Code keeps the non-secret half of an account's config.
 ///
-/// **The adopted account's file is not inside its config directory.** With
-/// `CLAUDE_CONFIG_DIR` set, `.claude.json` travels with the directory; with it
-/// unset — which is exactly how the adopted account is run, deliberately, see
-/// `session_env` — the file stays at `$HOME/.claude.json` and the one inside
-/// `~/.claude` is a small unrelated stub with no `oauthAccount` in it. Measured
-/// on this machine: 87 KB with the account against 343 bytes without.
-///
-/// Joining `config_dir` unconditionally would therefore read the stub, find no
-/// uuid, fall back to the e-mail, and quietly reinstate the very bug this
-/// exists to close.
-pub fn claude_identity_file(config_dir: &Path, adopted: bool) -> Option<PathBuf> {
-    if adopted {
-        Some(home()?.join(".claude.json"))
-    } else {
-        Some(config_dir.join(".claude.json"))
-    }
+/// All registered accounts run with an explicit `CLAUDE_CONFIG_DIR`, so the
+/// non-secret account metadata travels inside that directory. The `adopted`
+/// argument remains for API compatibility and records origin only.
+pub fn claude_identity_file(config_dir: &Path, _adopted: bool) -> Option<PathBuf> {
+    Some(config_dir.join(".claude.json"))
 }
 
 /// Read `oauthAccount` out of a Claude Code config file.
@@ -445,7 +430,14 @@ pub fn identity_is_stale(account: &Account) -> bool {
         {
             Some(identity) => {
                 identity.signed_in != account.signed_in
-                    || !same_text(&identity.email, &account.email)
+                    // Current Codex builds can omit decoded claims and keep
+                    // only the raw token. Missing e-mail is unknown, not a
+                    // contradiction that should keep this gate open forever.
+                    || identity
+                        .email
+                        .as_ref()
+                        .map(|_| !same_text(&identity.email, &account.email))
+                        .unwrap_or(false)
             }
             None => account.signed_in,
         },
@@ -503,12 +495,10 @@ fn same_text(a: &Option<String>, b: &Option<String>) -> bool {
 pub fn read_identity(provider: &str, config_dir: &Path, adopted: bool) -> Option<Identity> {
     match provider {
         "claude-code" => {
-            let env = (!adopted).then(|| {
-                (
-                    "CLAUDE_CONFIG_DIR".to_string(),
-                    config_dir.to_string_lossy().to_string(),
-                )
-            });
+            let env = Some((
+                "CLAUDE_CONFIG_DIR".to_string(),
+                config_dir.to_string_lossy().to_string(),
+            ));
             let out = crate::envscan::run_tool("claude", &["auth", "status", "--json"], env)?;
             let mut identity = parse_claude_identity(&out)?;
             identity.account_uuid = claude_account_uuid(config_dir, adopted, &identity);
@@ -704,6 +694,200 @@ pub fn adopt_machine_account(db: &Database, provider: &str) -> Result<Option<Str
     Ok(Some(id))
 }
 
+/// Move every machine-adopted row onto an app-owned configuration root.
+///
+/// This is a one-time import, not a sync. Once the database points at the
+/// private directory, later logins and logouts in VS Code or an external
+/// terminal cannot alter the account J.A.R.V.I.S. sees. The source is copied,
+/// never changed, and the database is updated only after a complete staging
+/// directory has been renamed into place.
+pub fn isolate_adopted_accounts(db: &Database, data_dir: &Path) -> Result<()> {
+    for account in list(db)?.into_iter().filter(|account| account.adopted) {
+        let Some(source) = machine_config_dir(&account.provider) else {
+            continue;
+        };
+        let target = data_dir
+            .join("accounts")
+            .join(&account.provider)
+            .join(&account.id);
+
+        if same_path_text(Path::new(&account.config_dir), &target) {
+            if account.provider == "codex" {
+                enforce_codex_file_credentials(&target)?;
+            }
+            continue;
+        }
+        // Only legacy rows that still point at the provider default are
+        // eligible. Never copy from an arbitrary path merely because a bit in
+        // the database says "adopted".
+        if !same_path_text(Path::new(&account.config_dir), &source) {
+            continue;
+        }
+
+        let marker = target.join(".jarvis-isolated");
+        if !marker.is_file() {
+            if target.exists() {
+                return Err(format!(
+                    "refusing to replace an existing account directory: {}",
+                    target.display()
+                ));
+            }
+            let staging = target.with_extension("jarvis-importing");
+            if staging.exists() {
+                // The path is derived entirely below app data and names only
+                // our interrupted staging directory.
+                std::fs::remove_dir_all(&staging).map_err(|e| e.to_string())?;
+            }
+            std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+            copy_provider_state(&account.provider, &source, &staging)?;
+            if account.provider == "claude-code" {
+                if let Some(identity) = home().map(|home| home.join(".claude.json")) {
+                    copy_file_if_present(&identity, &staging.join(".claude.json"))?;
+                }
+            }
+            if account.provider == "codex" {
+                enforce_codex_file_credentials(&staging)?;
+            }
+            std::fs::write(staging.join(".jarvis-isolated"), b"1\n")
+                .map_err(|e| e.to_string())?;
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            std::fs::rename(&staging, &target).map_err(|e| e.to_string())?;
+        }
+
+        db.with(|conn| {
+            conn.execute(
+                "UPDATE provider_accounts SET config_dir = ?2 WHERE id = ?1",
+                params![account.id, target.to_string_lossy()],
+            )?;
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
+    }
+    // Accounts created by older builds already had private CODEX_HOME paths,
+    // but could still fall through to the shared OS keyring. Harden those too.
+    for account in list(db)?.into_iter().filter(|account| account.provider == "codex") {
+        let root = Path::new(&account.config_dir);
+        if root.is_dir() {
+            enforce_codex_file_credentials(root)?;
+        }
+    }
+    Ok(())
+}
+
+fn same_path_text(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => {
+            let clean = |path: &Path| {
+                let text = path.to_string_lossy().replace('\\', "/");
+                if cfg!(windows) {
+                    text.to_lowercase()
+                } else {
+                    text
+                }
+            };
+            clean(a).trim_end_matches('/') == clean(b).trim_end_matches('/')
+        }
+    }
+}
+
+/// Copy provider state while excluding histories and caches. Credentials are
+/// copied as opaque files; their contents are never parsed or logged.
+fn copy_provider_state(provider: &str, source: &Path, target: &Path) -> Result<()> {
+    let excluded: &[&str] = match provider {
+        "claude-code" => &["projects", "debug", "cache", "session-env", "todos"],
+        "codex" => &[
+            "sessions",
+            "archived_sessions",
+            "log",
+            "logs",
+            "shell_snapshots",
+            "tmp",
+        ],
+        _ => return Err("accounts.unknownProvider".into()),
+    };
+    copy_tree(source, target, excluded, true)
+}
+
+fn copy_tree(source: &Path, target: &Path, excluded: &[&str], top_level: bool) -> Result<()> {
+    let entries = std::fs::read_dir(source).map_err(|e| e.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name();
+        let name_text = name.to_string_lossy();
+        if top_level
+            && (excluded.iter().any(|value| name_text.eq_ignore_ascii_case(value))
+                || matches!(name_text.as_ref(), "history.jsonl" | "models_cache.json"))
+        {
+            continue;
+        }
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        let destination = target.join(&name);
+        if kind.is_dir() {
+            std::fs::create_dir_all(&destination).map_err(|e| e.to_string())?;
+            copy_tree(&entry.path(), &destination, excluded, false)?;
+        } else if kind.is_file() {
+            copy_file_if_present(&entry.path(), &destination)?;
+        }
+        // Symlinks and junction-like entries are deliberately not followed:
+        // an account import must never escape the provider root it was given.
+    }
+    Ok(())
+}
+
+fn copy_file_if_present(source: &Path, target: &Path) -> Result<()> {
+    if !source.is_file() {
+        return Ok(());
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::copy(source, target)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Codex can otherwise choose the OS credential store, which is shared by the
+/// IDE extension and every CLI home. File storage makes `CODEX_HOME` the actual
+/// authentication boundary documented by Codex.
+fn enforce_codex_file_credentials(root: &Path) -> Result<()> {
+    let path = root.join("config.toml");
+    let current = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut found = false;
+    let mut root_scope = true;
+    let mut lines = Vec::new();
+    for line in current.lines() {
+        if line.trim_start().starts_with('[') {
+            root_scope = false;
+        }
+        if root_scope
+            && line
+            .trim_start()
+            .starts_with("cli_auth_credentials_store")
+        {
+            lines.push("cli_auth_credentials_store = \"file\"".to_string());
+            found = true;
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    if !found {
+        let first_table = lines
+            .iter()
+            .position(|line| line.trim_start().starts_with('['))
+            .unwrap_or(lines.len());
+        lines.insert(first_table, "cli_auth_credentials_store = \"file\"".to_string());
+    }
+    let mut rendered = lines.join("\n");
+    rendered.push('\n');
+    if rendered != current {
+        std::fs::write(path, rendered).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Create a new account, with its own configuration directory.
 ///
 /// The directory is created empty. Nothing is copied from another account —
@@ -718,6 +902,9 @@ pub fn create(db: &Database, provider: &str, data_dir: &Path, label: &str) -> Re
     let id = crate::session::manager::new_session_id();
     let dir = data_dir.join("accounts").join(provider).join(&id);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    if provider == "codex" {
+        enforce_codex_file_credentials(&dir)?;
+    }
     let dir_text = dir.to_string_lossy().to_string();
     let ts = now_ms();
     // An unnamed account is stored unnamed. See `Account::label`.

@@ -20,6 +20,7 @@ mod mission;
 mod notebook;
 mod notify;
 mod onboarding;
+mod performance;
 mod preview;
 mod project;
 mod providers;
@@ -31,6 +32,7 @@ mod session;
 mod settings;
 mod social;
 mod voice;
+mod workspace;
 mod window;
 mod worktrees;
 
@@ -169,6 +171,23 @@ pub fn run() {
                     tracing::warn!(%error, %provider, "could not adopt machine account");
                 }
             }
+            // From this point on every provider process is pinned to app-owned
+            // state. External IDE/terminal logins may change the machine roots,
+            // but can no longer change an account underneath J.A.R.V.I.S.
+            if let Err(error) = accounts::isolate_adopted_accounts(&db, &data_dir) {
+                tracing::error!(%error, "refusing to start with shared provider accounts");
+                use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                app.dialog()
+                    .message(format!(
+                        "J.A.R.V.I.S. could not isolate its Claude/Codex accounts.\n\n\
+                         It will not start using shared credentials because a login in VS Code or \
+                         another terminal could change the account underneath it.\n\n{error}"
+                    ))
+                    .title("J.A.R.V.I.S.")
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+                std::process::exit(1);
+            }
 
             // Everything said in a session recorded before Global Search
             // existed is on disk and not in the index (D25). This walks those
@@ -209,6 +228,14 @@ pub fn run() {
             if let Err(error) = notify::store::prune(&db, notify::commands::KEEP_ON_DISK) {
                 tracing::warn!(%error, "could not prune old notifications");
             }
+
+            // Read the signed-in account's state back from the cloud, once.
+            // Off the startup path in a thread of its own (D30's rule), and
+            // silent when there is no session or no network — see
+            // `identity::cloud::spawn_pull`. Until M23 nothing in the whole
+            // application ever called `GET /v1/sync/state`, which made the
+            // cloud a place data went and never came back from.
+            identity::cloud::spawn_pull(app.handle().clone(), Arc::clone(&db));
 
             let attention = Arc::new(notify::Attention::default());
             attention.set_enabled(notify::enabled(&db));
@@ -356,16 +383,20 @@ pub fn run() {
             settings::settings_preferences,
             settings::settings_set_preference,
             settings::settings_set_notification,
+            settings::settings_set_performance_hud,
             preview::preview_detect,
             preview::preview_open,
             preview::preview_reload,
             preview::preview_close,
             preview::preview_is_open,
+            performance::system_metrics,
             voice::voice_model_status,
             voice::voice_download_model,
             voice::voice_start_recording,
             voice::voice_cancel_recording,
             voice::voice_stop_recording,
+            workspace::workspace_snapshot,
+            workspace::workspace_save,
         ])
         .run(tauri::generate_context!())
         .expect("error while running J.A.R.V.I.S.");

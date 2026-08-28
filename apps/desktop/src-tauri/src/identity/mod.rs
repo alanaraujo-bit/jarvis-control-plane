@@ -350,6 +350,24 @@ pub fn sign_up(
     email: &str,
     password: &str,
 ) -> Result<SignUpOutcome> {
+    sign_up_as(db, display_name, email, password, None)
+}
+
+/// The same thing, with the account's id supplied.
+///
+/// The id is the one thing about an account that has to be the same on two
+/// machines, and only the server can decide it. When a signup reached the
+/// server first, this is how its answer becomes the local row -- rather than
+/// creating a local id and reconciling two of them later, which is a mapping
+/// table and a class of bug (`upsert_google` already carries the one case where
+/// the ids legitimately differ, and one is enough).
+pub fn sign_up_as(
+    db: &Database,
+    display_name: &str,
+    email: &str,
+    password: &str,
+    id: Option<&str>,
+) -> Result<SignUpOutcome> {
     let name = display_name.trim();
     if name.is_empty() {
         return Ok(SignUpOutcome::NameRequired);
@@ -368,7 +386,9 @@ pub fn sign_up(
     }
 
     let hash = hash_password(password)?;
-    let id = uuid::Uuid::now_v7().to_string();
+    let id = id
+        .map(str::to_string)
+        .unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
     let now = now_ms();
 
     db.with(|conn| {
@@ -459,6 +479,67 @@ pub fn upsert_google(
     }).map_err(|error| error.to_string())?;
     prefs::adopt_machine_settings(db, remote_id)?;
     Ok(remote_id.to_string())
+}
+
+/// Make a local row for an account the **server** has just authenticated.
+///
+/// Used when somebody signs in on a machine that has never seen them -- a fresh
+/// install, which is the whole point of M23. The password is hashed locally as
+/// well, so the next sign-in works with no network: the server proved it once,
+/// and this machine can prove it again on its own afterwards.
+///
+/// Also the repair path for a password changed on another machine: the local
+/// hash is replaced with one for the password that just worked, rather than
+/// being left to refuse a password the person is entering correctly.
+pub fn adopt_remote(
+    db: &Database,
+    id: &str,
+    email: &str,
+    display_name: &str,
+    password: &str,
+) -> Result<String> {
+    let email = normalise_email(email);
+    let name = display_name.trim();
+    let hash = hash_password(password)?;
+    let now = now_ms();
+
+    // Matched on e-mail as well as on id, for the case that made this function
+    // necessary in the other direction: an account created offline here and
+    // then promoted by a sign-in has a local id the server never issued.
+    let existing = match find_by_id(db, id)? {
+        Some(account) => Some(account),
+        None => find_by_email(db, &email)?,
+    };
+
+    if let Some(account) = existing {
+        let target = account.id.clone();
+        db.with(move |conn| {
+            conn.execute(
+                "UPDATE identity_accounts
+                    SET email = ?2, display_name = ?3, password_hash = ?4,
+                        failed_attempts = 0, locked_until = NULL, updated_at = ?5
+                  WHERE id = ?1",
+                params![&target, &email, name, &hash, now],
+            )?;
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
+        return Ok(account.id);
+    }
+
+    let id = id.to_string();
+    let stored = id.clone();
+    db.with(move |conn| {
+        conn.execute(
+            "INSERT INTO identity_accounts
+                 (id, email, display_name, password_hash, auth_provider, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, 'local', ?5, ?5)",
+            params![&stored, &email, name, &hash, now],
+        )?;
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(id)
 }
 
 pub fn sign_in(db: &Database, email: &str, password: &str) -> Result<SignInOutcome> {

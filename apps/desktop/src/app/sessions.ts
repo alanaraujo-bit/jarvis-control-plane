@@ -65,22 +65,39 @@ export async function missionSessions(missionId: string): Promise<SessionInfo[]>
 /**
  * Attach a view and start receiving output.
  *
- * Returns a detach function. Detaching stops the stream but never stops the
- * session — closing a tab must not kill an agent mid-task (§32).
+ * Returns the gap-free replay plus controls for releasing buffered live bytes
+ * and detaching this exact mount. Detaching stops the stream but never stops
+ * the session — closing a tab must not kill an agent mid-task (§32).
  */
 export async function attachSession(
   sessionId: string,
   onOutput: (bytes: Uint8Array) => void,
-): Promise<() => void> {
+): Promise<{ history: Uint8Array; release: () => void; detach: () => void }> {
+  const attachmentId = crypto.randomUUID();
+  let released = false;
+  const pending: Uint8Array[] = [];
   const channel = new Channel<ArrayBuffer>();
   channel.onmessage = (message) => {
-    onOutput(message instanceof ArrayBuffer ? new Uint8Array(message) : new Uint8Array());
+    const bytes = message instanceof ArrayBuffer ? new Uint8Array(message) : new Uint8Array();
+    if (released) onOutput(bytes);
+    else pending.push(bytes);
   };
-  await invoke("session_attach", { sessionId, channel });
-  return () => {
-    void invoke("session_detach", { sessionId }).catch(() => {
-      // The session may already be gone; detaching is best-effort.
-    });
+  const history = await invoke<ArrayBuffer>("session_attach", {
+    sessionId,
+    attachmentId,
+    channel,
+  });
+  return {
+    history: new Uint8Array(history),
+    release: () => {
+      released = true;
+      for (const bytes of pending.splice(0)) onOutput(bytes);
+    },
+    detach: () => {
+      void invoke("session_detach", { sessionId, attachmentId }).catch(() => {
+        // The session may already be gone; detaching is best-effort.
+      });
+    },
   };
 }
 

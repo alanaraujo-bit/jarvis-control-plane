@@ -153,28 +153,13 @@ pub async fn accounts_refresh(
     // so an account that just finished signing in is asked rather than skipped.
     let accounts = super::list(&state.db)?;
     super::live::refresh_all(&state.db, &accounts);
-
-    // **Nothing here rotates accounts, deliberately.**
-    //
-    // It is tempting: a fresh reading is the first moment the threshold policy
-    // could act on something other than a refusal, and before live quota the
-    // "switch before it runs out" setting could not fire until it had already
-    // run out. An earlier version of this function did exactly that, and it was
-    // wrong for reasons that only show up in the paths it skips.
-    //
-    // `switch::maybe_rotate` is called from the **transcript tailer**
-    // (`session::transcript`), and that call site is not incidental: it knows
-    // which session observed the quota news, so it can check the destination
-    // account's folder trust before moving, relay a running autopilot onto the
-    // new account, and record the switch against the session that caused it.
-    // Calling it from a report refresh has none of that context. It would move
-    // the active account from a five-minute background poll behind the status
-    // bar — no session, no trust check, no relay — and the person's next agent
-    // would start somewhere they never chose and, on an untrusted folder, park
-    // at a trust prompt with nobody to answer it (HANDOFF item 25).
-    //
-    // Reading quota must not change state. The surface still says an account
-    // is nearing its limit and which one has more room; deciding is a click.
+    // The exhausted CLI may stop producing transcript lines, so a provider's
+    // official live reading must be allowed to trigger the configured policy.
+    // This changes only the destination for new work. A driven session still
+    // performs its context-aware relay in the autopilot path.
+    for account in accounts.iter().filter(|account| account.active) {
+        let _ = super::switch::maybe_rotate_recorded(&state.db, &account.id);
+    }
     let report = report(&state, project_id.as_deref())?;
     crate::identity::cloud::push_quota(&state.db, &report);
     Ok(report)
@@ -194,6 +179,9 @@ pub async fn account_refresh_live(
     let _ = super::refresh_identity(&state.db, &account_id);
     if let Some(account) = super::get(&state.db, &account_id)? {
         super::live::refresh_all(&state.db, std::slice::from_ref(&account));
+        if account.active {
+            let _ = super::switch::maybe_rotate_recorded(&state.db, &account.id);
+        }
     }
     let report = report(&state, project_id.as_deref())?;
     crate::identity::cloud::push_quota(&state.db, &report);

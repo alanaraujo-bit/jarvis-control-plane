@@ -7,7 +7,7 @@ import { GuardrailPanel } from "../guardrails/GuardrailPanel";
 import { AutonomyPanel } from "./AutonomyPanel";
 import { CATEGORIES, CATEGORY, type CategoryId } from "./categories";
 import { CompanionPanel } from "./CompanionPanel";
-import { NotificationsPanel } from "./NotificationsPanel";
+import { NotificationsPanel, Switch } from "./NotificationsPanel";
 import { NumberSetting } from "./NumberSetting";
 import { useSettingsCategory } from "./settingsNav";
 import { PREF, usePreferences } from "./usePreferences";
@@ -138,7 +138,7 @@ function Section({ id }: { id: CategoryId }) {
   const t = useT();
   const { locale, setLocale } = useI18n();
   const { preference, setPreference } = useTheme();
-  const { prefs, set } = usePreferences();
+  const { prefs, set, setPerformanceHud } = usePreferences();
 
   switch (id) {
     case "account":
@@ -206,6 +206,14 @@ function Section({ id }: { id: CategoryId }) {
       return (
         <>
           <Head id="terminal" />
+          <div className="settings__field">
+            <Switch
+              label={t("settings.performanceHud")}
+              help={t("settings.performanceHudHelp")}
+              checked={prefs.performanceHudEnabled}
+              onChange={(value) => void setPerformanceHud(value)}
+            />
+          </div>
           <NumberSetting
             preference={PREF.fontSize}
             label="settings.fontSize"

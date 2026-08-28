@@ -29,10 +29,8 @@ pub fn sign_in_command(account: &Account, email: Option<&str>) -> Result<std::pr
     }
     let mut command = crate::envscan::tool_command(bin, &args)
         .ok_or_else(|| "accounts.providerMissing".to_string())?;
-    if !account.adopted {
-        if let Some(key) = super::config_env_key(&account.provider) {
-            command.env(key, &account.config_dir);
-        }
+    if let Some(key) = super::config_env_key(&account.provider) {
+        command.env(key, &account.config_dir);
     }
     Ok(command)
 }
@@ -46,10 +44,8 @@ pub fn sign_out_command(account: &Account) -> Result<std::process::Command> {
     };
     let mut command = crate::envscan::tool_command(bin, &args)
         .ok_or_else(|| "accounts.providerMissing".to_string())?;
-    if !account.adopted {
-        if let Some(key) = super::config_env_key(&account.provider) {
-            command.env(key, &account.config_dir);
-        }
+    if let Some(key) = super::config_env_key(&account.provider) {
+        command.env(key, &account.config_dir);
     }
     Ok(command)
 }
@@ -126,7 +122,11 @@ pub fn set_active(db: &Database, account_id: &str) -> Result<Account> {
     get(db, account_id)?.ok_or_else(|| "accounts.notFound".to_string())
 }
 
-/// Next signed-in, unpaused and non-exhausted account in rotation order.
+/// Best signed-in, unpaused and non-exhausted account.
+///
+/// Official/estimated quota wins: the account whose fullest window is least
+/// used has the most practical headroom. Position remains the deterministic
+/// fallback when providers have not supplied comparable percentages.
 ///
 /// **An account on the same subscription is not a destination.** Two
 /// configuration directories can be signed into one provider account, and when
@@ -140,24 +140,43 @@ pub fn next_available(db: &Database, current: &Account) -> Option<Account> {
     let mut accounts: Vec<_> = list(db)
         .ok()?
         .into_iter()
-        .filter(|candidate| {
-            candidate.provider == current.provider
+        .filter_map(|candidate| {
+            let quota = super::quota::for_account(db, &candidate);
+            let available = candidate.provider == current.provider
                 && candidate.id != current.id
-                && !super::same_subscription(current, candidate)
+                && !super::same_subscription(current, &candidate)
                 && candidate.signed_in
                 && !candidate.paused
-                && !super::quota::for_account(db, candidate)
+                && !quota.windows.iter().any(|window| window.exhausted);
+            available.then(|| {
+                let fullest = quota
                     .windows
                     .iter()
-                    .any(|window| window.exhausted)
+                    .filter_map(|window| window.percent)
+                    .reduce(f64::max);
+                (candidate, fullest)
+            })
         })
         .collect();
-    accounts.sort_by_key(|candidate| candidate.position);
-    accounts
-        .iter()
-        .find(|candidate| candidate.position > current.position)
-        .cloned()
-        .or_else(|| accounts.into_iter().next())
+    accounts.sort_by(|(left, left_used), (right, right_used)| {
+        match (left_used, right_used) {
+            (Some(left), Some(right)) => left
+                .partial_cmp(right)
+                .unwrap_or(std::cmp::Ordering::Equal),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        }
+        .then_with(|| {
+            rotation_distance(current.position, left.position)
+                .cmp(&rotation_distance(current.position, right.position))
+        })
+    });
+    accounts.into_iter().next().map(|(account, _)| account)
+}
+
+fn rotation_distance(current: i64, candidate: i64) -> (bool, i64) {
+    (candidate <= current, candidate)
 }
 
 /// Apply automatic rotation after quota state changes.
@@ -194,6 +213,23 @@ pub fn maybe_rotate(db: &Database, current_id: &str) -> Option<Account> {
 
     let next = next_available(db, &current)?;
     set_active(db, &next.id).ok()
+}
+
+/// Rotate and write one audit event. Shared by transcript-driven checks and
+/// live quota probes so the two paths cannot silently diverge.
+pub fn maybe_rotate_recorded(db: &Database, current_id: &str) -> Option<Account> {
+    let before = get(db, current_id).ok().flatten()?;
+    let quota = super::quota::for_account(db, &before);
+    let estimated = quota.windows.iter().any(|window| {
+        window.confidence == crate::session::event::Confidence::Estimated
+            && window
+                .percent
+                .map(|percent| percent >= super::quota::NEARING_PERCENT)
+                .unwrap_or(false)
+    });
+    let next = maybe_rotate(db, current_id)?;
+    record_rotation(db, &before, &next, estimated);
+    Some(next)
 }
 
 /// Why a driven session should move to the now-active account.

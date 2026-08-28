@@ -4,6 +4,7 @@ import { LOCALES, LOCALE_NAMES } from "@jarvis/i18n";
 import { Rail, RAIL_ITEMS, type SurfaceId } from "./shell/Rail";
 import { TitleBar } from "./shell/TitleBar";
 import { StatusBar } from "./shell/StatusBar";
+import { ProjectDock } from "./shell/ProjectDock";
 import { CommandPalette, type Command } from "./shell/CommandPalette";
 import { GlobalSearch } from "./shell/GlobalSearch";
 import { NotificationBell } from "./shell/notify/NotificationBell";
@@ -27,7 +28,7 @@ import { Accounts } from "./surfaces/accounts/Accounts";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
 import { Missions } from "./surfaces/missions/Missions";
 import { Auth } from "./surfaces/identity/Auth";
-import { registerLocaleSetter, useIdentity } from "./surfaces/identity/useIdentity";
+import { registerLocaleSetter, useIdentity, watchSync } from "./surfaces/identity/useIdentity";
 import { Onboarding } from "./surfaces/onboarding/Onboarding";
 import { useOnboarding } from "./surfaces/onboarding/useOnboarding";
 import { Projects } from "./surfaces/projects/Projects";
@@ -41,6 +42,7 @@ import { openSettingsCategory } from "./surfaces/settings/settingsNav";
 import { useEnvironmentStore } from "./surfaces/environment/useEnvironment";
 import { useProjects } from "./surfaces/projects/useProjects";
 import { useTerminals } from "./surfaces/terminal/useTerminals";
+import { useWorkspace } from "./app/workspace";
 import { useI18n, useT } from "./app/i18n";
 import { useTheme } from "./app/theme";
 import "./App.css";
@@ -71,6 +73,13 @@ export function App() {
   const rescanEnvironment = useEnvironmentStore((state) => state.scan);
   const projects = useProjects((state) => state.projects);
   const openTerminal = useTerminals((state) => state.openTerminal);
+  const workspaceHydrated = useWorkspace((state) => state.hydrated);
+  const openProjectIds = useWorkspace((state) => state.openProjectIds);
+  const activeProjectId = useWorkspace((state) => state.activeProjectId);
+  const loadWorkspace = useWorkspace((state) => state.load);
+  const activateWorkspace = useWorkspace((state) => state.openProject);
+  const showGlobal = useWorkspace((state) => state.showGlobal);
+  const closeWorkspace = useWorkspace((state) => state.closeProject);
   const onboardingSeen = useOnboarding((state) => state.seen);
   const loadOnboarding = useOnboarding((state) => state.load);
   const identity = useIdentity((state) => state.report);
@@ -95,9 +104,19 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notebookOpen, setNotebookOpen] = useState(false);
-  // An open project takes over the surface area. The rail stays put, so the
-  // user never loses their bearings when they go deeper (§85).
-  const [openProject, setOpenProject] = useState<Project | null>(null);
+  // Project records are presentation metadata. The durable workspace stores
+  // ids; this cache also holds archived projects reached from History.
+  const [projectCache, setProjectCache] = useState<Record<string, Project>>({});
+  const knownProjects = useMemo(() => {
+    const records = { ...projectCache };
+    for (const project of projects) records[project.id] = project;
+    return records;
+  }, [projects, projectCache]);
+  const dockedProjects = useMemo(
+    () => openProjectIds.map((id) => knownProjects[id]).filter((project): project is Project => !!project),
+    [openProjectIds, knownProjects],
+  );
+  const openProject = activeProjectId ? (knownProjects[activeProjectId] ?? null) : null;
   // Set when arriving at Missions from somewhere that already knows which one.
   const [focusMission, setFocusMission] = useState<string | undefined>();
   // Where inside a project Global Search (§51) wants to land — which area, and
@@ -156,13 +175,22 @@ export function App() {
    * focus into the next, unrelated project somebody opens by hand.
    */
   const openProjectDirect = useCallback((project: Project, focus?: Focus) => {
-    setOpenProject(project);
+    setProjectCache((known) => ({ ...known, [project.id]: project }));
+    activateWorkspace(project.id);
+    const terminals = useTerminals.getState();
+    useWorkspace.getState().captureSessions(
+      project.id,
+      (terminals.tabs[project.id] ?? []).map((tab) => tab.sessionId),
+      terminals.activeTab[project.id],
+      terminals.slots[project.id] ?? [],
+      terminals.direction[project.id] ?? "columns",
+    );
     setFocusArea(focus?.area);
     setFocusSessionId(focus?.sessionId);
     setFocusSessionProvider(focus?.sessionProvider);
     setFocusSessionTitle(focus?.sessionTitle);
     if (focus?.area) setFocusToken((token) => token + 1);
-  }, []);
+  }, [activateWorkspace]);
 
   /**
    * Open a project workspace by id, looked up in the already-loaded list.
@@ -178,11 +206,11 @@ export function App() {
    */
   const openProjectById = useCallback(
     (projectId: string, focus?: Focus) => {
-      const project = projects.find((p) => p.id === projectId);
+      const project = knownProjects[projectId];
       if (project) openProjectDirect(project, focus);
       return project;
     },
-    [projects, openProjectDirect],
+    [knownProjects, openProjectDirect],
   );
 
   /**
@@ -220,13 +248,13 @@ export function App() {
   const handleSearchResult = useCallback(
     (result: SearchResult) => {
       if (result.kind === "mission" && result.missionId) {
-        setOpenProject(null);
+        showGlobal();
         setFocusMission(result.missionId);
         setSurface("missions");
         return;
       }
       if (result.kind === "activity") {
-        setOpenProject(null);
+        showGlobal();
         setFocusMission(undefined);
         setSurface("activity");
         return;
@@ -246,17 +274,17 @@ export function App() {
         openProjectById(result.projectId, { area: "brain" });
       }
     },
-    [openProjectById, openProjectAnywhere],
+    [openProjectById, openProjectAnywhere, showGlobal],
   );
 
   const goTo = useCallback(
     (id: SurfaceId) => {
       if (id === "accounts") setAccountsProjectId(openProject?.id ?? null);
-      setOpenProject(null);
+      showGlobal();
       setFocusMission(undefined);
       setSurface(id);
     },
-    [openProject],
+    [openProject, showGlobal],
   );
 
   // Who is signed in, and whether an account has ever been offered (M20).
@@ -267,11 +295,42 @@ export function App() {
     void loadIdentity();
   }, [loadIdentity]);
 
+  useEffect(() => {
+    void loadWorkspace();
+  }, [loadWorkspace]);
+
+  // The durable snapshot stores ids so project metadata can evolve normally.
+  // Resolve records independently of the Projects surface, including archived
+  // projects that were reopened from History.
+  useEffect(() => {
+    if (!workspaceHydrated) return;
+    const missing = openProjectIds.filter((id) => !knownProjects[id]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(missing.map((id) => invoke<Project | null>("get_project", { id }))).then(
+      (found) => {
+        if (cancelled) return;
+        setProjectCache((known) => {
+          const next = { ...known };
+          for (const project of found) if (project) next[project.id] = project;
+          return next;
+        });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceHydrated, openProjectIds, knownProjects]);
+
   // The locale lives in React context and `useIdentity` is not a component, so
   // signing in cannot reach the setter by itself. Registered once, here.
   useEffect(() => {
     registerLocaleSetter(setLocale);
   }, [setLocale]);
+
+  // A launch pull can land seconds after the window is already on screen, and
+  // whatever it changed has to reach the surfaces holding a copy of it (M23).
+  useEffect(() => watchSync(setLocale), [setLocale]);
 
   // Whether this machine has ever gotten past the welcome screen (§13).
   // Fetched once, up front, so the reveal below never shows the normal shell
@@ -351,7 +410,7 @@ export function App() {
     (notification: Notification) => {
       dismiss(notification.id);
       if (notification.missionId && !notification.sessionId) {
-        setOpenProject(null);
+        showGlobal();
         setFocusMission(notification.missionId);
         setSurface("missions");
         return;
@@ -372,7 +431,7 @@ export function App() {
         });
       }
     },
-    [dismiss, openProjectById],
+    [dismiss, openProjectById, showGlobal],
   );
 
   const togglePalette = useCallback(() => setPaletteOpen((open) => !open), []);
@@ -607,12 +666,24 @@ export function App() {
       ) : (
         <div className="app__body">
           <Rail active={surface} available={IMPLEMENTED} onNavigate={goTo} />
-
-          <main className="app__surface" key={openProject ? openProject.id : surface}>
+          <div className="app__workbench">
+            <ProjectDock
+              projects={dockedProjects}
+              activeProjectId={activeProjectId}
+              onActivate={(project) => openProjectDirect(project)}
+              onClose={(projectId) => {
+                closeWorkspace(projectId);
+                setFocusArea(undefined);
+                setFocusSessionId(undefined);
+                setFocusSessionProvider(undefined);
+                setFocusSessionTitle(undefined);
+              }}
+            />
+            <main className="app__surface" key={openProject ? openProject.id : surface}>
             {openProject ? (
               <ProjectWorkspace
                 project={openProject}
-                onBack={() => setOpenProject(null)}
+                onBack={() => goTo("projects")}
                 onOpenProject={openProjectById}
                 focusArea={focusArea}
                 focusSessionId={focusSessionId}
@@ -683,7 +754,7 @@ export function App() {
                   );
                 }}
                 onOpenMission={(missionId) => {
-                  setOpenProject(null);
+                  showGlobal();
                   setFocusMission(missionId);
                   setSurface("missions");
                 }}
@@ -711,13 +782,14 @@ export function App() {
               <MissionControl
                 onOpenProject={() => goTo("projects")}
                 onOpenMission={(mission) => {
-                  setOpenProject(null);
+                  showGlobal();
                   setFocusMission(mission.id);
                   setSurface("missions");
                 }}
               />
             )}
-          </main>
+            </main>
+          </div>
         </div>
       )}
 

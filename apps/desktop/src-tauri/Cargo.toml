@@ -1,6 +1,6 @@
 [package]
 name = "jarvis"
-version = "0.8.0"
+version = "0.9.0"
 description = "J.A.R.V.I.S. — a universal operating environment for AI-agent software development."
 authors = ["Alan Araujo"]
 edition = "2021"
@@ -46,7 +46,10 @@ argon2 = { version = "0.5", features = ["std"] }
 # if J.A.R.V.I.S. itself is killed.
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_JobObjects",
+    "Win32_System_ProcessStatus",
+    "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
 
