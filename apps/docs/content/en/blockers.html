@@ -28,23 +28,23 @@ code.</p>
   See <a href="page:distribution">Distribution and updates</a>.</p>
 </div>
 
-<h2>B2 — Nowhere to publish updates yet</h2>
+<h2>B2 — Nowhere to publish updates yet <em>(resolved)</em></h2>
 
-<p><span class="badge" data-t="danger">Blocked on a decision</span></p>
+<p><span class="badge" data-t="ok">Resolved in 0.10.0</span></p>
 
-<p><strong>What you see:</strong> <em>Check for updates</em> reports a failure.</p>
+<p>The decision this was blocked on has been made: releases are published to the
+<strong>GitHub releases of this repository</strong>, and the updater's endpoint —
+<code>releases/latest/download/latest.json</code> — now points at something that exists.
+<em>Check for updates</em> reaches a real manifest and compares against a real version.</p>
 
-<p><strong>Why:</strong> the updater is configured against a release location that is not reachable
-as things stand. Two routes exist and both are straightforward — a separate public repository just
-for release artifacts, with the source staying private; or serving the update manifest and the
-installers from the cloud project that already exists.</p>
+<p>The manifest is written by hand as part of cutting a release, and its
+<code>signature</code> is the minisign signature of the installer it names. An installer whose
+signature does not verify against the public key compiled into the application is refused — that
+is the guarantee, and it is unchanged by where the files are hosted.</p>
 
-<p>It is open because pointing release artifacts at a function that exists to pass small JSON
-around deserves its own thought rather than being bolted on because an account happened to be
-available.</p>
-
-<p>Until then the check <strong>reports the failure honestly</strong> rather than pretending to be
-up to date — which would leave you believing you had the latest build forever.</p>
+<p>Kept here rather than deleted, because a blocker that was closed by a decision is worth being
+able to read: the alternative route considered — serving the manifest from the cloud project —
+would have put release artifacts behind a function built to pass small JSON around.</p>
 
 <h2>B6 — Signing in to additional accounts</h2>
 

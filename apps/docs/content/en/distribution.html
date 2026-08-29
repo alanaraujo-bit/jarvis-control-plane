@@ -123,8 +123,16 @@ failure.</p>
 
 <h2>What update checks do today</h2>
 
-<p>They report a failure, honestly. The updater is configured against a release location that is
-not yet published, so the check cannot succeed. That is
+<p>They reach a real manifest. From 0.10.0 releases are published to this repository's GitHub
+releases, so <code>releases/latest/download/latest.json</code> — the endpoint compiled into the
+application — resolves, and a check compares your build against the newest published one.</p>
+
+<p>What a check cannot do is install something unverified: the download is checked against the
+minisign public key compiled into the application, and a signature that does not verify is refused.
+Where the files are hosted does not change that guarantee.</p>
+
+<p class="muted">Before 0.10.0 this said the opposite, and honestly so: the endpoint pointed at a
+location that had never been published. That was
 <a href="page:blockers">a tracked blocker about where to publish</a> rather than a bug in the
 updater — and reporting the failure is better than pretending to be up to date, which would leave
 you believing you had the latest build forever.</p>

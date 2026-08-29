@@ -16,6 +16,7 @@
 pub mod claude;
 pub mod codex;
 pub mod conversation;
+pub mod local;
 pub mod tail;
 
 use serde::{Deserialize, Serialize};
@@ -230,6 +231,7 @@ pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(claude::ClaudeCode),
         Box::new(codex::Codex),
+        Box::new(local::LocalModel),
     ]
 }
 
@@ -334,6 +336,42 @@ mod tests {
             "appending to the original rollout is real and is not wired up; \n             claiming otherwise would offer a button that does not continue \n             anything"
         );
         assert!(!ResumeSupport::None.is_available());
+    }
+
+    /// The difference a third provider makes (§92).
+    ///
+    /// The three tests above are all pairwise Claude-versus-Codex and would
+    /// still pass if the local provider described itself as an exact copy of
+    /// Codex. It is not one, and the difference is the whole reason it needed
+    /// its own surface: a model running in this machine has no allowance to
+    /// switch between, because nothing meters it.
+    #[test]
+    fn a_local_model_has_no_account_to_switch() {
+        let local = local::LocalModel.capabilities();
+        assert!(
+            !local.account_switching,
+            "there is no subscription behind a model in your own GPU; offering \
+             an account switcher would put a quota dial on a card that can \
+             never move"
+        );
+        assert!(codex::Codex.capabilities().account_switching);
+        assert!(claude::ClaudeCode.capabilities().account_switching);
+    }
+
+    /// Local usage counts are stated by the runner, not estimated by us —
+    /// measured in a real rollout, where `token_count` carried genuine input
+    /// and output totals while every `rate_limits` field was null.
+    #[test]
+    fn a_local_model_still_reports_its_own_token_counts() {
+        assert_eq!(local::LocalModel.capabilities().usage, UsageReporting::Official);
+    }
+
+    /// Vision is a property of the model loaded, not of this adapter. Claiming
+    /// it for the provider would promise image attachments on a 7B code model
+    /// that cannot see one.
+    #[test]
+    fn the_local_adapter_does_not_promise_what_the_model_decides() {
+        assert!(!local::LocalModel.capabilities().images);
     }
 
     #[test]

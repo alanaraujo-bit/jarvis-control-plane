@@ -610,9 +610,28 @@ pub fn active(db: &Database, provider: &str) -> Option<Account> {
 
 /// Register the account already signed in on this machine, once.
 ///
-/// Idempotent by `config_dir`, so running it on every launch adopts the machine
+/// Idempotent **by provider**, so running it on every launch adopts the machine
 /// account the first time and does nothing afterwards. Returns the id when a
 /// row was created.
+///
+/// ## Why not idempotent by `config_dir` (the bug this replaces)
+///
+/// It used to be, and the two halves of this module then disagreed with each
+/// other once per launch. `isolate_adopted_accounts` **rewrites** `config_dir`
+/// onto an app-owned path — that is its entire job — so on the next start no
+/// row pointed at the machine directory any more, this function concluded the
+/// machine account had never been adopted, and inserted a second one. Isolation
+/// then dutifully copied the whole provider directory again.
+///
+/// Measured on the machine this was found on: nine `codex` copies of 2.36 GB
+/// each, one per launch, plus matching `claude-code` ones — about 21 GB of
+/// duplicates, a disk filled to zero bytes twice, and every start paying a
+/// multi-gigabyte copy **before the window appears**. That is the whole of the
+/// "it got slow to open after 0.9.0" report.
+///
+/// Adoption is a fact about a provider on this machine, not about a path, so
+/// the question asked here is now the one that was always meant: *has this
+/// provider's machine account already been adopted?*
 ///
 /// It does not require the provider to be signed in: an installed-but-logged-out
 /// Claude Code still gets a row, showing as signed out with a way to sign in.
@@ -631,7 +650,14 @@ pub fn adopt_machine_account(db: &Database, provider: &str) -> Result<Option<Str
         .with(|conn| {
             Ok(conn
                 .query_row(
-                    "SELECT id FROM provider_accounts WHERE provider = ?1 AND config_dir = ?2",
+                    // `adopted = 1` regardless of where the row points now: an
+                    // isolated account is still the adopted one, and this is
+                    // the check that stops a second copy being made on every
+                    // launch. `config_dir` is still matched as well, so a row
+                    // that has not been isolated yet is recognised too.
+                    "SELECT id FROM provider_accounts
+                     WHERE provider = ?1 AND (adopted = 1 OR config_dir = ?2)
+                     LIMIT 1",
                     params![provider, dir_text],
                     |row| row.get(0),
                 )
@@ -805,6 +831,17 @@ fn copy_provider_state(provider: &str, source: &Path, target: &Path) -> Result<(
             "logs",
             "shell_snapshots",
             "tmp",
+            // Re-downloadable caches, not account state, and they are the bulk
+            // of the directory: measured on this machine, `packages` is 1.5 GB
+            // and `plugins` 387 MB out of 2.59 GB total. Copying them made the
+            // one-time import a multi-gigabyte, multi-second operation that the
+            // window waits on, to duplicate files the CLI fetches again by
+            // itself. What an account actually needs — `auth.json`,
+            // `config.toml`, skills, state — is a few megabytes.
+            "packages",
+            "plugins",
+            "cache",
+            "vendor_imports",
         ],
         _ => return Err("accounts.unknownProvider".into()),
     };

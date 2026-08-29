@@ -1,10 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { Cpu, X } from "lucide-react";
+import { Cpu, X, Zap } from "lucide-react";
 import type { ConversationItem, TokenUsage } from "../conversation/ConversationView";
 import { readLiveTokenProgress } from "../terminal/live";
 import { invoke, isTauri } from "../../app/platform";
+import { readGpu, throttleReason, type GpuMetrics } from "../../app/gpu";
+import type { SessionKind } from "../../app/sessions";
 import { useT } from "../../app/i18n";
 import "./PerformanceHud.css";
+
+/**
+ * The context window a local session is really working inside (§92).
+ *
+ * Only asked for a local session, and only because the number the agent itself
+ * believes can be wrong: with no metadata for the model, Codex falls back to an
+ * invented window — 258400 tokens, against a runner actually loaded at 65536 on
+ * this machine. Reading the runtime tells the HUD which of the two is true, so
+ * "latest context" can be shown as a share of something real rather than as a
+ * bare count with no ceiling.
+ */
+interface LocalWindow {
+  tokens: number;
+  model: string | null;
+}
 
 interface SystemMetrics {
   processMemoryBytes: number | null;
@@ -149,16 +166,29 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-export function PerformanceHud({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+export function PerformanceHud({
+  sessionId,
+  kind,
+  onClose,
+}: {
+  sessionId: string;
+  /** Which provider this session runs on. Only a local one has a card to report. */
+  kind?: SessionKind;
+  onClose: () => void;
+}) {
   const t = useT();
   const locale = navigator.language;
   const [items, setItems] = useState<ConversationItem[]>([]);
   const [liveSpeed, setLiveSpeed] = useState<LiveSpeed>(INITIAL_LIVE_SPEED);
+  const [gpu, setGpu] = useState<GpuMetrics | null>(null);
+  const [localWindow, setLocalWindow] = useState<LocalWindow | null>(null);
   const [system, setSystem] = useState<SystemMetrics>({
     processMemoryBytes: null,
     systemMemoryUsedBytes: null,
     systemMemoryTotalBytes: null,
   });
+
+  const isLocal = kind === "local";
 
   useEffect(() => {
     let cancelled = false;
@@ -179,6 +209,45 @@ export function PerformanceHud({ sessionId, onClose }: { sessionId: string; onCl
       window.clearInterval(timer);
     };
   }, [sessionId]);
+
+  // The card, and what the local runner was really loaded with.
+  //
+  // Only for a local session: when the model is in somebody else's datacentre,
+  // this machine's GPU has nothing to do with how fast the answer arrives, and
+  // a power meter beside a cloud agent's throughput would invite exactly the
+  // wrong conclusion.
+  useEffect(() => {
+    if (!isLocal || !isTauri()) {
+      setGpu(null);
+      setLocalWindow(null);
+      return;
+    }
+    let cancelled = false;
+    const read = async () => {
+      const [metrics, runtime] = await Promise.allSettled([
+        readGpu(),
+        invoke<{
+          config: { model: string | null };
+          resident: { name: string; contextLength: number | null }[];
+        }>("local_runtime_report"),
+      ]);
+      if (cancelled) return;
+      if (metrics.status === "fulfilled") setGpu(metrics.value);
+      if (runtime.status === "fulfilled") {
+        const model = runtime.value.config.model;
+        const resident = runtime.value.resident.find((entry) => entry.name === model);
+        setLocalWindow(
+          resident?.contextLength ? { tokens: resident.contextLength, model } : null,
+        );
+      }
+    };
+    void read();
+    const timer = window.setInterval(() => void read(), POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isLocal, sessionId]);
 
   useEffect(() => {
     let previous = readLiveTokenProgress(sessionId);
@@ -320,9 +389,27 @@ export function PerformanceHud({ sessionId, onClose }: { sessionId: string; onCl
           value={shownAverage == null ? "—" : `${formatCompact(shownAverage, locale)} tok/s`}
         />
         <Metric label={t("performance.tokens")} value={formatCompact(stats.totalTokens, locale)} />
-        <Metric label={t("performance.context")} value={stats.contextTokens == null ? "—" : formatCompact(stats.contextTokens, locale)} />
+        <Metric
+          label={localWindow ? t("performance.contextWindow") : t("performance.context")}
+          // With a measured window, the count means something: 12k of 65k is a
+          // different situation from 12k of 8k, and the bare number cannot say
+          // which one it is.
+          value={
+            stats.contextTokens == null
+              ? "—"
+              : localWindow
+                ? t("performance.contextShare", {
+                    used: formatCompact(stats.contextTokens, locale),
+                    total: formatCompact(localWindow.tokens, locale),
+                  })
+                : formatCompact(stats.contextTokens, locale)
+          }
+        />
         <Metric label={t("performance.appMemory")} value={formatMemory(system.processMemoryBytes, locale)} />
       </div>
+
+      {/* The card, only where it is the thing producing the tokens (§92). */}
+      {isLocal && gpu && <GpuStrip gpu={gpu} locale={locale} />}
 
       <div className="perf-hud__ram">
         <span><Cpu size={11} strokeWidth={1.8} aria-hidden="true" />{t("performance.systemRam")}</span>
@@ -346,6 +433,64 @@ export function PerformanceHud({ sessionId, onClose }: { sessionId: string; onCl
             : t("performance.derived")}
       </p>
     </aside>
+  );
+}
+
+/**
+ * The card, compressed to what explains a number on this HUD.
+ *
+ * Three readings and one sentence. Power against the limit in force is first
+ * because on a 375 W cap it is what a sustained generation runs into; the
+ * sentence beneath it is the only part that says *why* throughput moved, and it
+ * is the reason this strip exists rather than a row of numbers.
+ */
+function GpuStrip({ gpu, locale }: { gpu: GpuMetrics; locale: string }) {
+  const t = useT();
+  const reason = throttleReason(gpu);
+  const percent =
+    gpu.powerDrawWatts != null && gpu.powerLimitWatts
+      ? Math.min(100, (gpu.powerDrawWatts / gpu.powerLimitWatts) * 100)
+      : 0;
+
+  return (
+    <div className="perf-hud__gpu" data-throttled={reason ?? undefined}>
+      <span className="perf-hud__gpu-head">
+        <Zap size={11} strokeWidth={1.8} aria-hidden="true" />
+        {t("performance.gpu")}
+        <strong>
+          {gpu.powerDrawWatts == null || gpu.powerLimitWatts == null
+            ? "—"
+            : t("gpu.powerOfLimit", {
+                draw: Math.round(gpu.powerDrawWatts),
+                limit: Math.round(gpu.powerLimitWatts),
+              })}
+        </strong>
+      </span>
+      <div className="perf-hud__gpu-track" aria-hidden="true">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <span className="perf-hud__gpu-facts">
+        {gpu.temperatureC == null ? "—" : `${Math.round(gpu.temperatureC)} °C`}
+        {" · "}
+        {gpu.utilizationPercent == null ? "—" : `${Math.round(gpu.utilizationPercent)}%`}
+        {gpu.memoryUsedMib != null && gpu.memoryTotalMib != null
+          ? ` · ${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+              gpu.memoryUsedMib / 1024,
+            )}/${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
+              gpu.memoryTotalMib / 1024,
+            )} GB`
+          : ""}
+      </span>
+      <span className="perf-hud__gpu-reason">
+        {reason === "power"
+          ? t("gpu.throttlePower")
+          : reason === "thermal"
+            ? t("gpu.throttleThermal")
+            : reason === "slowdown"
+              ? t("gpu.throttleSlowdown")
+              : t("gpu.throttleNone")}
+      </span>
+    </div>
   );
 }
 

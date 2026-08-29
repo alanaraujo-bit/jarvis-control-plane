@@ -32,6 +32,12 @@ pub enum SessionKind {
     Shell,
     ClaudeCode,
     Codex,
+    /// A model running in this machine's own GPU (§92).
+    ///
+    /// Launched through the same agent binary as `Codex`, configured against a
+    /// local server. See `crate::localai` for why that is the build rather than
+    /// a chat client, and for the three ways it genuinely differs.
+    Local,
 }
 
 impl SessionKind {
@@ -40,6 +46,7 @@ impl SessionKind {
             Self::Shell => "shell",
             Self::ClaudeCode => "claude-code",
             Self::Codex => "codex",
+            Self::Local => crate::localai::PROVIDER_ID,
         }
     }
 
@@ -164,6 +171,18 @@ fn write_brief(
     Some(path)
 }
 
+/// What a local-model session needs and a cloud provider does not.
+///
+/// Built by `crate::localai` from the runtime configuration, because which
+/// model and which endpoint are settings a person changed, not constants this
+/// launcher can know.
+pub struct LocalLaunch {
+    /// This runtime's own configuration root. Set as `CODEX_HOME` so local
+    /// rollouts land in a tree only this provider writes to.
+    pub home: PathBuf,
+    pub args: Vec<String>,
+}
+
 /// How a session is launched.
 ///
 /// The guardrail settings file points the provider pre-tool hook at our own
@@ -176,12 +195,16 @@ fn write_brief(
 ///
 /// `resume` is the provider's own id for a past conversation to continue
 /// (§88, D41).
+///
+/// `local` is the prepared local runtime, and is Some only for a local-model
+/// session (§92).
 fn command_for(
     kind: SessionKind,
     session_id: &str,
     guardrail_settings: Option<&std::path::Path>,
     brief: Option<&std::path::Path>,
     resume: Option<&str>,
+    local: Option<&LocalLaunch>,
 ) -> (String, Vec<String>, Vec<(String, String)>) {
     match kind {
         SessionKind::Shell => {
@@ -234,7 +257,79 @@ fn command_for(
         // Codex has no equivalent flag on 0.147.0, so correlation is done by
         // watching its rollout directory instead. A real capability difference.
         SessionKind::Codex => ("codex".into(), vec![], vec![]),
+        // The same binary as Codex, pointed at a model in this machine.
+        //
+        // `CODEX_HOME` is the load-bearing part. Without it a local session
+        // would write its rollout into the same `~/.codex/sessions` tree a
+        // cloud Codex session writes to, and `codex::correlate` — which
+        // matches on working directory and start time — could hand each of two
+        // sessions started seconds apart in one project the other's transcript.
+        SessionKind::Local => match local {
+            Some(local) => (
+                "codex".into(),
+                local.args.clone(),
+                vec![(
+                    "CODEX_HOME".to_string(),
+                    local.home.to_string_lossy().to_string(),
+                )],
+            ),
+            // Unreachable in practice: `start_session` refuses before it gets
+            // here. Launching into the user's own Codex configuration would be
+            // the one wrong answer available, so this launches nothing.
+            None => (String::new(), vec![], vec![]),
+        },
     }
+}
+
+/// Get the local runtime ready for a session, or refuse with a reason.
+///
+/// Three things have to be true before a local agent can start, and each of
+/// them fails differently enough that collapsing them into one message would
+/// leave a person with nothing to act on: a model must be chosen, the server
+/// must be answering, and the configuration root must be writable.
+///
+/// The context window is read from the **resident runner** when there is one,
+/// because that is the process that will serve the request. Handing the agent
+/// a window it does not have is the failure mode this whole path exists to
+/// avoid — see `localai::prepare`.
+fn prepare_local(state: &State<'_, AppState>) -> Result<LocalLaunch> {
+    use crate::session::manager::SessionError::Refused;
+
+    let config = crate::localai::config(&state.db);
+    let Some(model) = config.model.clone() else {
+        return Err(Refused("localAi.noModel".into()));
+    };
+    if crate::localai::ollama::version(&config.endpoint).is_none() {
+        return Err(Refused("localAi.unreachable".into()));
+    }
+
+    let resident = crate::localai::ollama::resident(&config.endpoint).unwrap_or_default();
+    let context = crate::localai::measured_context(&config, &resident);
+
+    let home = crate::localai::prepare(&state.data_dir, &config, context)
+        .map_err(|_| Refused("localAi.configWriteFailed".into()))?;
+
+    // Warm the card before the first prompt, unless the person turned that off.
+    //
+    // On its own thread: a cold 27B Q4 load was measured at about ten seconds
+    // on this machine, and blocking the launch for it would freeze the window
+    // on a click. The session starts either way — the runner loads on the
+    // first turn if this has not finished, which is exactly what would have
+    // happened without a preload.
+    if config.preload_on_start && !resident.iter().any(|r| r.name == model) {
+        let endpoint = config.endpoint.clone();
+        let keep_alive = config.keep_alive();
+        std::thread::spawn(move || {
+            if let Err(error) = crate::localai::ollama::load(&endpoint, &model, &keep_alive) {
+                tracing::warn!(%error, "preloading the local model failed; it will load on the first turn");
+            }
+        });
+    }
+
+    Ok(LocalLaunch {
+        home,
+        args: crate::localai::launch_args(&config),
+    })
 }
 
 /// A session that has just been started, plus the handle to drive it.
@@ -446,12 +541,23 @@ fn launch(
     // exactly the environment and transcript roots it did before §66.
     let account = crate::accounts::active(&state.db, kind.provider_id());
     let account_id = account.as_ref().map(|account| account.id.clone());
-    let transcript_root = account.as_ref().and_then(|account| {
+    let mut transcript_root = account.as_ref().and_then(|account| {
         crate::accounts::transcript_root(
             &account.provider,
             std::path::Path::new(&account.config_dir),
         )
     });
+
+    // A local model has no account, so everything an account would have
+    // supplied — where the transcript lands, what configuration the runner
+    // reads — comes from the runtime instead (§92).
+    let local = match kind {
+        SessionKind::Local => Some(prepare_local(state)?),
+        _ => None,
+    };
+    if let Some(local) = local.as_ref() {
+        transcript_root = Some(local.home.join("sessions"));
+    }
 
     // Guardrails (§35), installed before the process starts because the hook
     // has to be in place for the very first tool call.
@@ -495,7 +601,10 @@ fn launch(
             }
             settings
         }
-        (SessionKind::Codex, Some(snapshot)) => {
+        // A local session is the same runner reading the same hooks file, so
+        // it is guarded by exactly the same route — and waits to be trusted in
+        // exactly the same way.
+        (SessionKind::Codex | SessionKind::Local, Some(snapshot)) => {
             let written =
                 crate::guardrail::sessions::write_codex_hook(std::path::Path::new(&cwd), snapshot);
             // Written, not yet in force: Codex runs it only once the user has
@@ -522,6 +631,7 @@ fn launch(
             guardrail_settings.as_deref(),
             brief.as_deref(),
             resume.as_ref().map(|r| r.provider_session_id.as_str()),
+            local.as_ref(),
         );
     if let Some(account) = account.as_ref() {
         env.extend(crate::accounts::session_env(account));
@@ -878,7 +988,7 @@ mod tests {
     fn claude_sessions_carry_our_session_id() {
         // Deterministic correlation to the provider's own transcript depends on
         // this flag being passed (§26).
-        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None, None, None);
+        let (program, args, _) = command_for(SessionKind::ClaudeCode, "abc-123", None, None, None, None);
         assert_eq!(program, "claude");
         assert_eq!(
             args,
@@ -901,6 +1011,7 @@ mod tests {
             None,
             None,
             Some("old-provider-id"),
+            None,
         );
 
         assert_eq!(program, "claude");
@@ -924,20 +1035,88 @@ mod tests {
     /// before this existed.
     #[test]
     fn a_session_that_resumes_nothing_carries_no_resume_flags() {
-        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None, None);
+        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None, None, None);
         assert!(!args.iter().any(|a| a == "--resume"));
         assert!(!args.iter().any(|a| a == "--fork-session"));
     }
 
     #[test]
     fn codex_sessions_do_not_claim_an_id_they_cannot_set() {
-        let (program, args, _) = command_for(SessionKind::Codex, "abc-123", None, None, None);
+        let (program, args, _) = command_for(SessionKind::Codex, "abc-123", None, None, None, None);
         assert_eq!(program, "codex");
         assert!(
             !args.iter().any(|a| a.contains("abc-123")),
             "Codex 0.147.0 has no session-id flag; pretending otherwise would \
              silently break correlation"
         );
+    }
+
+    /// The single most important line in the local launch (§92).
+    ///
+    /// A local session runs the same binary as Codex. Without its own
+    /// `CODEX_HOME` both would write rollouts into `~/.codex/sessions`, and
+    /// `codex::correlate` — which matches a session to a rollout by working
+    /// directory and start time — could hand each of two sessions started
+    /// seconds apart in one project the other's transcript. Every turn, every
+    /// token count and every searched sentence would then be filed against the
+    /// wrong session.
+    #[test]
+    fn a_local_session_writes_its_rollouts_somewhere_only_it_writes() {
+        let local = LocalLaunch {
+            home: PathBuf::from("C:\\app-data\\local-runtime\\codex-home"),
+            args: vec!["--oss".into()],
+        };
+        let (program, _args, env) =
+            command_for(SessionKind::Local, "abc-123", None, None, None, Some(&local));
+
+        assert_eq!(program, "codex", "the local provider is the same runner");
+        assert_eq!(
+            env,
+            vec![(
+                "CODEX_HOME".to_string(),
+                "C:\\app-data\\local-runtime\\codex-home".to_string()
+            )],
+        );
+    }
+
+    /// The launch carries whatever the runtime configuration produced, rather
+    /// than flags spelled a second time here where they could drift.
+    #[test]
+    fn the_local_launch_uses_the_configured_arguments() {
+        let local = LocalLaunch {
+            home: PathBuf::from("home"),
+            args: crate::localai::launch_args(&crate::localai::RuntimeConfig {
+                model: Some("qwen3.8:latest".into()),
+                ..Default::default()
+            }),
+        };
+        let (_, args, _) = command_for(SessionKind::Local, "s1", None, None, None, Some(&local));
+        assert!(args.windows(2).any(|w| w == ["-m", "qwen3.8:latest"]));
+    }
+
+    /// Reached only if a refusal upstream were ever removed. Launching into
+    /// the user's own Codex configuration is the one wrong answer available
+    /// here, so nothing launches at all.
+    #[test]
+    fn an_unprepared_local_session_launches_nothing_rather_than_the_wrong_thing() {
+        let (program, _, env) = command_for(SessionKind::Local, "s1", None, None, None, None);
+        assert!(program.is_empty());
+        assert!(
+            env.is_empty(),
+            "no CODEX_HOME means the user's own configuration; better to start \
+             nothing than to write into it"
+        );
+    }
+
+    /// A local model is not a cloud subscription, and the capability model has
+    /// to keep saying so where the launcher can see it.
+    #[test]
+    fn the_local_kind_maps_onto_the_provider_that_has_no_account() {
+        assert_eq!(SessionKind::Local.provider_id(), "local");
+        let capabilities = crate::providers::by_id("local")
+            .expect("the local provider is registered")
+            .capabilities();
+        assert!(!capabilities.account_switching);
     }
 
     #[test]
@@ -1044,7 +1223,7 @@ mod briefing_launch {
     #[test]
     fn a_brief_is_appended_rather_than_replacing_the_system_prompt() {
         let brief = std::path::Path::new("C:/logs/s1/project-brief.md");
-        let (program, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, Some(brief), None);
+        let (program, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, Some(brief), None, None);
 
         assert_eq!(program, "claude");
         let joined = args.join(" ");
@@ -1064,7 +1243,7 @@ mod briefing_launch {
 
     #[test]
     fn a_session_with_nothing_to_say_passes_no_brief_flag() {
-        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None, None);
+        let (_, args, _) = command_for(SessionKind::ClaudeCode, "s1", None, None, None, None);
         assert!(
             !args.iter().any(|a| a.contains("system-prompt")),
             "an empty brain must not produce an empty flag: {args:?}"
@@ -1091,7 +1270,7 @@ mod briefing_launch {
 
         // And even handed a path, Codex's command line does not grow one.
         let brief = std::path::Path::new("C:/logs/s1/project-brief.md");
-        let (_, args, _) = command_for(SessionKind::Codex, "s1", None, Some(brief), None);
+        let (_, args, _) = command_for(SessionKind::Codex, "s1", None, Some(brief), None, None);
         assert!(
             args.is_empty(),
             "Codex has no flag for this and must not be given one: {args:?}"

@@ -124,8 +124,16 @@ recuperável.</p>
 
 <h2>O que as checagens de atualização fazem hoje</h2>
 
-<p>Elas informam uma falha, honestamente. O atualizador está configurado contra um local de release
-que ainda não foi publicado, então a checagem não pode dar certo. Isso é
+<p>Elas alcançam um manifesto real. A partir da 0.10.0 os releases são publicados nos GitHub
+releases deste repositório, então <code>releases/latest/download/latest.json</code> — o endpoint
+compilado no aplicativo — resolve, e uma checagem compara a sua versão com a mais nova publicada.</p>
+
+<p>O que uma checagem não pode fazer é instalar algo não verificado: o download é conferido contra a
+chave pública minisign compilada no aplicativo, e uma assinatura que não confere é recusada. O lugar
+onde os arquivos estão hospedados não muda essa garantia.</p>
+
+<p class="muted">Antes da 0.10.0 isto dizia o contrário, e com razão: o endpoint apontava para um
+local que nunca tinha sido publicado. Isso era
 <a href="page:blockers">um bloqueio rastreado sobre onde publicar</a>, e não um bug no atualizador —
 e informar a falha é melhor do que fingir estar em dia, o que te deixaria acreditando ter a versão
 mais nova para sempre.</p>

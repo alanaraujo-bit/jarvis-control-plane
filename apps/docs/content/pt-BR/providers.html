@@ -1,6 +1,13 @@
-<p>Duas CLIs de agente vêm dentro do J.A.R.V.I.S. hoje: <strong>Claude Code</strong> e
-<strong>Codex</strong>. Elas não são intercambiáveis, e fingir o contrário seria o jeito mais
-fácil de fazer a interface mentir.</p>
+<p>Três provedores vêm dentro do J.A.R.V.I.S. hoje: <strong>Claude Code</strong>,
+<strong>Codex</strong> e o <a href="page:local-model"><strong>Local</strong></a> — um modelo rodando
+na GPU desta máquina. Eles não são intercambiáveis, e fingir o contrário seria o jeito mais fácil de
+fazer a interface mentir.</p>
+
+<p>O terceiro é a prova de que esse desenho funciona. Ele chegou sem remodelar nada acima dele:
+nenhum arquivo React aprendeu um caso especial novo, porque a interface é renderizada a partir do que
+os adaptadores declaram, e não de booleanos escritos dentro de componentes. O que ele precisou foram
+três respostas novas e honestas — ele não tem conta, o suporte a imagem é assunto do modelo carregado
+e não do adaptador, e ele escreve os transcripts num lugar em que só ele escreve.</p>
 
 <h2>Um provedor é um adaptador, não um caso especial</h2>
 
@@ -172,7 +179,8 @@ oferecido, e a seção Ambiente das Configurações diz o que está faltando.</p
 <div class="callout">
   <span class="callout__title">No código</span>
   <p><code>providers/mod.rs</code> é o trait e o modelo de capacidades;
-  <code>providers/claude.rs</code> e <code>providers/codex.rs</code> são os dois adaptadores,
-  cada um com o raciocínio dos próprios valores em comentários;
+  <code>providers/claude.rs</code>, <code>providers/codex.rs</code> e
+  <code>providers/local.rs</code> são os adaptadores, cada um com o raciocínio dos próprios valores em
+  comentários; <code>localai/</code> é o runtime local a partir do qual o terceiro é configurado;
   <code>providers/tail.rs</code> é o leitor de JSONL.</p>
 </div>

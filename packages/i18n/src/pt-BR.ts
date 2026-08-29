@@ -1042,4 +1042,127 @@ export const ptBR: Record<MessageKey, string> = {
   "settings.notifications.test": "Enviar uma notificação de teste",
   "settings.notifications.testSent": "Enviada",
   "settings.notifications.testPreview": "Você quer continuar?",
+
+  // Runtime de modelo local (§92).
+  "settings.startup": "Inicialização",
+  "settings.startup.blurb": "Se o J.A.R.V.I.S. abre junto com esta máquina.",
+  "settings.startup.withSystem": "Iniciar com o Windows",
+  "settings.startup.withSystemHelp":
+    "Registra o J.A.R.V.I.S. como item de inicialização, então ele já está rodando quando você entra. Você também pode desligar isso na aba Inicializar do Gerenciador de Tarefas — esta chave mostra o que o Windows tem de fato, não o que foi pedido.",
+  "settings.startup.minimized": "Abrir minimizado",
+  "settings.startup.minimizedHelp":
+    "Vale só para o início automático. A janela vai para a barra de tarefas em vez de aparecer na frente do que você estava fazendo; abrir o J.A.R.V.I.S. você mesmo sempre mostra ele.",
+  "settings.startup.unsupported": "Esta versão não consegue registrar um item de inicialização neste sistema.",
+  "settings.startup.failed": "O Windows recusou a mudança:",
+  "nav.local": "Modelo local",
+  "terminal.local": "Modelo local",
+
+  "localAi.title": "Modelo local",
+  "localAi.subtitle":
+    "Um modelo rodando nesta máquina. Não existe conta nem cota — o que limita ele é a placa onde ele roda.",
+  "localAi.server": "Servidor",
+  "localAi.online": "Respondendo",
+  "localAi.offline": "Sem resposta",
+  "localAi.version": "Versão do Ollama",
+  "localAi.endpoint": "Endereço",
+  "localAi.endpointHelp": "Loopback por padrão. Um modelo desta máquina deve continuar nesta máquina.",
+  "localAi.unreachableHelp": "Nada respondeu em {endpoint}. Suba o Ollama e esta tela encontra ele.",
+  "localAi.runnerMissing":
+    "A CLI do Codex não está instalada. As sessões locais rodam nela, apontada para o seu próprio modelo em vez da OpenAI.",
+
+  "localAi.models": "Modelos instalados",
+  "localAi.noModels": "Nenhum modelo instalado. Baixe um com ollama pull e ele aparece aqui.",
+  "localAi.use": "Usar nas sessões",
+  "localAi.inUse": "Em uso",
+  "localAi.notAnAgent":
+    "Sem suporte a ferramentas — este modelo conversa, mas não edita um arquivo nem roda um comando.",
+  "localAi.capabilities": "Capacidades",
+  "localAi.maxContext": "Máximo do modelo",
+  "localAi.onDisk": "Em disco",
+
+  "localAi.resident": "Na VRAM agora",
+  "localAi.notResident": "Não carregado",
+  "localAi.load": "Carregar agora",
+  "localAi.unload": "Liberar VRAM",
+  "localAi.working": "Trabalhando…",
+  "localAi.fullyOnGpu": "Inteiro na GPU",
+  "localAi.spilled":
+    "{percent}% na GPU — o resto roda na CPU, que é exatamente como aparece uma queda repentina de tokens por segundo.",
+  "localAi.expires": "Liberado às {when} se não for usado",
+  "localAi.keepsResident": "Fica carregado até você liberar",
+
+  "localAi.effectiveContext": "Janela de contexto",
+  "localAi.contextFromRunner": "Medida no runner carregado",
+  "localAi.contextFromServer": "Da configuração do servidor — nada carregado para medir",
+  "localAi.contextUnknown": "Desconhecida até carregar um modelo",
+
+  "localAi.session": "Como as sessões rodam",
+  "localAi.keepAlive": "Manter na VRAM por",
+  "localAi.keepAliveHelp":
+    "Quanto tempo o modelo continua carregado depois da última requisição. Mais tempo faz o próximo prompt responder na hora; menos tempo devolve a placa mais cedo.",
+  "localAi.keepAliveFor": "{count} min",
+  "localAi.keepAliveForever": "Até liberar",
+  "localAi.keepAliveImmediate": "Liberar na hora",
+  "localAi.preload": "Carregar o modelo quando uma sessão começa",
+  "localAi.preloadHelp": "Assim o primeiro prompt não é o que paga o carregamento.",
+  "localAi.sandbox": "O que uma sessão pode tocar",
+  "localAi.sandbox.readOnly": "Somente leitura",
+  "localAi.sandbox.workspaceWrite": "Escrever dentro do projeto",
+  "localAi.sandbox.dangerFullAccess": "Acesso total a esta máquina",
+  "localAi.approval": "Quando ele para para perguntar",
+  "localAi.approval.untrusted": "Antes de qualquer coisa de que não tem certeza",
+  "localAi.approval.onFailure": "Só depois de um comando falhar",
+  "localAi.approval.onRequest": "Quando ele decidir perguntar",
+  "localAi.approval.never": "Nunca",
+
+  "localAi.serverSettings": "Configuração do servidor",
+  "localAi.serverSettingsHelp":
+    "O Ollama lê isto uma vez, ao iniciar, e vale para tudo que usa ele — não só para o J.A.R.V.I.S. Salvar aqui guarda para a sua conta; o servidor em execução mantém o valor antigo até você reiniciá-lo.",
+  "localAi.notSet": "Não definido · o Ollama usa {value}",
+  "localAi.inherited": "Lido do ambiente do próprio app, não de uma configuração salva — então pode não ser o que o servidor em execução recebeu ao iniciar.",
+  "localAi.restartNeeded": "Salvo. Passa a valer no próximo início do Ollama.",
+  "localAi.contextLengthLabel": "Tamanho do contexto",
+  "localAi.flashAttentionLabel": "Flash attention",
+  "localAi.kvCacheLabel": "Tipo do cache KV",
+
+  "localAi.noAccount":
+    "Nada mede um modelo que é seu. O que decide se ele é rápido é quanto dele cabe na VRAM e quão perto a placa está do limite de potência — os dois acima.",
+  "localAi.configRoot": "Raiz de configuração",
+  "localAi.configRootHelp":
+    "As sessões locais rodam com a própria configuração, escrita aqui. O seu Codex nunca é lido nem alterado.",
+
+  "localAi.noModel":
+    "Nenhum modelo local foi escolhido ainda. Escolha um na tela Modelo local e a sessão começa nele.",
+  "localAi.unreachable":
+    "O servidor do modelo local não está respondendo, então nada foi iniciado. Suba o Ollama e tente de novo.",
+  "localAi.configWriteFailed":
+    "Não deu para escrever a configuração do runtime local, então nada foi iniciado.",
+  "localAi.serverEnvUnsupported": "A configuração do servidor só pode ser salva por você no Windows.",
+  "localAi.unknownSetting": "Isso não é uma configuração que este app gerencia.",
+
+  "gpu.title": "GPU",
+  "gpu.absent": "Nenhuma GPU NVIDIA encontrada nesta máquina.",
+  "gpu.power": "Potência",
+  "gpu.powerOfLimit": "{draw} W de {limit} W",
+  "gpu.powerHeadroom": "Limite em {limit} W de {max} W possíveis",
+  "gpu.temperature": "Temperatura",
+  "gpu.utilization": "GPU ocupada",
+  "gpu.memoryUtilization": "Banda de memória",
+  "gpu.vram": "VRAM",
+  "gpu.vramFree": "{free} livres",
+  "gpu.clock": "Clock do núcleo",
+  "gpu.fan": "Ventoinha",
+  "gpu.state": "Estado",
+  "gpu.driver": "Driver {version}",
+  "gpu.throttleNone": "Sem restrição",
+  "gpu.throttlePower": "Segurada pelo limite de potência",
+  "gpu.throttleThermal": "Segurada pela temperatura",
+  "gpu.throttleSlowdown": "Redução de hardware ativa",
+  "gpu.throttleHelp":
+    "Contra o limite de potência, subir o limite é o que compra velocidade. Contra o térmico, é refrigeração.",
+
+  "performance.gpu": "GPU",
+  "performance.contextWindow": "Janela de contexto",
+  "performance.contextShare": "{used} de {total}",
+  "performance.localModel": "Local · {model}",
 };

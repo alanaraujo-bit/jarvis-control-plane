@@ -1,6 +1,13 @@
-<p>Two agent CLIs ship inside J.A.R.V.I.S. today: <strong>Claude Code</strong> and
-<strong>Codex</strong>. They are not interchangeable, and pretending otherwise would be the
+<p>Three providers ship inside J.A.R.V.I.S. today: <strong>Claude Code</strong>,
+<strong>Codex</strong>, and <a href="page:local-model"><strong>Local</strong></a> — a model running
+in this machine's own GPU. They are not interchangeable, and pretending otherwise would be the
 easiest way to make the interface lie.</p>
+
+<p>The third one is the proof that this design works. It arrived without reshaping anything above
+it: no React file learned a new special case, because the interface renders from what the adapters
+declare rather than from booleans written into components. What it did need was three honest new
+answers — it has no account, its image support is the loaded model's business rather than the
+adapter's, and it writes its transcripts somewhere only it writes.</p>
 
 <h2>A provider is an adapter, not a special case</h2>
 
@@ -166,7 +173,8 @@ Environment section of Settings says what is missing.</p>
 <div class="callout">
   <span class="callout__title">In the source</span>
   <p><code>providers/mod.rs</code> is the trait and the capability model;
-  <code>providers/claude.rs</code> and <code>providers/codex.rs</code> are the two adapters,
-  each with the reasoning for its own values in comments;
+  <code>providers/claude.rs</code>, <code>providers/codex.rs</code> and
+  <code>providers/local.rs</code> are the adapters, each with the reasoning for its own values in
+  comments; <code>localai/</code> is the local runtime the third one is configured from;
   <code>providers/tail.rs</code> is the JSONL reader.</p>
 </div>

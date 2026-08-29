@@ -164,7 +164,9 @@ pub fn spawn(
             // it is there "so a session can be resumed", and for Codex it was
             // always NULL. The id is right here in the rollout's filename, and
             // this is the only moment we know it (§88, D41).
-            if provider == "codex" {
+            // The local provider is the same runner writing the same rollout,
+            // so it names its own session in exactly the same place (§92).
+            if provider == "codex" || provider == crate::localai::PROVIDER_ID {
                 if let Some(rollout_id) = codex::session_id_from_path(&path) {
                     let recorded = db.with(|conn| {
                         conn.execute(
@@ -213,7 +215,9 @@ pub fn spawn(
                             }
                             let items = match provider.as_str() {
                                 "claude-code" => claude::parse_line(&line),
-                                "codex" => codex::parse_line(&line),
+                                // The same rollout envelope, verified against a
+                                // real local run rather than assumed (§92).
+                                "codex" | "local" => codex::parse_line(&line),
                                 _ => Vec::new(),
                             };
                             for item in items {
@@ -333,6 +337,14 @@ fn locate(
                 Some(root) => codex::correlate_in(root, cwd, launched_at_ms),
                 None => codex::correlate(cwd, launched_at_ms),
             },
+            // The same heuristic over a tree only local sessions write to,
+            // which makes the match stronger here than it is for Codex: no
+            // cloud session can be sitting in it to be confused with. There is
+            // deliberately no fallback to the user's own `~/.codex/sessions` —
+            // a local session that lost its root must find nothing rather than
+            // adopt somebody else's rollout (§92).
+            "local" => transcript_root
+                .and_then(|root| codex::correlate_in(root, cwd, launched_at_ms)),
             _ => None,
         };
 

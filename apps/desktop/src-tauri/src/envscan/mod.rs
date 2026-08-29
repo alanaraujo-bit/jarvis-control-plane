@@ -135,6 +135,20 @@ const PROBES: &[Probe] = &[
         install_hint: "npm install -g @openai/codex",
         install_url: "https://developers.openai.com/codex/cli",
     },
+    // The local model runtime (§92). Optional rather than recommended: a
+    // machine without a capable GPU is a perfectly good machine for this
+    // product, and marking a 17 GB download as something the user is missing
+    // would be advice rather than a scan.
+    Probe {
+        id: "ollama",
+        name: "Ollama",
+        kind: ToolKind::Agent,
+        importance: ToolImportance::Optional,
+        bin: "ollama",
+        args: &["--version"],
+        install_hint: "winget install --id Ollama.Ollama",
+        install_url: "https://ollama.com/download",
+    },
     Probe {
         id: "gh",
         name: "GitHub CLI",

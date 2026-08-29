@@ -97,6 +97,11 @@ const SPLIT_LABEL: Record<SplitDirection, MessageKey> = {
 const AGENT_TOOL_ID: Record<Exclude<SessionKind, "shell">, string> = {
   "claude-code": "claude",
   codex: "codex",
+  // The local provider runs the same binary as Codex against a model in this
+  // machine, so the same scan answers whether it can be launched at all. Its
+  // other precondition — a reachable server with a model chosen — belongs to
+  // the runtime surface, which can say which of the two is missing.
+  local: "codex",
 };
 
 /**
@@ -351,9 +356,14 @@ export function ProjectWorkspace({
             >
               {t("terminal.shell")}
             </button>
-            {(["claude-code", "codex"] as const).map((kind) => {
+            {(["claude-code", "codex", "local"] as const).map((kind) => {
               const ready = toolReady(kind);
-              const label = kind === "claude-code" ? t("terminal.claudeCode") : t("terminal.codex");
+              const label =
+                kind === "claude-code"
+                  ? t("terminal.claudeCode")
+                  : kind === "codex"
+                    ? t("terminal.codex")
+                    : t("terminal.local");
               return (
                 <button
                   key={kind}
@@ -587,6 +597,7 @@ export function ProjectWorkspace({
         {prefs.performanceHudEnabled && activeTab_ && !activeTab_.historical && (
           <PerformanceHud
             sessionId={activeTab_.sessionId}
+            kind={activeTab_.kind}
             onClose={() => void setPerformanceHud(false)}
           />
         )}

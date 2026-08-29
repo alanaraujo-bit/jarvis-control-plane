@@ -10,7 +10,13 @@ import { isTauri } from "./platform";
  * exactly the corruption the Rust log takes care to avoid.
  */
 
-export type SessionKind = "shell" | "claude-code" | "codex";
+/**
+ * Codex and the local model are the same executable, launched differently
+ * (§92). They are separate kinds all the way down anyway, because everything
+ * downstream — which transcript tree is watched, whether there is an account,
+ * what the runtime surface reports — differs.
+ */
+export type SessionKind = "shell" | "claude-code" | "codex" | "local";
 
 export type SessionState =
   | "starting"

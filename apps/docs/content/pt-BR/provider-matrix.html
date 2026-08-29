@@ -1,6 +1,6 @@
 <p>Toda capacidade que os adaptadores declaram, o que cada valor significa para você, e como foi
 estabelecido. Os valores são lidos de <code>providers/claude.rs</code> e
-<code>providers/codex.rs</code>.</p>
+<code>providers/codex.rs</code> e <code>providers/local.rs</code>.</p>
 
 <div class="callout" data-kind="key">
   <span class="callout__title">Isto são dados, não documentação</span>
@@ -14,23 +14,41 @@ estabelecido. Os valores são lidos de <code>providers/claude.rs</code> e
 
 <div class="tablewrap">
 <table>
-  <thead><tr><th>Capacidade</th><th>Claude Code</th><th>Codex</th></tr></thead>
+  <thead><tr><th>Capacidade</th><th>Claude Code</th><th>Codex</th><th>Local</th></tr></thead>
   <tbody>
-    <tr><td>Executável</td><td><code>claude</code></td><td><code>codex</code></td></tr>
-    <tr><td>Correlação de sessão</td><td><code>Deterministic</code></td><td><code>FileWatch</code></td></tr>
-    <tr><td>Origem da conversa</td><td><code>Transcript</code></td><td><code>Transcript</code></td></tr>
-    <tr><td>Relato de uso</td><td><code>Official</code></td><td><code>Official</code></td></tr>
-    <tr><td>Aplicação de proteções</td><td><code>PreExecution</code></td><td><code>PreExecutionWhenTrusted</code></td></tr>
-    <tr><td>Rota do briefing</td><td><code>SystemPrompt</code></td><td><code>OpeningMessage</code></td></tr>
-    <tr><td>Títulos de sessão</td><td><code>Provider</code></td><td><code>Derived</code></td></tr>
-    <tr><td>Mecanismo de retomada</td><td><code>Fork</code></td><td><code>AppendInPlace</code></td></tr>
-    <tr><td>Imagens</td><td>Sim</td><td>Sim</td></tr>
-    <tr><td>Aprovações</td><td>Sim</td><td>Sim</td></tr>
-    <tr><td>Worktrees</td><td>Sim</td><td>Sim</td></tr>
-    <tr><td>Troca de conta</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Executável</td><td><code>claude</code></td><td><code>codex</code></td><td><code>codex</code></td></tr>
+    <tr><td>Correlação de sessão</td><td><code>Deterministic</code></td><td><code>FileWatch</code></td><td><code>FileWatch</code></td></tr>
+    <tr><td>Origem da conversa</td><td><code>Transcript</code></td><td><code>Transcript</code></td><td><code>Transcript</code></td></tr>
+    <tr><td>Relato de uso</td><td><code>Official</code></td><td><code>Official</code></td><td><code>Official</code></td></tr>
+    <tr><td>Aplicação de proteções</td><td><code>PreExecution</code></td><td><code>PreExecutionWhenTrusted</code></td><td><code>PreExecutionWhenTrusted</code></td></tr>
+    <tr><td>Rota do briefing</td><td><code>SystemPrompt</code></td><td><code>OpeningMessage</code></td><td><code>OpeningMessage</code></td></tr>
+    <tr><td>Títulos de sessão</td><td><code>Provider</code></td><td><code>Derived</code></td><td><code>Derived</code></td></tr>
+    <tr><td>Mecanismo de retomada</td><td><code>Fork</code></td><td><code>AppendInPlace</code></td><td><code>AppendInPlace</code></td></tr>
+    <tr><td>Imagens</td><td>Sim</td><td>Sim</td><td>O modelo decide</td></tr>
+    <tr><td>Aprovações</td><td>Sim</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Worktrees</td><td>Sim</td><td>Sim</td><td>Sim</td></tr>
+    <tr><td>Troca de conta</td><td>Sim</td><td>Sim</td><td><strong>Não</strong></td></tr>
   </tbody>
 </table>
 </div>
+
+<h2>A terceira coluna</h2>
+
+<p>O <a href="page:local-model">Local</a> roda o mesmo executável que o Codex contra um modelo na GPU
+desta máquina, então quase tudo é idêntico <em>por construção</em> — o mesmo formato de rollout
+significa a mesma correlação, a mesma visão de conversa, os mesmos hooks. Três coisas são de fato
+diferentes, e são o motivo de ele ser um provedor separado em vez de uma opção do Codex:</p>
+
+<ul>
+  <li><strong>Sem conta.</strong> Uma execução local reporta <code>rate_limits</code> com todos os
+  campos nulos, porque nada mede um modelo que é seu. A troca de conta é <code>false</code>, e a tela
+  do runtime reporta folga de VRAM onde as outras reportam cota.</li>
+  <li><strong>Imagens são decisão do modelo.</strong> Um modelo de visão enxerga uma; um modelo de
+  código pequeno não. O adaptador não promete isso por todos eles.</li>
+  <li><strong>Raiz de transcript própria.</strong> As sessões locais rodam com um
+  <code>CODEX_HOME</code> deste app, então um rollout local e um rollout do Codex na nuvem nunca podem
+  ser confundidos por uma heurística que casa diretório de trabalho e hora de início.</li>
+</ul>
 
 <h2>O que cada valor significa</h2>
 
@@ -176,7 +194,8 @@ está atribuindo cotas erradas e precisa ser desligado.</p>
 <table>
   <tbody>
     <tr><td>Claude Code</td><td>2.1.240, 2.1.241, 2.1.245</td></tr>
-    <tr><td>Codex CLI</td><td>0.147.0, 0.149.0, 0.149.1</td></tr>
+    <tr><td>Codex CLI</td><td>0.147.0, 0.149.0, 0.149.1, 0.150.1</td></tr>
+    <tr><td>Ollama</td><td>0.33.2, com <code>qwen3.8:27b-q4_K_M</code></td></tr>
   </tbody>
 </table>
 </div>

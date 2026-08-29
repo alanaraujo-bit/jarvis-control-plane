@@ -4,6 +4,8 @@
 //! mean when they ask how much of the machine the app is using. Read the OS
 //! counters directly and return bytes; formatting belongs to the surface.
 
+pub mod gpu;
+
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, Serialize)]

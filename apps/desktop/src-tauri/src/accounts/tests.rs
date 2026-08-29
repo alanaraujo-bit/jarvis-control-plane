@@ -1048,3 +1048,81 @@ fn real_machine_registry_tells_its_accounts_apart() {
 
     let _ = std::fs::remove_file(&copy);
 }
+
+/// The bug that made J.A.R.V.I.S. slow to open after 0.9.0, and filled a disk.
+///
+/// `adopt_machine_account` was idempotent by `config_dir`, while
+/// `isolate_adopted_accounts` exists precisely to *change* `config_dir`. So the
+/// second launch no longer recognised its own adopted row, inserted another,
+/// and isolation copied the whole provider directory again — every launch,
+/// before the window appeared.
+///
+/// This asserts the invariant that was violated: **at most one adopted row per
+/// provider, no matter how many times adoption runs or where the row has since
+/// been pointed.**
+#[test]
+fn the_machine_account_is_adopted_once_even_after_it_has_been_isolated() {
+    let db = Database::open_in_memory().unwrap();
+
+    // A row that adoption already created and isolation has since moved onto an
+    // app-owned path — exactly the state every launch after the first sees.
+    let mut isolated = account("machine-codex", "codex", 0, true);
+    isolated.adopted = true;
+    isolated.config_dir = "C:/app-data/accounts/codex/machine-codex".into();
+    insert(&db, &isolated);
+
+    // Adoption runs again, as it does on every start.
+    adopt_machine_account(&db, "codex").unwrap();
+
+    let adopted: Vec<_> = list(&db)
+        .unwrap()
+        .into_iter()
+        .filter(|a| a.provider == "codex" && a.adopted)
+        .collect();
+    assert_eq!(
+        adopted.len(),
+        1,
+        "a second adopted row is a second multi-gigabyte copy of the provider \
+         directory, made before the window opens: {adopted:?}"
+    );
+    assert_eq!(adopted[0].id, "machine-codex");
+}
+
+/// The import must carry an account, not the CLI's re-downloadable caches.
+///
+/// Measured on the machine this was found on: `~/.codex` was 2.59 GB, of which
+/// `packages` alone was 1.5 GB and `plugins` 387 MB. Copying those turned a
+/// one-time import into a multi-second, multi-gigabyte operation duplicating
+/// files the CLI fetches again on its own.
+#[test]
+fn importing_an_account_skips_the_caches_and_keeps_the_credentials() {
+    let source = tempfile::tempdir().unwrap();
+    let target = tempfile::tempdir().unwrap();
+
+    // What an account is.
+    std::fs::write(source.path().join("auth.json"), b"{}").unwrap();
+    std::fs::write(source.path().join("config.toml"), b"model = \"x\"").unwrap();
+    std::fs::create_dir_all(source.path().join("skills")).unwrap();
+    std::fs::write(source.path().join("skills").join("a.md"), b"skill").unwrap();
+
+    // What it is not.
+    for cache in ["packages", "plugins", "cache", "vendor_imports", "sessions"] {
+        std::fs::create_dir_all(source.path().join(cache)).unwrap();
+        std::fs::write(source.path().join(cache).join("big.bin"), vec![0u8; 1024]).unwrap();
+    }
+
+    copy_provider_state("codex", source.path(), target.path()).unwrap();
+
+    assert!(target.path().join("auth.json").is_file(), "credentials travel");
+    assert!(target.path().join("config.toml").is_file());
+    assert!(
+        target.path().join("skills").join("a.md").is_file(),
+        "a person's own skills are account state, not a cache"
+    );
+    for cache in ["packages", "plugins", "cache", "vendor_imports", "sessions"] {
+        assert!(
+            !target.path().join(cache).exists(),
+            "{cache} is re-downloadable and must not be copied"
+        );
+    }
+}

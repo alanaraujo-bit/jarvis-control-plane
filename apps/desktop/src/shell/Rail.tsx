@@ -3,6 +3,7 @@ import {
   ChartNoAxesColumn,
   History,
   FolderGit2,
+  Cpu,
   Network,
   Settings,
   Radar,
@@ -23,6 +24,7 @@ export type SurfaceId =
   | "history"
   | "analytics"
   | "accounts"
+  | "local"
   | "settings";
 
 export interface RailItem {
@@ -49,6 +51,9 @@ export const RAIL_ITEMS: RailItem[] = [
   { id: "history", icon: History, label: "nav.history" },
   { id: "analytics", icon: ChartNoAxesColumn, label: "nav.analytics" },
   { id: "accounts", icon: UsersRound, label: "nav.accounts" },
+  // Beside Accounts, because it answers the same question for the provider
+  // that has no account (§92).
+  { id: "local", icon: Cpu, label: "nav.local" },
   { id: "settings", icon: Settings, label: "nav.settings", footer: true },
 ];
 

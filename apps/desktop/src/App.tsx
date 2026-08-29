@@ -25,6 +25,7 @@ import { History } from "./surfaces/history/History";
 import { kindOf } from "./surfaces/history/format";
 import { Analytics } from "./surfaces/analytics/Analytics";
 import { Accounts } from "./surfaces/accounts/Accounts";
+import { LocalRuntime } from "./surfaces/local/LocalRuntime";
 import { MissionControl } from "./surfaces/mission-control/MissionControl";
 import { Missions } from "./surfaces/missions/Missions";
 import { Auth } from "./surfaces/identity/Auth";
@@ -63,6 +64,7 @@ const IMPLEMENTED: SurfaceId[] = [
   "history",
   "analytics",
   "accounts",
+  "local",
   "settings",
 ];
 
@@ -763,6 +765,8 @@ export function App() {
               <Analytics />
             ) : surface === "accounts" ? (
               <Accounts projectId={accountsProjectId} />
+            ) : surface === "local" ? (
+              <LocalRuntime />
             ) : surface === "missions" ? (
               <Missions
                 initialMissionId={focusMission}

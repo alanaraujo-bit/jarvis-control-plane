@@ -9,6 +9,7 @@ import { CATEGORIES, CATEGORY, type CategoryId } from "./categories";
 import { CompanionPanel } from "./CompanionPanel";
 import { NotificationsPanel, Switch } from "./NotificationsPanel";
 import { NumberSetting } from "./NumberSetting";
+import { StartupPanel } from "./StartupPanel";
 import { useSettingsCategory } from "./settingsNav";
 import { PREF, usePreferences } from "./usePreferences";
 import { Updates } from "./Updates";
@@ -267,6 +268,14 @@ function Section({ id }: { id: CategoryId }) {
 
     case "companion":
       return <CompanionPanel />;
+
+    case "startup":
+      return (
+        <>
+          <Head id="startup" />
+          <StartupPanel />
+        </>
+      );
 
     case "environment":
       return <EnvironmentPanel />;

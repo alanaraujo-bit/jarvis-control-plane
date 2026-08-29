@@ -85,6 +85,7 @@ const TITLES: Record<SessionKind, string> = {
   shell: "Shell",
   "claude-code": "Claude Code",
   codex: "Codex",
+  local: "Local",
 };
 
 /** Number tabs of the same kind so several shells stay distinguishable. */

@@ -236,6 +236,7 @@ fn provider_name(id: &str) -> String {
     match id {
         "claude-code" => "Claude Code".into(),
         "codex" => "Codex".into(),
+        "local" => "Local".into(),
         other => other.into(),
     }
 }

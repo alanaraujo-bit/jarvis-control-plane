@@ -4,6 +4,7 @@ import {
   Download,
   Gauge,
   Palette,
+  Power,
   ShieldCheck,
   Smartphone,
   SquareTerminal,
@@ -40,6 +41,7 @@ export const CATEGORIES = [
   "guardrails",
   "notifications",
   "companion",
+  "startup",
   "environment",
   "updates",
 ] as const;
@@ -117,6 +119,16 @@ export const CATEGORY: Record<CategoryId, Category> = {
     icon: Smartphone,
     label: "settings.companion",
     keywords: "phone mobile companion pair celular telefone parear",
+  },
+  // Rarely visited, and visited for one reason — so it says that reason in its
+  // own name rather than hiding under a broader heading.
+  startup: {
+    id: "startup",
+    icon: Power,
+    label: "settings.startup",
+    blurb: "settings.startup.blurb",
+    keywords:
+      "startup launch boot windows login autostart minimized inicializar iniciar com windows abrir sozinho minimizado",
   },
   environment: {
     id: "environment",

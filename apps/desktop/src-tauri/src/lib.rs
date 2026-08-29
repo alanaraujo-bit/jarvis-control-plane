@@ -16,6 +16,7 @@ mod git;
 mod guardrail;
 mod history;
 mod identity;
+mod localai;
 mod mission;
 mod notebook;
 mod notify;
@@ -103,6 +104,16 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        // Start with the machine (§93), registered second so the startup entry
+        // exists before anything else can want to read it.
+        //
+        // The `--autostart` argument is the whole point of the registration:
+        // Windows offers no way for a process to ask "did you start me?", so
+        // the entry carries the answer. See `settings::AUTOSTART_ARG`.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![settings::AUTOSTART_ARG]),
+        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -336,6 +347,12 @@ pub fn run() {
             notebook::commands::notebook_note_delete,
             brain::brain_preview_brief,
             providers::list_providers,
+            localai::commands::local_runtime_report,
+            localai::commands::local_runtime_save,
+            localai::commands::local_runtime_load,
+            localai::commands::local_runtime_unload,
+            localai::commands::local_runtime_set_server_env,
+            performance::gpu::gpu_metrics,
             activity::list_activity,
             analytics::analytics_report,
             mission::store::list_missions,
@@ -384,6 +401,8 @@ pub fn run() {
             settings::settings_set_preference,
             settings::settings_set_notification,
             settings::settings_set_performance_hud,
+            settings::settings_launch,
+            settings::settings_set_launch,
             preview::preview_detect,
             preview::preview_open,
             preview::preview_reload,

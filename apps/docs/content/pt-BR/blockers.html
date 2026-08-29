@@ -28,23 +28,23 @@ código.</p>
   Veja <a href="page:distribution">Distribuição e atualizações</a>.</p>
 </div>
 
-<h2>B2 — Ainda sem lugar para publicar atualizações</h2>
+<h2>B2 — Ainda sem lugar para publicar atualizações <em>(resolvido)</em></h2>
 
-<p><span class="badge" data-t="danger">Bloqueado por uma decisão</span></p>
+<p><span class="badge" data-t="ok">Resolvido na 0.10.0</span></p>
 
-<p><strong>O que você vê:</strong> <em>Verificar atualizações</em> informa uma falha.</p>
+<p>A decisão que travava isto foi tomada: os releases são publicados nos
+<strong>GitHub releases deste repositório</strong>, e o endpoint do atualizador —
+<code>releases/latest/download/latest.json</code> — agora aponta para algo que existe.
+<em>Verificar atualizações</em> alcança um manifesto real e compara contra uma versão real.</p>
 
-<p><strong>Por quê:</strong> o atualizador está configurado contra um local de release que não é
-alcançável do jeito que as coisas estão. Existem duas rotas e as duas são simples — um repositório
-público separado só para os artefatos de release, com o código-fonte continuando privado; ou servir o
-manifesto de atualização e os instaladores a partir do projeto na nuvem que já existe.</p>
+<p>O manifesto é escrito à mão como parte de cortar um release, e a <code>signature</code> dele é a
+assinatura minisign do instalador que ele nomeia. Um instalador cuja assinatura não confere contra a
+chave pública compilada no aplicativo é recusado — essa é a garantia, e ela não muda com o lugar onde
+os arquivos estão hospedados.</p>
 
-<p>Está em aberto porque apontar artefatos de release para uma função que existe para passar JSON
-pequeno de um lado para o outro merece uma reflexão própria em vez de ser aparafusada porque a conta
-por acaso estava disponível.</p>
-
-<p>Até lá a checagem <strong>informa a falha honestamente</strong> em vez de fingir estar em dia — o
-que te deixaria acreditando ter a versão mais nova para sempre.</p>
+<p>Mantido aqui em vez de apagado, porque um bloqueio fechado por uma decisão vale ser lido: a outra
+rota considerada — servir o manifesto a partir do projeto na nuvem — teria colocado artefatos de
+release atrás de uma função feita para passar JSON pequeno de um lado para o outro.</p>
 
 <h2>B6 — Login em contas adicionais</h2>
 

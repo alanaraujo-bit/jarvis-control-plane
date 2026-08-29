@@ -1,6 +1,6 @@
 <p>Every capability the adapters declare, what each value means for you, and how it was
-established. Values are read from <code>providers/claude.rs</code> and
-<code>providers/codex.rs</code>.</p>
+established. Values are read from <code>providers/claude.rs</code>,
+<code>providers/codex.rs</code> and <code>providers/local.rs</code>.</p>
 
 <div class="callout" data-kind="key">
   <span class="callout__title">These are data, not documentation</span>
@@ -13,23 +13,41 @@ established. Values are read from <code>providers/claude.rs</code> and
 
 <div class="tablewrap">
 <table>
-  <thead><tr><th>Capability</th><th>Claude Code</th><th>Codex</th></tr></thead>
+  <thead><tr><th>Capability</th><th>Claude Code</th><th>Codex</th><th>Local</th></tr></thead>
   <tbody>
-    <tr><td>Executable</td><td><code>claude</code></td><td><code>codex</code></td></tr>
-    <tr><td>Session correlation</td><td><code>Deterministic</code></td><td><code>FileWatch</code></td></tr>
-    <tr><td>Conversation source</td><td><code>Transcript</code></td><td><code>Transcript</code></td></tr>
-    <tr><td>Usage reporting</td><td><code>Official</code></td><td><code>Official</code></td></tr>
-    <tr><td>Guardrail enforcement</td><td><code>PreExecution</code></td><td><code>PreExecutionWhenTrusted</code></td></tr>
-    <tr><td>Briefing route</td><td><code>SystemPrompt</code></td><td><code>OpeningMessage</code></td></tr>
-    <tr><td>Session titles</td><td><code>Provider</code></td><td><code>Derived</code></td></tr>
-    <tr><td>Resume mechanism</td><td><code>Fork</code></td><td><code>AppendInPlace</code></td></tr>
-    <tr><td>Images</td><td>Yes</td><td>Yes</td></tr>
-    <tr><td>Approvals</td><td>Yes</td><td>Yes</td></tr>
-    <tr><td>Worktrees</td><td>Yes</td><td>Yes</td></tr>
-    <tr><td>Account switching</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Executable</td><td><code>claude</code></td><td><code>codex</code></td><td><code>codex</code></td></tr>
+    <tr><td>Session correlation</td><td><code>Deterministic</code></td><td><code>FileWatch</code></td><td><code>FileWatch</code></td></tr>
+    <tr><td>Conversation source</td><td><code>Transcript</code></td><td><code>Transcript</code></td><td><code>Transcript</code></td></tr>
+    <tr><td>Usage reporting</td><td><code>Official</code></td><td><code>Official</code></td><td><code>Official</code></td></tr>
+    <tr><td>Guardrail enforcement</td><td><code>PreExecution</code></td><td><code>PreExecutionWhenTrusted</code></td><td><code>PreExecutionWhenTrusted</code></td></tr>
+    <tr><td>Briefing route</td><td><code>SystemPrompt</code></td><td><code>OpeningMessage</code></td><td><code>OpeningMessage</code></td></tr>
+    <tr><td>Session titles</td><td><code>Provider</code></td><td><code>Derived</code></td><td><code>Derived</code></td></tr>
+    <tr><td>Resume mechanism</td><td><code>Fork</code></td><td><code>AppendInPlace</code></td><td><code>AppendInPlace</code></td></tr>
+    <tr><td>Images</td><td>Yes</td><td>Yes</td><td>The model decides</td></tr>
+    <tr><td>Approvals</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Worktrees</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Account switching</td><td>Yes</td><td>Yes</td><td><strong>No</strong></td></tr>
   </tbody>
 </table>
 </div>
+
+<h2>The third column</h2>
+
+<p><a href="page:local-model">Local</a> runs the same executable as Codex against a model in this
+machine's GPU, so most of it is identical <em>by construction</em> — the same rollout format means
+the same correlation, the same conversation view, the same hooks. Three things are genuinely
+different, and they are the reason it is a separate provider rather than a setting on Codex:</p>
+
+<ul>
+  <li><strong>No account.</strong> A local run reports <code>rate_limits</code> with every field
+  null, because nothing meters a model you own. Account switching is <code>false</code>, and the
+  runtime screen reports VRAM headroom where the others report an allowance.</li>
+  <li><strong>Images are the model's call.</strong> A vision model can see one and a small code
+  model cannot, so the adapter does not promise it for all of them.</li>
+  <li><strong>Its own transcript root.</strong> Local sessions run with a <code>CODEX_HOME</code>
+  this app owns, so a local rollout and a cloud Codex rollout can never be confused for one another
+  by a heuristic that matches on working directory and start time.</li>
+</ul>
 
 <h2>What each value means</h2>
 
@@ -175,7 +193,8 @@ allowances and must be turned off.</p>
 <table>
   <tbody>
     <tr><td>Claude Code</td><td>2.1.240, 2.1.241, 2.1.245</td></tr>
-    <tr><td>Codex CLI</td><td>0.147.0, 0.149.0, 0.149.1</td></tr>
+    <tr><td>Codex CLI</td><td>0.147.0, 0.149.0, 0.149.1, 0.150.1</td></tr>
+    <tr><td>Ollama</td><td>0.33.2, with <code>qwen3.8:27b-q4_K_M</code></td></tr>
   </tbody>
 </table>
 </div>

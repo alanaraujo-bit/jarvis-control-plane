@@ -1124,6 +1124,128 @@ export const en = {
   "common.retry": "Retry",
   "common.dismiss": "Dismiss",
   "common.loading": "Loading…",
+  // Local model runtime (§92).
+  "settings.startup": "Startup",
+  "settings.startup.blurb": "Whether J.A.R.V.I.S. opens when this machine does.",
+  "settings.startup.withSystem": "Start with Windows",
+  "settings.startup.withSystemHelp":
+    "Registers J.A.R.V.I.S. as a startup item, so it is already running when you sign in. You can also turn this off in Task Manager's Startup tab — this switch reads what Windows actually has, not what was asked for.",
+  "settings.startup.minimized": "Open minimised",
+  "settings.startup.minimizedHelp":
+    "Only applies to an automatic start. The window goes to the taskbar instead of in front of what you were doing; opening J.A.R.V.I.S. yourself always shows it.",
+  "settings.startup.unsupported": "This build cannot register a startup item on this system.",
+  "settings.startup.failed": "Windows refused the change:",
+  "nav.local": "Local model",
+  "terminal.local": "Local model",
+
+  "localAi.title": "Local model",
+  "localAi.subtitle":
+    "A model running in this machine. There is no account and no allowance — what limits it is the card it runs on.",
+  "localAi.server": "Server",
+  "localAi.online": "Answering",
+  "localAi.offline": "Not answering",
+  "localAi.version": "Ollama version",
+  "localAi.endpoint": "Endpoint",
+  "localAi.endpointHelp": "Loopback by default. A model on this machine should stay on this machine.",
+  "localAi.unreachableHelp": "Nothing answered at {endpoint}. Start Ollama and this screen will find it.",
+  "localAi.runnerMissing":
+    "The Codex CLI is not installed. Local sessions run on it, pointed at your own model instead of OpenAI.",
+
+  "localAi.models": "Installed models",
+  "localAi.noModels": "No models installed. Pull one with ollama pull and it will appear here.",
+  "localAi.use": "Use for sessions",
+  "localAi.inUse": "In use",
+  "localAi.notAnAgent":
+    "No tool support — this model can talk, but it cannot edit a file or run a command.",
+  "localAi.capabilities": "Capabilities",
+  "localAi.maxContext": "Model maximum",
+  "localAi.onDisk": "On disk",
+
+  "localAi.resident": "In VRAM now",
+  "localAi.notResident": "Not loaded",
+  "localAi.load": "Load now",
+  "localAi.unload": "Free VRAM",
+  "localAi.working": "Working…",
+  "localAi.fullyOnGpu": "Entirely on the GPU",
+  "localAi.spilled":
+    "{percent}% on the GPU — the rest runs on the CPU, which is what a sudden drop in tokens per second looks like.",
+  "localAi.expires": "Freed at {when} unless used",
+  "localAi.keepsResident": "Stays loaded until you free it",
+
+  "localAi.effectiveContext": "Context window",
+  "localAi.contextFromRunner": "Measured from the loaded runner",
+  "localAi.contextFromServer": "From the server setting — nothing is loaded to measure",
+  "localAi.contextUnknown": "Unknown until a model is loaded",
+
+  "localAi.session": "How sessions run",
+  "localAi.keepAlive": "Keep in VRAM for",
+  "localAi.keepAliveHelp":
+    "How long the model stays loaded after the last request. Longer means the next prompt answers immediately; shorter gives the card back sooner.",
+  "localAi.keepAliveFor": "{count} min",
+  "localAi.keepAliveForever": "Until freed",
+  "localAi.keepAliveImmediate": "Free it immediately",
+  "localAi.preload": "Load the model when a session starts",
+  "localAi.preloadHelp": "So the first prompt is not the one that pays for the load.",
+  "localAi.sandbox": "What a session may touch",
+  "localAi.sandbox.readOnly": "Read only",
+  "localAi.sandbox.workspaceWrite": "Write inside the project",
+  "localAi.sandbox.dangerFullAccess": "Full access to this machine",
+  "localAi.approval": "When it stops to ask",
+  "localAi.approval.untrusted": "Before anything it is unsure about",
+  "localAi.approval.onFailure": "Only after a command fails",
+  "localAi.approval.onRequest": "When it decides to ask",
+  "localAi.approval.never": "Never",
+
+  "localAi.serverSettings": "Server settings",
+  "localAi.serverSettingsHelp":
+    "Ollama reads these once, when it starts, and they apply to everything using it — not only to J.A.R.V.I.S. Saving one here stores it for your account; the running server keeps its old value until you restart it.",
+  "localAi.notSet": "Not set · Ollama uses {value}",
+  "localAi.inherited": "Read from this app's own environment, not from a saved setting — so it may not be what the running server was started with.",
+  "localAi.restartNeeded": "Saved. It takes effect the next time Ollama starts.",
+  "localAi.contextLengthLabel": "Context length",
+  "localAi.flashAttentionLabel": "Flash attention",
+  "localAi.kvCacheLabel": "KV cache type",
+
+  "localAi.noAccount":
+    "Nothing meters a model you own. What decides whether it is fast is how much of it fits in VRAM and how close the card is to its power limit — both above.",
+  "localAi.configRoot": "Configuration root",
+  "localAi.configRootHelp":
+    "Local sessions run with their own configuration, written here. Your own Codex setup is never read or changed.",
+
+  "localAi.noModel":
+    "No local model is chosen yet. Pick one on the Local model screen and the session will start on it.",
+  "localAi.unreachable":
+    "The local model server is not answering, so nothing was started. Start Ollama and try again.",
+  "localAi.configWriteFailed":
+    "The local runtime's configuration could not be written, so nothing was started.",
+  "localAi.serverEnvUnsupported": "Server settings can only be saved for you on Windows.",
+  "localAi.unknownSetting": "That is not a setting this app manages.",
+
+  "gpu.title": "GPU",
+  "gpu.absent": "No NVIDIA GPU found on this machine.",
+  "gpu.power": "Power",
+  "gpu.powerOfLimit": "{draw} W of {limit} W",
+  "gpu.powerHeadroom": "Limit set to {limit} W of a possible {max} W",
+  "gpu.temperature": "Temperature",
+  "gpu.utilization": "GPU busy",
+  "gpu.memoryUtilization": "Memory bandwidth",
+  "gpu.vram": "VRAM",
+  "gpu.vramFree": "{free} free",
+  "gpu.clock": "Core clock",
+  "gpu.fan": "Fan",
+  "gpu.state": "State",
+  "gpu.driver": "Driver {version}",
+  "gpu.throttleNone": "Running unrestricted",
+  "gpu.throttlePower": "Held back by the power limit",
+  "gpu.throttleThermal": "Held back by temperature",
+  "gpu.throttleSlowdown": "Hardware slowdown active",
+  "gpu.throttleHelp":
+    "Against the power limit, raising the limit is what buys speed. Against a thermal one, cooling is.",
+
+  "performance.gpu": "GPU",
+  "performance.contextWindow": "Context window",
+  "performance.contextShare": "{used} of {total}",
+  "performance.localModel": "Local · {model}",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -147,6 +147,28 @@ statement of what is sent — <em>before</em> you connect. Disconnecting
 <strong>revokes the token</strong>, not just the local pairing.
 See <a href="page:guide-phone">Pair your phone</a>.</p>
 
+<h2>Startup</h2>
+
+<p>Whether J.A.R.V.I.S. opens when the machine does, and how.</p>
+
+<div class="defs">
+  <div>
+    <dt>Start with Windows</dt>
+    <dd>Registers a startup item so J.A.R.V.I.S. is already running when you sign in. The switch
+    <strong>reads the operating system</strong> every time this section is opened, rather than a
+    value stored here: you can also turn the item off in Task Manager's Startup tab, and a switch
+    that kept saying "on" after you did would be asserting something Windows had already overruled.
+    A machine that refuses the change says so instead of sliding the switch back.</dd>
+  </div>
+  <div>
+    <dt>Open minimised</dt>
+    <dd>Applies to an automatic start only. The startup entry carries an <code>--autostart</code>
+    argument — Windows offers no way for a process to ask whether it was started at login — and a
+    start carrying it goes to the taskbar without taking focus. Opening J.A.R.V.I.S. yourself
+    always shows the window, because you were looking for it.</dd>
+  </div>
+</div>
+
 <h2>Environment</h2>
 
 <p>Read-only. What was found on this machine — Git, Node, pnpm, Claude Code, Codex, GitHub CLI —

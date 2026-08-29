@@ -102,6 +102,48 @@ pub struct Preferences {
     pub performance_hud_enabled: bool,
 }
 
+/// Whether J.A.R.V.I.S. starts with the machine, and how (§93).
+///
+/// Deliberately **not** part of `Preferences`, and the reason is where the
+/// answer lives. Every other preference is a row in this database, so the
+/// database is the truth. This one is a registry entry Windows owns: the person
+/// can turn it off in Task Manager's Startup tab, and any tool that manages
+/// startup items can remove it. A copy of the answer stored here would go stale
+/// the moment they did, and a switch showing "on" for something Windows has
+/// already disabled is worse than no switch.
+///
+/// So `starts_with_system` is read from the operating system on every call, and
+/// only `start_minimized` — which is ours, and which Windows knows nothing
+/// about — is stored.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchPreferences {
+    /// Read from the OS, never from this database.
+    pub starts_with_system: bool,
+    /// Whether that automatic start opens the window or leaves it minimised.
+    pub start_minimized: bool,
+    /// False where this build cannot register a startup item at all, so the
+    /// surface can be absent rather than offer a switch that does nothing.
+    pub supported: bool,
+}
+
+/// Open minimised when started automatically.
+pub const START_MINIMIZED_KEY: &str = "startup.minimized";
+
+/// The argument an automatic start is registered with (§93).
+///
+/// A launched-by-Windows start and a start by hand have to be told apart: the
+/// person double-clicking the icon wants the window, and the same binary
+/// waking up at login usually does not want to be thrown in front of whatever
+/// they were doing. Windows gives no flag for "you started me", so the startup
+/// entry carries one of ours.
+pub const AUTOSTART_ARG: &str = "--autostart";
+
+/// Whether this process was started by the operating system at login.
+pub fn started_by_system() -> bool {
+    std::env::args().any(|arg| arg == AUTOSTART_ARG)
+}
+
 /// Terminal type size, in CSS pixels.
 pub const TERMINAL_FONT_SIZE_KEY: &str = "terminal.fontSize";
 pub const DEFAULT_TERMINAL_FONT_SIZE: u32 = 13;
@@ -134,6 +176,56 @@ pub fn settings_preferences(state: tauri::State<'_, crate::AppState>) -> Prefere
         // Opt-in: this panel deliberately sits over working content.
         performance_hud_enabled: get_or(db, PERFORMANCE_HUD_ENABLED_KEY, false),
     }
+}
+
+/// Read whether J.A.R.V.I.S. starts with the machine (§93).
+#[tauri::command]
+pub fn settings_launch(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+) -> LaunchPreferences {
+    use tauri_plugin_autostart::ManagerExt;
+    // `is_enabled` failing is not the same as "off": the registry could not be
+    // read. Reported as off, because that is what the machine will do — but it
+    // is a read of the OS either way, never of a value we cached.
+    let starts_with_system = app.autolaunch().is_enabled().unwrap_or(false);
+    LaunchPreferences {
+        starts_with_system,
+        start_minimized: get_or(&state.db, START_MINIMIZED_KEY, true),
+        supported: cfg!(any(windows, target_os = "macos", target_os = "linux")),
+    }
+}
+
+/// Turn the startup entry on or off, or change how it opens.
+///
+/// Both arguments are optional so one switch can move without restating the
+/// other, and the whole set comes back so the surface renders what is now true
+/// rather than what it asked for.
+#[tauri::command]
+pub fn settings_set_launch(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+    starts_with_system: Option<bool>,
+    start_minimized: Option<bool>,
+) -> Result<LaunchPreferences> {
+    use tauri_plugin_autostart::ManagerExt;
+
+    if let Some(enabled) = starts_with_system {
+        let manager = app.autolaunch();
+        let outcome = if enabled {
+            manager.enable()
+        } else {
+            manager.disable()
+        };
+        // Surfaced rather than swallowed: this writes outside the app's own
+        // data, and a locked-down machine can refuse. A switch that silently
+        // slid back would leave the person retrying something that cannot work.
+        outcome.map_err(|error| format!("startup.registerFailed: {error}"))?;
+    }
+    if let Some(minimized) = start_minimized {
+        set(&state.db, START_MINIMIZED_KEY, &minimized)?;
+    }
+    Ok(settings_launch(app, state))
 }
 
 /// Show or hide the live performance HUD.

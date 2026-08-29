@@ -1,0 +1,184 @@
+<p>A third execution provider, and the first one that is not a service. Claude Code and Codex are
+programs that talk to somebody else's datacentre. <strong>Local</strong> talks to a model sitting in
+this machine's GPU — and almost everything that is different about it follows from that one fact.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">The same agent, a different brain</span>
+  <p>A local session is not a chat window. It runs the Codex CLI against an
+  <a href="https://ollama.com">Ollama</a> server on this machine, through a provider J.A.R.V.I.S.
+  configures for it. So it edits files, runs commands, writes a rollout, is followed by the
+  conversation view, is governed by guardrails and can be run in a worktree — everything a Codex
+  session does, with the model in your own card.</p>
+</div>
+
+<h2>What you need</h2>
+
+<div class="defs">
+  <div>
+    <dt>Ollama, running</dt>
+    <dd>Listening on <code>http://127.0.0.1:11434</code> by default. The screen tells you the
+    version it found, or says nothing answered.</dd>
+  </div>
+  <div>
+    <dt>The Codex CLI, installed</dt>
+    <dd>Local sessions run on it. It is not signed in to anything for this — no OpenAI account is
+    used, read or required.</dd>
+  </div>
+  <div>
+    <dt>A model with tool support</dt>
+    <dd>The screen lists every installed model with its capabilities. A model without
+    <code>tools</code> can talk but cannot edit a file or run a command, so it is not offered for
+    sessions: it would produce an agent that narrates changes it never makes.</dd>
+  </div>
+</div>
+
+<h2>There is no account, and no allowance</h2>
+
+<p>The <a href="page:accounts">Accounts</a> screen exists for a credentialed configuration directory
+with a five-hour window behind it. A local run reports <code>rate_limits</code> with every field
+null, because nothing meters a model you own. Modelling this as an account would put a quota dial on
+a card that can never move.</p>
+
+<p>What actually limits a local model is physical, so that is what this screen reports instead.</p>
+
+<h2>Will it be fast? The two readings that decide</h2>
+
+<div class="defs">
+  <div>
+    <dt>How much of the model is in VRAM</dt>
+    <dd>Read from Ollama's <code>/api/ps</code>, which reports the runner's total size against the
+    part held on the GPU. Equal means every layer is offloaded. Anything less means the remainder is
+    running on the CPU — and that is what a sudden collapse in tokens per second looks like from the
+    inside. A 27B Q4 model that fits entirely in 24&nbsp;GB runs at roughly 72&nbsp;tok/s on an
+    RTX&nbsp;3090&nbsp;Ti; the same model with layers spilled runs at a fraction of it.</dd>
+  </div>
+  <div>
+    <dt>Whether the card is being held back</dt>
+    <dd>The GPU panel reads power, temperature, clocks and — the reading that turns "it got slower"
+    into something you can act on — <strong>why</strong> the clocks are down. Against a power limit,
+    raising the limit is what buys speed. Against a thermal one, cooling is. They call for opposite
+    responses, so they are never shown as one thing.</dd>
+  </div>
+</div>
+
+<h2>The context window, measured rather than assumed</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">The number the agent believes can be wrong</span>
+  <p>With no metadata for a local model, the Codex CLI warns and falls back to an invented context
+  window — 258400 tokens, measured against a runner actually loaded at <strong>65536</strong>. An
+  agent that believes it has four times the context it has does not degrade gracefully; it fills the
+  window and the server silently truncates the front of the conversation.</p>
+</div>
+
+<p>J.A.R.V.I.S. reads the effective window from the loaded runner and writes it into the
+configuration the session starts with, so the agent is told the truth. Where nothing is loaded there
+is nothing to measure, and the screen shows the server's configured default while saying that is
+what it is.</p>
+
+<h2>Server settings are not per session</h2>
+
+<p>Three things are read by Ollama once, when it starts, and apply to every client of it — not only
+to J.A.R.V.I.S.:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Variable</th><th>What it does</th><th>Default if unset</th></tr></thead>
+  <tbody>
+    <tr><td><code>OLLAMA_CONTEXT_LENGTH</code></td><td>The context window every model is loaded with</td><td><code>4096</code></td></tr>
+    <tr><td><code>OLLAMA_FLASH_ATTENTION</code></td><td>Flash attention, which cuts the memory a long context costs</td><td><code>0</code></td></tr>
+    <tr><td><code>OLLAMA_KV_CACHE_TYPE</code></td><td>KV cache precision — <code>q8_0</code> roughly halves what the cache costs</td><td><code>f16</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The default of 4096 is not a detail: an agent session on a 4096-token window truncates its own
+instructions. The screen can save these for your account, and says plainly that the running server
+keeps its old value until it restarts. A control that looked applied while the server ignored it
+would be the same class of untruth as an invented context window.</p>
+
+<h2>What a session may do</h2>
+
+<div class="defs">
+  <div>
+    <dt>Sandbox</dt>
+    <dd>Read only, write inside the project, or full access to the machine. The default is to write
+    inside the project: a local agent exists to change code, and a read-only default would make
+    every session start by failing at the thing it is for. Full machine access is a choice you make,
+    never one you inherit.</dd>
+  </div>
+  <div>
+    <dt>Approvals</dt>
+    <dd>When the agent stops to ask. Same values the Codex CLI uses, passed through verbatim.</dd>
+  </div>
+  <div>
+    <dt>Keep in VRAM</dt>
+    <dd>How long the weights stay loaded after the last request. Longer means the next prompt answers
+    immediately instead of paying a reload of about ten seconds; shorter gives 17&nbsp;GB back to the
+    card sooner.</dd>
+  </div>
+  <div>
+    <dt>Preload on start</dt>
+    <dd>Loads the model when a session starts, on its own thread, so the first prompt is not the one
+    that pays for the load. The session starts either way.</dd>
+  </div>
+</div>
+
+<h2>Why a configured provider and not <code>--oss</code></h2>
+
+<p>The Codex CLI has an open-source mode — <code>codex --oss --local-provider ollama</code> — that
+runs an agent against a local model with no configuration at all. That was the first build here, and
+it works. It was dropped for one reason: it always talks to the runner's own default address, so the
+endpoint shown on this screen would have changed what J.A.R.V.I.S. reads and not what its sessions
+do. A person who moved their server to another port would have had a screen reading one machine
+while sessions talked to another.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">One value in that configuration is not obvious</span>
+  <p>The wire protocol has to be named, and the obvious value is wrong: <code>wire_api = "chat"</code>
+  is <strong>rejected outright</strong> by Codex 0.150.1 — the session dies on startup with "no longer
+  supported", before its first prompt. <code>"responses"</code> is the value that works, and Ollama
+  0.33.2 answers <code>POST /v1/responses</code>. A full agent turn was run through this exact
+  configuration before it shipped, and a test pins it, because the failure is total and invisible from
+  the outside: the process starts and the agent never does.</p>
+</div>
+
+<h2>Its own configuration root</h2>
+
+<p>Local sessions run with a <code>CODEX_HOME</code> this app owns, under its data directory. Two
+reasons, both concrete:</p>
+
+<ul>
+  <li><strong>Correlation.</strong> A rollout is matched to a session by working directory and start
+  time. A local session and a cloud Codex session started seconds apart in one project would write
+  into the same tree and could each be handed the other's transcript — every turn, every token count
+  and every searched sentence filed against the wrong session. Separate roots make that impossible
+  rather than unlikely.</li>
+  <li><strong>Configuration.</strong> The model, the sandbox policy and the measured context window
+  have to be stated somewhere. Writing them into your own <code>~/.codex/config.toml</code> would
+  change how <em>your</em> Codex behaves outside this app. It is never read or modified.</li>
+</ul>
+
+<h2>In the live HUD</h2>
+
+<p>With the <a href="page:terminal">performance HUD</a> open on a local session, the card appears
+beneath the token readings: power against the limit in force, temperature, utilisation, VRAM, and
+one line saying whether anything is holding the clocks down. It appears only for local sessions —
+beside a cloud agent's throughput a power meter would invite exactly the wrong conclusion, since
+this machine's GPU has nothing to do with how fast that answer arrives.</p>
+
+<p>The context reading also changes shape there: with a measured window it is shown as a share of
+it, because 12k of 65k and 12k of 8k are different situations and a bare count cannot say which.</p>
+
+<h2>Measured against</h2>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td>Codex CLI</td><td>0.150.1</td></tr>
+    <tr><td>Ollama</td><td>0.33.2</td></tr>
+    <tr><td>Model</td><td><code>qwen3.8:27b-q4_K_M</code> — 27.3B, Q4_K_M, tools · thinking · vision</td></tr>
+    <tr><td>Card</td><td>RTX 3090 Ti, 375&nbsp;W limit of a possible 450&nbsp;W</td></tr>
+  </tbody>
+</table>
+</div>

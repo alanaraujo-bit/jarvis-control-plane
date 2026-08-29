@@ -1,0 +1,184 @@
+<p>Um terceiro provedor de execução, e o primeiro que não é um serviço. Claude Code e Codex são
+programas que conversam com o datacenter de outra pessoa. O <strong>Local</strong> conversa com um
+modelo que está na GPU desta máquina — e quase tudo que é diferente nele vem desse único fato.</p>
+
+<div class="callout" data-kind="key">
+  <span class="callout__title">O mesmo agente, outro cérebro</span>
+  <p>Uma sessão local não é uma janela de bate-papo. Ela roda a CLI do Codex contra um servidor
+  <a href="https://ollama.com">Ollama</a> desta máquina, através de um provedor que o J.A.R.V.I.S.
+  configura para ela. Então ela edita arquivos, roda comandos, escreve um rollout, é acompanhada pela
+  visão de conversa, é governada pelas proteções e pode rodar numa worktree — tudo que uma sessão do
+  Codex faz, com o modelo na sua própria placa.</p>
+</div>
+
+<h2>O que você precisa</h2>
+
+<div class="defs">
+  <div>
+    <dt>Ollama, rodando</dt>
+    <dd>Escutando em <code>http://127.0.0.1:11434</code> por padrão. A tela mostra a versão que
+    encontrou, ou diz que nada respondeu.</dd>
+  </div>
+  <div>
+    <dt>A CLI do Codex, instalada</dt>
+    <dd>As sessões locais rodam nela. Ela não está conectada a nada para isso — nenhuma conta da
+    OpenAI é usada, lida ou necessária.</dd>
+  </div>
+  <div>
+    <dt>Um modelo com suporte a ferramentas</dt>
+    <dd>A tela lista cada modelo instalado com suas capacidades. Um modelo sem <code>tools</code>
+    conversa, mas não edita um arquivo nem roda um comando, então ele não é oferecido para sessões:
+    produziria um agente que narra mudanças que nunca faz.</dd>
+  </div>
+</div>
+
+<h2>Não existe conta, nem cota</h2>
+
+<p>A tela de <a href="page:accounts">Contas</a> existe para um diretório de configuração com
+credencial e uma janela de cinco horas atrás dele. Uma execução local reporta <code>rate_limits</code>
+com todos os campos nulos, porque nada mede um modelo que é seu. Modelar isso como conta colocaria um
+mostrador de cota num cartão que nunca sai do lugar.</p>
+
+<p>O que de fato limita um modelo local é físico, e é isso que esta tela reporta no lugar.</p>
+
+<h2>Vai ser rápido? As duas leituras que decidem</h2>
+
+<div class="defs">
+  <div>
+    <dt>Quanto do modelo está na VRAM</dt>
+    <dd>Lido do <code>/api/ps</code> do Ollama, que reporta o tamanho total do runner contra a parte
+    que está na GPU. Iguais significa que todas as camadas estão na placa. Menos que isso significa
+    que o resto está rodando na CPU — e é assim que uma queda repentina de tokens por segundo aparece
+    por dentro. Um modelo 27B Q4 que cabe inteiro em 24&nbsp;GB roda por volta de 72&nbsp;tok/s numa
+    RTX&nbsp;3090&nbsp;Ti; o mesmo modelo com camadas fora da placa roda numa fração disso.</dd>
+  </div>
+  <div>
+    <dt>Se a placa está sendo segurada</dt>
+    <dd>O painel da GPU lê potência, temperatura, clocks e — a leitura que transforma "ficou mais
+    lento" em algo acionável — <strong>por que</strong> os clocks estão baixos. Contra o limite de
+    potência, subir o limite é o que compra velocidade. Contra o térmico, é refrigeração. Pedem
+    respostas opostas, então nunca aparecem como uma coisa só.</dd>
+  </div>
+</div>
+
+<h2>A janela de contexto, medida em vez de suposta</h2>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">O número em que o agente acredita pode estar errado</span>
+  <p>Sem metadados para um modelo local, a CLI do Codex avisa e cai num contexto inventado — 258400
+  tokens, medido contra um runner de fato carregado com <strong>65536</strong>. Um agente que acredita
+  ter quatro vezes o contexto que tem não degrada com elegância; ele enche a janela e o servidor corta
+  o começo da conversa em silêncio.</p>
+</div>
+
+<p>O J.A.R.V.I.S. lê a janela efetiva do runner carregado e escreve ela na configuração com que a
+sessão começa, então o agente é informado da verdade. Quando nada está carregado não há o que medir, e
+a tela mostra o padrão configurado do servidor dizendo que é isso que ele é.</p>
+
+<h2>A configuração do servidor não é por sessão</h2>
+
+<p>Três coisas são lidas pelo Ollama uma vez, ao iniciar, e valem para todo cliente dele — não só para
+o J.A.R.V.I.S.:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Variável</th><th>O que faz</th><th>Padrão se não definida</th></tr></thead>
+  <tbody>
+    <tr><td><code>OLLAMA_CONTEXT_LENGTH</code></td><td>A janela de contexto com que todo modelo é carregado</td><td><code>4096</code></td></tr>
+    <tr><td><code>OLLAMA_FLASH_ATTENTION</code></td><td>Flash attention, que reduz a memória que um contexto longo custa</td><td><code>0</code></td></tr>
+    <tr><td><code>OLLAMA_KV_CACHE_TYPE</code></td><td>Precisão do cache KV — <code>q8_0</code> corta o custo do cache quase pela metade</td><td><code>f16</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>O padrão de 4096 não é um detalhe: uma sessão de agente numa janela de 4096 tokens corta as próprias
+instruções. A tela consegue salvar isso para a sua conta, e diz com todas as letras que o servidor em
+execução mantém o valor antigo até reiniciar. Um controle que parecesse aplicado enquanto o servidor
+ignora ele seria a mesma classe de mentira que uma janela de contexto inventada.</p>
+
+<h2>O que uma sessão pode fazer</h2>
+
+<div class="defs">
+  <div>
+    <dt>Sandbox</dt>
+    <dd>Somente leitura, escrever dentro do projeto, ou acesso total à máquina. O padrão é escrever
+    dentro do projeto: um agente local existe para mudar código, e um padrão somente leitura faria
+    toda sessão começar falhando naquilo para que ela existe. Acesso total é uma escolha que você faz,
+    nunca uma que você herda.</dd>
+  </div>
+  <div>
+    <dt>Aprovações</dt>
+    <dd>Quando o agente para para perguntar. Os mesmos valores que a CLI do Codex usa, repassados
+    literalmente.</dd>
+  </div>
+  <div>
+    <dt>Manter na VRAM</dt>
+    <dd>Quanto tempo os pesos ficam carregados depois da última requisição. Mais tempo faz o próximo
+    prompt responder na hora em vez de pagar um recarregamento de uns dez segundos; menos tempo devolve
+    17&nbsp;GB para a placa mais cedo.</dd>
+  </div>
+  <div>
+    <dt>Carregar ao iniciar</dt>
+    <dd>Carrega o modelo quando uma sessão começa, numa thread própria, para que o primeiro prompt não
+    seja o que paga o carregamento. A sessão começa de qualquer jeito.</dd>
+  </div>
+</div>
+
+<h2>Por que um provedor configurado e não <code>--oss</code></h2>
+
+<p>A CLI do Codex tem um modo open source — <code>codex --oss --local-provider ollama</code> — que roda
+um agente contra um modelo local sem nenhuma configuração. Essa foi a primeira versão aqui, e funciona.
+Ela foi descartada por um motivo: ela sempre fala com o endereço padrão do próprio runner, então o
+endereço mostrado nesta tela mudaria o que o J.A.R.V.I.S. lê e não o que as sessões dele fazem. Quem
+tivesse movido o servidor para outra porta teria uma tela lendo uma máquina enquanto as sessões falavam
+com outra.</p>
+
+<div class="callout" data-kind="warn">
+  <span class="callout__title">Um valor dessa configuração não é óbvio</span>
+  <p>O protocolo de fio precisa ser nomeado, e o valor óbvio está errado: <code>wire_api = "chat"</code>
+  é <strong>recusado de saída</strong> pelo Codex 0.150.1 — a sessão morre ao iniciar com "no longer
+  supported", antes do primeiro prompt. <code>"responses"</code> é o valor que funciona, e o Ollama
+  0.33.2 responde <code>POST /v1/responses</code>. Um turno completo de agente foi rodado exatamente
+  com essa configuração antes dela entrar, e um teste fixa isso, porque a falha é total e invisível de
+  fora: o processo inicia e o agente nunca.</p>
+</div>
+
+<h2>Uma raiz de configuração própria</h2>
+
+<p>As sessões locais rodam com um <code>CODEX_HOME</code> que este app é dono, dentro do diretório de
+dados dele. Dois motivos, os dois concretos:</p>
+
+<ul>
+  <li><strong>Correlação.</strong> Um rollout é associado a uma sessão por diretório de trabalho e hora
+  de início. Uma sessão local e uma sessão do Codex na nuvem iniciadas com segundos de diferença no
+  mesmo projeto escreveriam na mesma árvore e cada uma poderia receber o transcript da outra — cada
+  turno, cada contagem de tokens e cada frase buscada arquivados na sessão errada. Raízes separadas
+  tornam isso impossível em vez de improvável.</li>
+  <li><strong>Configuração.</strong> O modelo, a política de sandbox e a janela de contexto medida
+  precisam estar escritos em algum lugar. Escrever no seu próprio <code>~/.codex/config.toml</code>
+  mudaria como o <em>seu</em> Codex se comporta fora deste app. Ele nunca é lido nem alterado.</li>
+</ul>
+
+<h2>No HUD ao vivo</h2>
+
+<p>Com o <a href="page:terminal">HUD de performance</a> aberto numa sessão local, a placa aparece
+abaixo das leituras de token: potência contra o limite em vigor, temperatura, utilização, VRAM e uma
+linha dizendo se algo está segurando os clocks. Ele aparece só em sessões locais — ao lado da vazão de
+um agente na nuvem, um medidor de potência convidaria exatamente à conclusão errada, já que a GPU desta
+máquina não tem nada a ver com a velocidade daquela resposta.</p>
+
+<p>A leitura de contexto também muda de forma ali: com uma janela medida, ela aparece como uma fração
+dela, porque 12k de 65k e 12k de 8k são situações diferentes e um número solto não sabe dizer qual.</p>
+
+<h2>Medido contra</h2>
+
+<div class="tablewrap">
+<table>
+  <tbody>
+    <tr><td>Codex CLI</td><td>0.150.1</td></tr>
+    <tr><td>Ollama</td><td>0.33.2</td></tr>
+    <tr><td>Modelo</td><td><code>qwen3.8:27b-q4_K_M</code> — 27.3B, Q4_K_M, tools · thinking · vision</td></tr>
+    <tr><td>Placa</td><td>RTX 3090 Ti, limite de 375&nbsp;W de 450&nbsp;W possíveis</td></tr>
+  </tbody>
+</table>
+</div>

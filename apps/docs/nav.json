@@ -211,6 +211,14 @@
           }
         },
         {
+          "slug": "local-model",
+          "title": { "en": "Local model", "pt-BR": "Modelo local" },
+          "summary": {
+            "en": "A third provider that runs in your own GPU: what makes it fast, what limits it, and why it has no account.",
+            "pt-BR": "Um terceiro provedor que roda na sua própria GPU: o que deixa ele rápido, o que limita ele, e por que não tem conta."
+          }
+        },
+        {
           "slug": "notebook",
           "title": { "en": "The Notebook", "pt-BR": "O bloco de notas" },
           "summary": {

@@ -47,7 +47,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(500);
 /// What each one actually delivers is reported by the capability model, never
 /// assumed in the UI (§26).
 pub fn installs_hook(provider: &str) -> bool {
-    matches!(provider, "claude-code" | "codex")
+    matches!(provider, "claude-code" | "codex" | "local")
 }
 
 /// Whether a session of this provider is guarded from the moment it starts.
