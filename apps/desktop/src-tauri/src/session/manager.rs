@@ -27,6 +27,7 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 
 use super::event::{EventKind, Lifecycle, SessionState};
 use super::log::{now_ms, SessionLog};
+use crate::chat::process::ChatHandle;
 use crate::pty::{self, PtyEvent, PtyHandle, PtyOptions};
 
 /// How often coalesced terminal output is pushed to the UI.
@@ -103,12 +104,18 @@ struct AttachedView {
     channel: Channel<InvokeResponseBody>,
 }
 
+/// What a session's process is: a terminal, or a protocol pipe (M29).
+enum Process {
+    Terminal(Arc<PtyHandle>),
+    Chat(Arc<ChatHandle>),
+}
+
 /// A running session.
 pub struct LiveSession {
     pub id: String,
     /// The current provider process. Behind a lock because an account switch
     /// replaces it while the session goes on (M26).
-    pty: Mutex<Arc<PtyHandle>>,
+    process: Mutex<Process>,
     /// The current pump's retirement flag. `replace_process` sets it on the
     /// pump it is retiring, so that pump records the exit without ending the
     /// session; each pump gets its own, so the new process is never mistaken
@@ -141,6 +148,13 @@ pub struct LiveSession {
 
 impl LiveSession {
     pub fn write(&self, data: &[u8]) -> Result<()> {
+        // A chat's stdin is a protocol. Raw bytes from dictation, the Notebook,
+        // the autopilot or the rotation relay would corrupt it, so they are
+        // refused here, once, for every caller (M29).
+        let pty = match &*self.process.lock() {
+            Process::Terminal(pty) => Arc::clone(pty),
+            Process::Chat(_) => return Err(SessionError::Refused("session.chatMode".into())),
+        };
         // Record what was typed before sending it, so the log reflects intent
         // even if the process dies on receiving it.
         let _ = self.log_tx.send(LogCommand::Append {
@@ -152,8 +166,46 @@ impl LiveSession {
         if let Some(watch) = self.watch.lock().as_ref() {
             let _ = watch.send(crate::notify::watch::Beat::Input);
         }
-        self.pty.lock().write(data)?;
+        pty.write(data)?;
         Ok(())
+    }
+
+    /// Whether this session is a chat (M29).
+    pub fn is_chat(&self) -> bool {
+        matches!(&*self.process.lock(), Process::Chat(_))
+    }
+
+    /// The protocol pipe of a chat session.
+    pub fn chat(&self) -> Option<Arc<ChatHandle>> {
+        match &*self.process.lock() {
+            Process::Chat(handle) => Some(Arc::clone(handle)),
+            Process::Terminal(_) => None,
+        }
+    }
+
+    /// Set what the session is doing. A chat knows exactly, from its protocol,
+    /// where a terminal can only infer it from output going quiet.
+    pub fn set_state(&self, state: SessionState) {
+        *self.state.lock() = state;
+    }
+
+    /// The end a terminal's pump records when its process exits: the exit
+    /// frame, the final state, the watcher told, the writer stopped. A chat's
+    /// reader calls it when the protocol stream closes.
+    pub fn finish(&self, code: Option<i32>) {
+        let _ = self.log_tx.send(LogCommand::Append {
+            kind: EventKind::Lifecycle,
+            payload: serde_json::to_vec(&Lifecycle::Exited { code }).unwrap_or_default(),
+        });
+        *self.state.lock() = match code {
+            Some(0) | None => SessionState::Completed,
+            Some(_) => SessionState::Failed,
+        };
+        if let Some(watch) = self.watch.lock().as_ref() {
+            let _ = watch.send(crate::notify::watch::Beat::Exited(code));
+        }
+        self.stopped.store(true, Ordering::SeqCst);
+        let _ = self.log_tx.send(LogCommand::Stop);
     }
 
     /// Point this session's terminal stream at a notification watcher (§49).
@@ -165,7 +217,12 @@ impl LiveSession {
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {
-        self.pty.lock().resize(cols, rows)?;
+        // A chat has no geometry; there is nothing to lay out or record.
+        let pty = match &*self.process.lock() {
+            Process::Terminal(pty) => Arc::clone(pty),
+            Process::Chat(_) => return Ok(()),
+        };
+        pty.resize(cols, rows)?;
         *self.size.lock() = (cols, rows);
         let payload = serde_json::to_vec(&Lifecycle::Resized { cols, rows }).unwrap_or_default();
         let _ = self.log_tx.send(LogCommand::Append {
@@ -269,7 +326,10 @@ impl LiveSession {
 
     /// The exit code of the current process, if it has ended.
     pub fn exited(&self) -> Option<i32> {
-        self.pty.lock().try_wait()
+        match &*self.process.lock() {
+            Process::Terminal(pty) => pty.try_wait(),
+            Process::Chat(chat) => chat.try_wait(),
+        }
     }
 
     /// `replace_process`, with `prepare` run after the old process has exited
@@ -281,10 +341,17 @@ impl LiveSession {
         options: PtyOptions,
         prepare: impl FnOnce() -> std::result::Result<(), String>,
     ) -> std::result::Result<(), String> {
+        // Only a terminal is relaunched in place; a chat would come back as a
+        // TUI nobody can see (M29).
+        let old = match &*self.process.lock() {
+            Process::Terminal(pty) => Arc::clone(pty),
+            Process::Chat(_) => return Err("session.chatMode".into()),
+        };
         // Retire the current pump before its process dies.
         self.retiring.lock().store(true, Ordering::SeqCst);
         let old_done = self.pump_done.lock().take();
-        let _ = self.pty.lock().kill();
+        let _ = old.kill();
+        drop(old);
         let deadline = Instant::now() + Duration::from_secs(5);
         while self.exited().is_none() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(50));
@@ -305,7 +372,7 @@ impl LiveSession {
         // Swapping drops the last strong reference to the old pseudoconsole.
         // On Windows that is what ends the old reader: ConPTY yields EOF only
         // once it is closed, not when the child exits.
-        let old = std::mem::replace(&mut *self.pty.lock(), Arc::clone(&handle));
+        let old = std::mem::replace(&mut *self.process.lock(), Process::Terminal(Arc::clone(&handle)));
         drop(old);
         if let Some(done) = old_done {
             let _ = done.recv_timeout(Duration::from_secs(15));
@@ -325,7 +392,10 @@ impl LiveSession {
         // Stop the follower first: it must not keep polling a transcript for a
         // session that no longer exists.
         self.stopped.store(true, Ordering::SeqCst);
-        self.pty.lock().kill()?;
+        match &*self.process.lock() {
+            Process::Terminal(pty) => pty.kill()?,
+            Process::Chat(chat) => chat.kill(),
+        }
         let _ = self.log_tx.send(LogCommand::Stop);
         Ok(())
     }
@@ -361,46 +431,7 @@ impl SessionManager {
         log_dir: std::path::PathBuf,
         options: PtyOptions,
     ) -> Result<Arc<LiveSession>> {
-        let mut log = SessionLog::open(&log_dir)?;
-
-        // Record how the session began, so the log alone explains it later.
-        let started = Lifecycle::Started {
-            command: format!("{} {}", options.program, options.args.join(" ")),
-            cwd: options.cwd.to_string_lossy().to_string(),
-        };
-        log.append(
-            EventKind::Lifecycle,
-            &serde_json::to_vec(&started).unwrap_or_default(),
-        )?;
-        log.append(
-            EventKind::Lifecycle,
-            &serde_json::to_vec(&Lifecycle::Resized {
-                cols: options.cols,
-                rows: options.rows,
-            })
-            .unwrap_or_default(),
-        )?;
-
-        // ---- The single writer thread ------------------------------------
-        let (log_tx, log_rx) = channel::<LogCommand>();
-        std::thread::Builder::new()
-            .name(format!("session-log-{id}"))
-            .spawn(move || {
-                while let Ok(command) = log_rx.recv() {
-                    match command {
-                        LogCommand::Append { kind, payload } => {
-                            if let Err(e) = log.append(kind, &payload) {
-                                tracing::error!(error = %e, "failed to append to the session log");
-                            }
-                        }
-                        LogCommand::Barrier(done) => {
-                            let _ = done.send(());
-                        }
-                        LogCommand::Stop => break,
-                    }
-                }
-            })
-            .expect("spawn session log writer");
+        let log_tx = open_writer(&id, &log_dir, &options)?;
 
         let (cols, rows) = (options.cols, options.rows);
         let (handle, pty_rx) = pty::spawn(options)?;
@@ -408,27 +439,115 @@ impl SessionManager {
 
         let (done_tx, done_rx) = channel();
         let retiring = Arc::new(AtomicBool::new(false));
-        let session = Arc::new(LiveSession {
-            id: id.clone(),
-            pty: Mutex::new(Arc::clone(&pty)),
-            retiring: Mutex::new(Arc::clone(&retiring)),
-            pump_done: Mutex::new(Some(done_rx)),
-            size: Mutex::new((cols, rows)),
-            tail: Mutex::new(None),
-            log_tx: log_tx.clone(),
-            view_attached: Arc::new(AtomicBool::new(false)),
-            sink: Arc::new(Mutex::new(None)),
-            view_gate: Arc::new(Mutex::new(())),
-            state: Arc::new(Mutex::new(SessionState::Starting)),
-            stopped: Arc::new(AtomicBool::new(false)),
-            watch: Arc::new(Mutex::new(None)),
-        });
+        let session = Arc::new(LiveSession::new(
+            id.clone(),
+            Process::Terminal(Arc::clone(&pty)),
+            Arc::clone(&retiring),
+            Some(done_rx),
+            (cols, rows),
+            log_tx.clone(),
+        ));
 
         spawn_pump(&session, &pty, pty_rx, log_tx, done_tx, retiring);
 
         self.sessions.lock().insert(id, Arc::clone(&session));
         Ok(session)
     }
+
+    /// Start a chat session over a process already spawned (M29): the same log
+    /// and single writer as a terminal, and no pump — the chat runtime reads
+    /// the protocol and calls `LiveSession::finish` when it closes.
+    pub fn start_chat(
+        &self,
+        id: String,
+        log_dir: std::path::PathBuf,
+        options: &PtyOptions,
+        handle: ChatHandle,
+    ) -> Result<Arc<LiveSession>> {
+        let log_tx = open_writer(&id, &log_dir, options)?;
+        let session = Arc::new(LiveSession::new(
+            id.clone(),
+            Process::Chat(Arc::new(handle)),
+            Arc::new(AtomicBool::new(false)),
+            None,
+            (options.cols, options.rows),
+            log_tx,
+        ));
+        self.sessions.lock().insert(id, Arc::clone(&session));
+        Ok(session)
+    }
+}
+
+impl LiveSession {
+    fn new(
+        id: String,
+        process: Process,
+        retiring: Arc<AtomicBool>,
+        pump_done: Option<Receiver<()>>,
+        size: (u16, u16),
+        log_tx: Sender<LogCommand>,
+    ) -> Self {
+        Self {
+            id,
+            process: Mutex::new(process),
+            retiring: Mutex::new(retiring),
+            pump_done: Mutex::new(pump_done),
+            size: Mutex::new(size),
+            tail: Mutex::new(None),
+            log_tx,
+            view_attached: Arc::new(AtomicBool::new(false)),
+            sink: Arc::new(Mutex::new(None)),
+            view_gate: Arc::new(Mutex::new(())),
+            state: Arc::new(Mutex::new(SessionState::Starting)),
+            stopped: Arc::new(AtomicBool::new(false)),
+            watch: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+/// Open a session's log, record how it began, and start its single writer.
+fn open_writer(id: &str, log_dir: &std::path::Path, options: &PtyOptions) -> Result<Sender<LogCommand>> {
+    let mut log = SessionLog::open(log_dir)?;
+
+    // Record how the session began, so the log alone explains it later.
+    let started = Lifecycle::Started {
+        command: format!("{} {}", options.program, options.args.join(" ")),
+        cwd: options.cwd.to_string_lossy().to_string(),
+    };
+    log.append(
+        EventKind::Lifecycle,
+        &serde_json::to_vec(&started).unwrap_or_default(),
+    )?;
+    log.append(
+        EventKind::Lifecycle,
+        &serde_json::to_vec(&Lifecycle::Resized {
+            cols: options.cols,
+            rows: options.rows,
+        })
+        .unwrap_or_default(),
+    )?;
+
+    // ---- The single writer thread ------------------------------------
+    let (log_tx, log_rx) = channel::<LogCommand>();
+    std::thread::Builder::new()
+        .name(format!("session-log-{id}"))
+        .spawn(move || {
+            while let Ok(command) = log_rx.recv() {
+                match command {
+                    LogCommand::Append { kind, payload } => {
+                        if let Err(e) = log.append(kind, &payload) {
+                            tracing::error!(error = %e, "failed to append to the session log");
+                        }
+                    }
+                    LogCommand::Barrier(done) => {
+                        let _ = done.send(());
+                    }
+                    LogCommand::Stop => break,
+                }
+            }
+        })
+        .expect("spawn session log writer");
+    Ok(log_tx)
 }
 
 /// The pump: PTY output → log, → UI, and terminal-query handling.
@@ -615,6 +734,82 @@ mod tests {
         assert!(owns_attachment(Some("new-view"), "new-view"));
         assert!(!owns_attachment(Some("new-view"), "old-view"));
         assert!(!owns_attachment(None, "old-view"));
+    }
+
+    /// A chat over a real child that echoes its stdin: the stand-in for a CLI
+    /// speaking a line protocol (M29). `None` where `node` is not installed.
+    fn echo_chat(dir: &std::path::Path) -> Option<(Arc<LiveSession>, std::process::ChildStdout)> {
+        crate::envscan::tool_command("node", &["--version"])?;
+        let options = PtyOptions {
+            program: "node".into(),
+            args: vec!["-e".into(), "process.stdin.pipe(process.stdout)".into()],
+            cwd: std::env::temp_dir(),
+            cols: 0,
+            rows: 0,
+            env: vec![],
+            env_remove: Vec::new(),
+        };
+        let (handle, stdout) = crate::chat::process::spawn(&options).expect("spawn the echo child");
+        let session = SessionManager::default()
+            .start_chat(new_session_id(), dir.to_path_buf(), &options, handle)
+            .expect("start the chat session");
+        Some((session, stdout))
+    }
+
+    #[test]
+    fn a_chat_session_refuses_raw_terminal_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some((session, _stdout)) = echo_chat(dir.path()) else {
+            eprintln!("node is not installed; skipping");
+            return;
+        };
+        assert!(session.is_chat());
+        match session.write(b"x") {
+            Err(SessionError::Refused(code)) => assert_eq!(code, "session.chatMode"),
+            other => panic!("raw bytes must never reach a protocol pipe: {other:?}"),
+        }
+        assert!(session.resize(80, 24).is_ok(), "a chat has no geometry to refuse");
+        let _ = session.kill();
+    }
+
+    #[test]
+    fn a_chat_process_echoes_a_line() {
+        use std::io::BufRead;
+        let dir = tempfile::tempdir().unwrap();
+        let Some((session, stdout)) = echo_chat(dir.path()) else {
+            eprintln!("node is not installed; skipping");
+            return;
+        };
+        session.chat().unwrap().send_line(r#"{"type":"hello"}"#).unwrap();
+        let mut line = String::new();
+        std::io::BufReader::new(stdout).read_line(&mut line).unwrap();
+        assert_eq!(line.trim_end(), r#"{"type":"hello"}"#);
+        let _ = session.kill();
+    }
+
+    #[test]
+    fn finishing_a_chat_session_records_its_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some((session, _stdout)) = echo_chat(dir.path()) else {
+            eprintln!("node is not installed; skipping");
+            return;
+        };
+        // What the reader does when the protocol stream closes on its own.
+        session.finish(Some(0));
+        assert_eq!(session.state(), SessionState::Completed);
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut exited = false;
+        while Instant::now() < deadline && !exited {
+            let reader = super::super::log::SessionLogReader::open(dir.path()).unwrap();
+            exited = reader.read_from(0).unwrap().iter().any(|event| {
+                event.kind == EventKind::Lifecycle
+                    && event.payload_str().is_some_and(|text| text.contains("\"exited\""))
+            });
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let _ = session.kill();
+        assert!(exited, "the log must say the chat ended");
     }
 
     /// End-to-end proof that a session with **no view attached** still runs.

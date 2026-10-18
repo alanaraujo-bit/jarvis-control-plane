@@ -67,7 +67,7 @@ const SCRUBBED_ENV_PREFIXES: &[&str] = &["CLAUDE_CODE_", "CLAUDECODE", "CLAUDE_A
 /// Exact variables to scrub that do not share a prefix with the above.
 const SCRUBBED_ENV_KEYS: &[&str] = &["CLAUDE_PID", "CLAUDE_EFFORT"];
 
-fn scrubbed_env_keys() -> Vec<String> {
+pub(crate) fn scrubbed_env_keys() -> Vec<String> {
     std::env::vars()
         .map(|(key, _)| key)
         .filter(|key| {

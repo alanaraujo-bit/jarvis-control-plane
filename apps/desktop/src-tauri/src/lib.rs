@@ -9,6 +9,7 @@ mod activity;
 mod analytics;
 mod autopilot;
 mod brain;
+mod chat;
 mod db;
 mod envscan;
 mod files;
