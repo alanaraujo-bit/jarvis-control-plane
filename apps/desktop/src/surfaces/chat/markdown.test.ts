@@ -98,6 +98,25 @@ test("raw HTML stays text", () => {
   assert.ok(text(blocks[0].inline).includes("<script>"));
 });
 
+test("closing hashes go, a hash inside a word stays", () => {
+  assert.deepEqual(parseMarkdown("## Title ##")[0], { type: "heading", level: 2, inline: [{ type: "text", text: "Title" }] });
+  assert.deepEqual(parseMarkdown("## Learn C#")[0], { type: "heading", level: 2, inline: [{ type: "text", text: "Learn C#" }] });
+});
+
+test("a padded heading does not stall the parser", () => {
+  const started = Date.now();
+  parseMarkdown(`# a${" ".repeat(20_000)}x\n${"para ".repeat(2000)}`);
+  assert.ok(Date.now() - started < 200, `took ${Date.now() - started} ms`);
+});
+
+test("unmatched emphasis marks do not make parsing quadratic", () => {
+  for (const sample of ["*a ".repeat(8000), "_a ".repeat(8000), "[a ".repeat(8000)]) {
+    const started = Date.now();
+    parseInline(sample);
+    assert.ok(Date.now() - started < 100, `took ${Date.now() - started} ms`);
+  }
+});
+
 test("nothing unusual makes it loop", () => {
   for (const sample of ["|", "| a |", "#", "-", "* ", "```", "> ", "1.", "__", "**x", "[a](", "`"]) {
     parseMarkdown(sample);

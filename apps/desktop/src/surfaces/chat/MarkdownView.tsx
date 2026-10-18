@@ -130,7 +130,13 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
                 // person's browser, and only http(s) ever reaches here.
                 onClick={(event) => {
                   event.preventDefault();
-                  void (isTauri() ? openUrl(node.href) : window.open(node.href, "_blank", "noopener"));
+                  open(node.href);
+                }}
+                // A middle click would otherwise let the webview open its own
+                // window on the address.
+                onAuxClick={(event) => {
+                  event.preventDefault();
+                  if (event.button === 1) open(node.href);
                 }}
               >
                 <Inlines nodes={node.children} />
@@ -140,6 +146,11 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
       })}
     </>
   );
+}
+
+/** In the person's browser, never in this webview. */
+function open(href: string) {
+  void (isTauri() ? openUrl(href) : window.open(href, "_blank", "noopener"));
 }
 
 function CodeBlock({ lang, text }: { lang: string; text: string }) {

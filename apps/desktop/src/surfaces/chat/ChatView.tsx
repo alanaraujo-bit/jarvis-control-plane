@@ -16,11 +16,12 @@ import {
 } from "../../app/chat";
 import { useT } from "../../app/i18n";
 import { invoke, isTauri } from "../../app/platform";
+import { insertIntoComposer } from "../terminal/live";
 import { describeTool } from "./activity";
 import { Composer } from "./Composer";
 import { Markdown } from "./MarkdownView";
 import { RequestCard } from "./RequestCard";
-import { buildThread, reconcile, type ChatItem, type Draft, type Entry, type Sent, type Step } from "./thread";
+import { buildThread, reconcile, sentNow, type ChatItem, type Draft, type Entry, type Sent, type Step } from "./thread";
 import "./ChatView.css";
 
 /** How often the log is read while the chat is live. */
@@ -76,6 +77,11 @@ export function ChatView({
         );
       } else if (event.type === "draftDone") {
         setDraft((current) => (current ? { ...current, doneAt: Date.now() } : current));
+      } else if (event.type === "exited") {
+        // Nothing more will stream or arrive: a half-written reply and a
+        // message that never reached the agent must not wait forever.
+        setDraft(null);
+        setSent([]);
       }
     };
     // The stream can overtake the snapshot it follows; what arrives first is
@@ -150,8 +156,16 @@ export function ChatView({
 
   const send = (text: string) => {
     pinned.current = true;
-    setSent((current) => [...current, { text, at: Date.now() }]);
-    act(sendChat(sessionId, text));
+    const message = sentNow(text);
+    setSent((current) => [...current, message]);
+    setError(null);
+    sendChat(sessionId, text).catch((cause) => {
+      // Not sent: the bubble goes, and the words go back where they were
+      // typed instead of being lost.
+      setSent((current) => current.filter((entry) => entry !== message));
+      insertIntoComposer(sessionId, text);
+      setError(t(chatErrorKey(cause)));
+    });
   };
   const answer = (id: string, value: ChatAnswer) => act(answerChat(sessionId, id, value));
 

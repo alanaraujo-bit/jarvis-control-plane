@@ -24,7 +24,10 @@ export type Block =
   | { type: "rule" };
 
 const FENCE = /^\s{0,3}(`{3,}|~{3,})\s*([^`\s]*)/;
-const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+// The closing `#`s are trimmed by hand (`headingText`): folding them into this
+// pattern backtracked quadratically — a heading padded with 4000 spaces took
+// 25 s, re-run on every streamed draft (M29 review).
+const HEADING = /^\s{0,3}(#{1,6})\s+(.*)$/;
 const RULE = /^\s{0,3}([-*_])(\s*\1){2,}\s*$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
 const ITEM = /^(\s*)([-*+]|\d{1,9}[.)])\s+(.*)$/;
@@ -64,7 +67,7 @@ function parseLines(lines: string[]): Block[] {
     const heading = HEADING.exec(line);
     if (heading) {
       const level = Math.min(3, heading[1].length) as 1 | 2 | 3;
-      blocks.push({ type: "heading", level, inline: parseInline(heading[2]) });
+      blocks.push({ type: "heading", level, inline: parseInline(headingText(heading[2])) });
       i += 1;
       continue;
     }
@@ -144,6 +147,16 @@ function parseLines(lines: string[]): Block[] {
   return blocks;
 }
 
+/** A heading's text without its optional closing `#`s (`## Title ##`). */
+function headingText(raw: string): string {
+  const text = raw.trimEnd();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "#") end -= 1;
+  if (end === text.length) return text;
+  // `#` glued to a word is part of it (`C#`); only a separated run closes.
+  return end === 0 || /\s/.test(text[end - 1]) ? text.slice(0, end).trimEnd() : text;
+}
+
 function leading(line: string): number {
   return line.length - line.trimStart().length;
 }
@@ -189,7 +202,9 @@ export function parseInline(text: string): Inline[] {
     }
 
     if (ch === "`") {
-      const run = /^`+/.exec(text.slice(i))![0];
+      let length = 1;
+      while (text[i + length] === "`") length += 1;
+      const run = "`".repeat(length);
       const close = text.indexOf(run, i + run.length);
       if (close !== -1) {
         flush();
@@ -224,7 +239,7 @@ export function parseInline(text: string): Inline[] {
     }
 
     if (ch === "[") {
-      const link = /^\[([^\]]*)\]\(([^)\s]*)\)/.exec(text.slice(i));
+      const link = /^\[([^\]]*)\]\(([^)\s]*)\)/.exec(text.slice(i, i + REACH));
       if (link) {
         if (SAFE_LINK.test(link[2])) {
           flush();
@@ -264,8 +279,16 @@ function wordBoundary(text: string, open: number, end: number, ch: string): bool
   return !(before && /\w/.test(before)) && !(after && /\w/.test(after));
 }
 
+/**
+ * How far an emphasis or a link may reach for its closing mark. Real ones are
+ * short; an unbounded search made every unmatched `*` scan to the end of the
+ * reply, quadratic in its length and re-run on every streamed draft.
+ */
+const REACH = 1000;
+
 function findSingle(text: string, from: number, ch: string): number {
-  for (let j = from; j < text.length; j += 1) {
+  const end = Math.min(text.length, from + REACH);
+  for (let j = from; j < end; j += 1) {
     if (text[j] === ch && text[j + 1] !== ch && text[j - 1] !== ch && text[j - 1] !== " ") return j;
   }
   return -1;

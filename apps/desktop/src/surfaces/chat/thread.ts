@@ -104,6 +104,11 @@ export interface Sent {
   at: number;
 }
 
+/** A message as it leaves, stamped so the log's copy can be matched to it. */
+export function sentNow(text: string): Sent {
+  return { text, at: Date.now() };
+}
+
 /** How long a finished draft waits for the log before it is let go anyway. */
 const DRAFT_GRACE_MS = 10_000;
 /** Provider clocks and ours are the same machine; this absorbs rounding. */
