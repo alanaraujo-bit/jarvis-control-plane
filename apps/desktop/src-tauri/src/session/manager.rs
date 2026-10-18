@@ -251,16 +251,39 @@ impl LiveSession {
     /// the session ended, or mark it finished. Then the new process starts at
     /// the same terminal size on a new pump feeding the same log.
     pub fn replace_process(&self, options: PtyOptions) -> Result<()> {
+        self.replace_process_with(options, || Ok(())).map_err(SessionError::Refused)
+    }
+
+    /// The exit code of the current process, if it has ended.
+    pub fn exited(&self) -> Option<i32> {
+        self.pty.lock().try_wait()
+    }
+
+    /// `replace_process`, with `prepare` run after the old process has exited
+    /// and before the new one starts — the window in which a transcript can be
+    /// copied without the old CLI still writing to it. If `prepare` fails,
+    /// nothing is started and the error is returned.
+    pub fn replace_process_with(
+        &self,
+        options: PtyOptions,
+        prepare: impl FnOnce() -> std::result::Result<(), String>,
+    ) -> std::result::Result<(), String> {
         // Retire the current pump before its process dies.
         self.retiring.lock().store(true, Ordering::SeqCst);
         let old_done = self.pump_done.lock().take();
         let _ = self.pty.lock().kill();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while self.exited().is_none() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        prepare()?;
 
         let (cols, rows) = *self.size.lock();
         let relaunched = Lifecycle::Relaunched {
             command: format!("{} {}", options.program, options.args.join(" ")),
         };
-        let (handle, rx) = pty::spawn(PtyOptions { cols, rows, ..options })?;
+        let (handle, rx) =
+            pty::spawn(PtyOptions { cols, rows, ..options }).map_err(|e| e.to_string())?;
         let handle = Arc::new(handle);
         // Swapping drops the last strong reference to the old pseudoconsole.
         // On Windows that is what ends the old reader: ConPTY yields EOF only

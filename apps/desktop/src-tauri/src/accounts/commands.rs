@@ -153,13 +153,6 @@ pub async fn accounts_refresh(
     // so an account that just finished signing in is asked rather than skipped.
     let accounts = super::list(&state.db)?;
     super::live::refresh_all(&state.db, &accounts);
-    // The exhausted CLI may stop producing transcript lines, so a provider's
-    // official live reading must be allowed to trigger the configured policy.
-    // This changes only the destination for new work. A driven session still
-    // performs its context-aware relay in the autopilot path.
-    for account in accounts.iter().filter(|account| account.active) {
-        let _ = super::switch::maybe_rotate_recorded(&state.db, &account.id);
-    }
     let report = report(&state, project_id.as_deref())?;
     crate::identity::cloud::push_quota(&state.db, &report);
     Ok(report)
@@ -180,7 +173,6 @@ pub async fn account_refresh_live(
     if let Some(account) = super::get(&state.db, &account_id)? {
         super::live::refresh_all(&state.db, std::slice::from_ref(&account));
         if account.active {
-            let _ = super::switch::maybe_rotate_recorded(&state.db, &account.id);
         }
     }
     let report = report(&state, project_id.as_deref())?;

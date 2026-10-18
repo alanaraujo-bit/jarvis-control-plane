@@ -155,110 +155,6 @@ fn the_only_ready_account_cannot_be_paused_while_active() {
 }
 
 #[test]
-fn automatic_switch_policy_round_trips_as_a_stable_code() {
-    let db = Database::open_in_memory().unwrap();
-    assert_eq!(switch::policy(&db), switch::AutoSwitchPolicy::Off);
-    switch::set_policy(&db, switch::AutoSwitchPolicy::OnThreshold).unwrap();
-    assert_eq!(switch::policy(&db), switch::AutoSwitchPolicy::OnThreshold);
-}
-
-#[test]
-fn an_official_rejection_rotates_when_automatic_switching_is_enabled() {
-    let db = Database::open_in_memory().unwrap();
-    insert(&db, &account("a", "claude-code", 0, true));
-    insert(&db, &account("b", "claude-code", 1, false));
-    insert_session(&db, "a");
-    switch::set_policy(&db, switch::AutoSwitchPolicy::OnExhaustion).unwrap();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
-    db.with(|conn| {
-        conn.execute(
-            "INSERT INTO account_limit_events
-                 (account_id, ts_ms, window, status, resets_at_ms)
-             VALUES ('a', ?1, 'five_hour', 'rejected', ?2)",
-            rusqlite::params![now, now + 60 * 60 * 1_000],
-        )?;
-        Ok(())
-    })
-    .unwrap();
-
-    let next = switch::maybe_rotate(&db, "a").expect("another account is ready");
-    assert_eq!(next.id, "b");
-    assert_eq!(active(&db, "claude-code").unwrap().id, "b");
-    let relay = switch::relay_needed(&db, "s1").expect("the driven session now needs a relay");
-    assert_eq!(relay.from.id, "a");
-    assert_eq!(relay.to.id, "b");
-}
-
-#[test]
-fn rotation_refuses_a_second_directory_signed_into_the_same_account() {
-    // Found on this machine: three Claude cards, and two of them —
-    // `~/.claude` and one added later — were signed in as the same person, so
-    // they showed the same 74% and the same reset. Rotating between them moves
-    // the work and changes nothing.
-    let db = Database::open_in_memory().unwrap();
-    let mut twin = account("b", "claude-code", 1, false);
-    twin.email = Some("a@example.test".into());
-    let mut other = account("c", "claude-code", 2, false);
-    other.email = Some("someone.else@example.test".into());
-    insert(&db, &account("a", "claude-code", 0, true));
-    insert(&db, &twin);
-    insert(&db, &other);
-    insert_session(&db, "a");
-    switch::set_policy(&db, switch::AutoSwitchPolicy::OnExhaustion).unwrap();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
-    db.with(|conn| {
-        conn.execute(
-            "INSERT INTO account_limit_events
-                 (account_id, ts_ms, window, status, resets_at_ms)
-             VALUES ('a', ?1, 'five_hour', 'rejected', ?2)",
-            rusqlite::params![now, now + 60 * 60 * 1_000],
-        )?;
-        Ok(())
-    })
-    .unwrap();
-
-    let next = switch::maybe_rotate(&db, "a").expect("a different subscription is ready");
-    assert_eq!(
-        next.id, "c",
-        "the twin sits earlier in rotation order and must still be skipped"
-    );
-}
-
-#[test]
-fn rotation_chooses_the_account_with_the_most_headroom() {
-    let db = Database::open_in_memory().unwrap();
-    insert(&db, &account("a", "claude-code", 0, true));
-    insert(&db, &account("b", "claude-code", 1, false));
-    insert(&db, &account("c", "claude-code", 2, false));
-    let now = now_ms();
-    db.with(|conn| {
-        for (id, used) in [("b", 78.0), ("c", 12.0)] {
-            conn.execute(
-                "INSERT INTO account_limit_events
-                     (account_id, ts_ms, window, status, resets_at_ms, percent)
-                 VALUES (?1, ?2, 'five_hour', 'ok', ?3, ?4)",
-                rusqlite::params![id, now, now + 60 * 60 * 1_000, used],
-            )?;
-        }
-        Ok(())
-    })
-    .unwrap();
-
-    assert_eq!(
-        switch::next_available(&db, &active(&db, "claude-code").unwrap())
-            .map(|account| account.id),
-        Some("c".into()),
-        "the next position is not useful when another account has substantially more quota"
-    );
-}
-
-#[test]
 fn an_account_with_no_email_is_unknown_rather_than_everyone_else() {
     // Codex 0.149.1 stopped writing `id_token_claims`, so nameless accounts are
     // a real state. Grouping them together would strand rotation on a provider
@@ -329,14 +225,6 @@ fn a_matching_email_does_not_override_two_different_account_uuids() {
     assert!(!same_subscription(&left, &right));
     assert!(twins_of(&left, &[left.clone(), right.clone()]).is_empty());
 
-    // …and a rotation may move between them, which is the point.
-    let db = Database::open_in_memory().unwrap();
-    insert(&db, &left);
-    insert(&db, &right);
-    assert_eq!(
-        switch::next_available(&db, &left).map(|a| a.id),
-        Some("b".to_string())
-    );
 }
 
 /// A uuid on only one side falls back to e-mail rather than declaring a match.
@@ -358,26 +246,6 @@ fn a_missing_uuid_falls_back_to_email_and_never_matches_on_absence() {
     blank_b.account_uuid = None;
     blank_b.email = None;
     assert!(!same_subscription(&blank_a, &blank_b));
-}
-
-/// A rotation must never move work onto the allowance it is leaving.
-#[test]
-fn rotation_skips_a_directory_on_the_same_subscription() {
-    let db = Database::open_in_memory().unwrap();
-    let mut current = account("a", "claude-code", 0, true);
-    current.account_uuid = Some("same-account".into());
-    let mut twin = account("b", "claude-code", 1, false);
-    twin.account_uuid = Some("same-account".into());
-    twin.email = Some("looks-different@example.test".into());
-    insert(&db, &current);
-    insert(&db, &twin);
-
-    assert!(
-        switch::next_available(&db, &current).is_none(),
-        "moving to a second directory on the same subscription buys nothing: \
-         same allowance, same window, same reset — and under the threshold \
-         policy it would bounce straight back"
-    );
 }
 
 /// Origin no longer changes where Claude reads account metadata.
@@ -762,20 +630,6 @@ fn the_authorisation_link_is_recovered_from_the_login_output() {
 }
 
 #[test]
-fn a_manual_switch_never_relays_a_running_session() {
-    let db = Database::open_in_memory().unwrap();
-    insert(&db, &account("a", "claude-code", 0, true));
-    insert(&db, &account("b", "claude-code", 1, false));
-    insert_session(&db, "a");
-
-    switch::set_active(&db, "b").unwrap();
-    assert!(
-        switch::relay_needed(&db, "s1").is_none(),
-        "manual activation affects new sessions only"
-    );
-}
-
-#[test]
 fn account_wire_data_contains_identity_but_no_credential_field() {
     let json = serde_json::to_value(account("a", "claude-code", 0, true)).unwrap();
     assert_eq!(json["email"], "a@example.test");
@@ -1041,10 +895,15 @@ fn real_machine_registry_tells_its_accounts_apart() {
         );
         // Two views of one allowance must never be offered as somewhere to move
         // work to — that is the ping-pong this whole area exists to prevent.
+        let candidates = all.iter().map(|c| rotation::rank::candidate_for(&db, c, None)).collect();
+        let ranked = rotation::rank::rank(
+            now_ms(),
+            account,
+            &rotation::policy::Trigger::Exhausted,
+            candidates,
+        );
         assert!(
-            switch::next_available(&db, account)
-                .map(|next| !same_subscription(account, &next))
-                .unwrap_or(true),
+            ranked.iter().all(|next| !same_subscription(account, &next.account)),
             "rotation offered a directory on the same subscription"
         );
     }

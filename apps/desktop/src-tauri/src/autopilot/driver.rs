@@ -200,36 +200,6 @@ pub fn start(
     )
 }
 
-/// Continue the same mission on a fresh provider process after an account
-/// rotation. Progress and the original budget cross the relay; provider
-/// transcript internals do not.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn start_relayed(
-    session: Arc<LiveSession>,
-    db: Arc<Database>,
-    log_dir: std::path::PathBuf,
-    mission_id: String,
-    project_id: String,
-    app: tauri::AppHandle,
-    turns: u32,
-    budget: u32,
-    stalled_rounds: u32,
-    last_failing: Vec<String>,
-) -> Arc<Autopilot> {
-    start_with_progress(
-        session,
-        db,
-        log_dir,
-        mission_id,
-        project_id,
-        app,
-        turns,
-        budget,
-        stalled_rounds,
-        last_failing,
-    )
-}
-
 #[allow(clippy::too_many_arguments)]
 fn start_with_progress(
     session: Arc<LiveSession>,
@@ -361,33 +331,6 @@ fn start_with_progress(
                 };
 
                 let step = next_instruction(&detail, &progress);
-                if matches!(step, Step::Say(_))
-                    && crate::accounts::switch::relay_needed(&db, &driven.session_id).is_some()
-                {
-                    match crate::accounts::switch::relay_autopilot(
-                        &app,
-                        &driven,
-                        &project_id,
-                        turns,
-                        budget,
-                        stalled_rounds,
-                        last_failing.clone(),
-                    ) {
-                        Ok(Some(_replacement)) => break,
-                        Ok(None) => {}
-                        Err(code) => {
-                            let _ = crate::mission::store::set_status(
-                                &db,
-                                &mission_id,
-                                MissionStatus::Waiting,
-                                Some(code.clone()),
-                            );
-                            finish(&driven, &db, &project_id, &detail.mission.title, &code);
-                            break;
-                        }
-                    }
-                }
-
                 match step {
                     Step::Say(text) => {
                         record(

@@ -332,6 +332,59 @@ fn prepare_local(state: &State<'_, AppState>) -> Result<LocalLaunch> {
     })
 }
 
+/// The provider command that resumes this session's conversation on `account`
+/// (M26). Reuses the guardrail settings and project brief already written into
+/// the session's log directory, so the resumed process is guarded and briefed
+/// exactly as the first one was.
+pub fn relaunch_options(
+    state: &AppState,
+    session_id: &str,
+    account: &crate::accounts::Account,
+    provider_session_id: &str,
+) -> std::result::Result<PtyOptions, String> {
+    let (cwd, log_dir): (String, String) = state
+        .db
+        .with(|conn| {
+            conn.query_row(
+                "SELECT cwd, log_dir FROM sessions WHERE id = ?1",
+                [session_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        })
+        .map_err(|e| e.to_string())?;
+    let log_dir = PathBuf::from(log_dir);
+    let mut args =
+        crate::accounts::rotation::relay::continue_args(&account.provider, provider_session_id)?;
+    if account.provider == "claude-code" {
+        let settings = log_dir.join("guardrail-settings.json");
+        if settings.is_file() {
+            args.push("--settings".into());
+            args.push(settings.to_string_lossy().to_string());
+        }
+        let brief = log_dir.join("project-brief.md");
+        if brief.is_file() {
+            args.push("--append-system-prompt-file".into());
+            args.push(brief.to_string_lossy().to_string());
+        }
+    }
+    let program = match account.provider.as_str() {
+        "claude-code" => "claude",
+        "codex" => "codex",
+        _ => return Err("accounts.unknownProvider".into()),
+    };
+    let provider_env = crate::accounts::provider_env(account);
+    Ok(PtyOptions {
+        program: program.into(),
+        args,
+        cwd: PathBuf::from(cwd),
+        // `replace_process` carries the live terminal size over these.
+        cols: 120,
+        rows: 30,
+        env: provider_env.set,
+        env_remove: provider_env.remove,
+    })
+}
+
 /// A session that has just been started, plus the handle to drive it.
 ///
 /// `session_start` returns only what the UI needs; the autopilot needs the live
