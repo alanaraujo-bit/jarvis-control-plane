@@ -291,6 +291,17 @@ fn start_with_progress(
                     break;
                 }
 
+                // An account move is pending for this session — being asked,
+                // waiting for this very turn end, or every account is out. The
+                // next instruction waits, and neither turns nor stall rounds
+                // advance meanwhile (M26).
+                while crate::accounts::rotation::engine::holds(&driven.session_id) {
+                    if driven.stop.load(Ordering::SeqCst) || session_stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    std::thread::sleep(POLL_INTERVAL);
+                }
+
                 *driven.state.lock() = RunState::Deciding;
                 let turns = driven.turns.fetch_add(1, Ordering::Relaxed) + 1;
 

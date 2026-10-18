@@ -275,6 +275,8 @@ pub fn spawn(
                                     }
                                 }
                                 if matches!(item, ConversationItem::TurnEnded { .. }) {
+                                    // The safe point for a pending account move.
+                                    crate::accounts::rotation::engine::turn_ended(&session_id);
                                     announce_turn_ended(
                                         &session_id,
                                         &project_id,

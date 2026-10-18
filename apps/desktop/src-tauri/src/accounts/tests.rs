@@ -895,7 +895,7 @@ fn real_machine_registry_tells_its_accounts_apart() {
         );
         // Two views of one allowance must never be offered as somewhere to move
         // work to — that is the ping-pong this whole area exists to prevent.
-        let candidates = all.iter().map(|c| rotation::rank::candidate_for(&db, c, None)).collect();
+        let candidates = all.iter().map(|c| rotation::rank::candidate_for(&db, c, None, now_ms())).collect();
         let ranked = rotation::rank::rank(
             now_ms(),
             account,

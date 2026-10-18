@@ -139,7 +139,12 @@ pub fn rank(
 
 /// Build a candidate from the stored live reading, falling back to the
 /// Observed/Estimated quota model when no live reading exists.
-pub fn candidate_for(db: &Database, account: &Account, project_root: Option<&Path>) -> Candidate {
+pub fn candidate_for(
+    db: &Database,
+    account: &Account,
+    project_root: Option<&Path>,
+    now_ms: i64,
+) -> Candidate {
     let folder_trusted = match (account.provider.as_str(), project_root) {
         ("claude-code", Some(root)) => crate::providers::claude::folder_is_trusted_in(
             Path::new(&account.config_dir),
@@ -149,6 +154,10 @@ pub fn candidate_for(db: &Database, account: &Account, project_root: Option<&Pat
         _ => None,
     };
     let live = crate::accounts::live::stored(db, &account.id);
+    // A refusal seen in the transcript is official even when the stored live
+    // reading predates it: an exhausted CLI may stop answering probes.
+    let quota = crate::accounts::quota::for_account(db, account);
+    let refused = |name: &str| quota.windows.iter().any(|w| w.window == name && w.exhausted);
     let (session, weekly) = match live.as_ref().and_then(|s| s.reading()) {
         Some(reading) => {
             let state = |w: &crate::accounts::live::LiveWindow| WindowState {
@@ -167,7 +176,6 @@ pub fn candidate_for(db: &Database, account: &Account, project_root: Option<&Pat
             (session, weekly)
         }
         None => {
-            let quota = crate::accounts::quota::for_account(db, account);
             let state = |name: &str| {
                 quota.windows.iter().find(|w| w.window == name).map(|w| WindowState {
                     percent_used: w.percent,
@@ -179,7 +187,26 @@ pub fn candidate_for(db: &Database, account: &Account, project_root: Option<&Pat
             (state("five_hour"), state("weekly"))
         }
     };
-    Candidate { account: account.clone(), session, weekly, folder_trusted }
+    // A window whose stated reset has passed is fresh, whatever the last
+    // reading said — the provider told us when it comes back (M13 §5.2).
+    let settle = |w: Option<WindowState>, refused: bool| {
+        w.map(|mut w| {
+            if w.resets_at_ms.is_some_and(|r| r <= now_ms) {
+                w.percent_used = Some(0.0);
+                w.exhausted = false;
+                w.resets_at_ms = None;
+            } else if refused {
+                w.exhausted = true;
+            }
+            w
+        })
+    };
+    Candidate {
+        account: account.clone(),
+        session: settle(session, refused("five_hour")),
+        weekly: settle(weekly, refused("weekly")),
+        folder_trusted,
+    }
 }
 
 #[cfg(test)]

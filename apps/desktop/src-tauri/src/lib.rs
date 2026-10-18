@@ -259,6 +259,10 @@ pub fn run() {
                 notify::watch::announce_to(app.handle().clone()),
             );
 
+            // Quota is probed and rotation decided in the core, not by a screen
+            // that happens to be open (M26).
+            accounts::rotation::engine::start(app.handle().clone(), Arc::clone(&db));
+
             app.manage(AppState {
                 db,
                 data_dir,
