@@ -6,4 +6,6 @@
 //! protocol's stdout is the live half: streaming text, permission requests and
 //! questions, whether a turn is running, and which model and effort are in use.
 
+pub mod claude;
+pub mod model;
 pub mod process;
