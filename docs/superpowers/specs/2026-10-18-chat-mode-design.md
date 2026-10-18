@@ -408,8 +408,10 @@ Temas escuro e claro desenhados cada um com os tokens existentes.
   botões pequenos abaixo da resposta. Um clique manda o rótulo como mensagem.
 - **Caixa de texto:** cartão arredondado ao pé, textarea que cresce até ~40% da
   altura. Placeholder "Peça algo ao agente…". Enter envia, Shift+Enter quebra
-  linha. Embaixo, à esquerda: o seletor de modelo/potência. À direita: microfone
-  (se o ditado estiver disponível) e Enviar (seta para cima). Ocupado: Enviar vira
+  linha. Embaixo, à esquerda: o seletor de modelo/potência. À direita: Enviar
+  (seta para cima). O microfone fica no cabeçalho da sessão, no mesmo lugar do
+  terminal, e o texto ditado cai na caixa (decisão de construção: um botão só,
+  sempre no mesmo lugar). Ocupado: Enviar vira
   **Parar** (quadrado) quando a caixa está vazia. Com texto, Enviar manda mesmo
   ocupado (Claude enfileira; Codex usa `turn/steer`).
 - **Seletor de modelo e potência:** botão "Opus 5.5 · Alto" que abre o `Popover`

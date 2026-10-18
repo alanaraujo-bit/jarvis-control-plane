@@ -8,6 +8,12 @@ This file tells you where things stand, how the work is done here, and what
 will bite you. **Read `docs/DECISIONS.md` before changing anything in the core** —
 several decisions there were paid for with real debugging.
 
+> **In progress: M29 — chat mode.** Claude Code and Codex worked with as a
+> chat over each CLI's own protocol, beside the terminal. Built and tested
+> against the real CLIs; seeing it run in the app is pending. Read
+> [`docs/M29-CHAT.md`](M29-CHAT.md) (its Handoff section is the next action)
+> and D54 before touching `chat/` or a session's mode.
+>
 > **Most recently finished: M20 — a person's account, and the screen that
 > opens it.** Read [`docs/M20-IDENTITY.md`](M20-IDENTITY.md) and D48 before
 > touching anything under `identity/` or `surfaces/identity/`. The one rule

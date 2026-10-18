@@ -85,6 +85,7 @@ This is why Conversation View is real structured data, not ANSI scraping.
 apps/desktop/src-tauri/src/
   session/     event log, frame codec, projections   ← the core
   pty/         portable-pty host, resize, lifecycle
+  chat/        chat sessions over each CLI's protocol (M29, D54)
   providers/   adapter trait + claude/ + codex/
   db/          sqlite schema + migrations
   git/         git2 integration, worktrees

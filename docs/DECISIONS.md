@@ -2336,3 +2336,54 @@ missions, onboarding, relay pairing.
 
 **Not done, deliberately:** leaderboards, badges and streak nags (D50: metrics
 are information), image uploads, a moderation queue.
+
+## D54 — A chat speaks the provider's protocol; the transcript stays the record
+**Date:** 2026-10-18 (M29)
+
+A chat mode — the same agents for people who should never read a terminal —
+could have been a hidden PTY that the app types into. It is not: that would
+inherit everything D16 and D35 showed to be fragile (waiting for the prompt,
+reading the screen, guessing when Enter lands), and a permission question
+would still exist only as pixels.
+
+### What is decided
+
+1. **The chat drives each CLI's own structured protocol.** Claude Code through
+   `-p` stream-json with `--permission-prompt-tool stdio`; Codex through
+   `app-server`. Both carry the person's message, permission requests,
+   questions, interrupts, and model and effort changes as data. Measured
+   against 2.1.302 and 0.163.0 before anything was designed
+   (`docs/M29-CHAT.md`).
+2. **The provider's transcript is still the record (D3).** Both protocols leave
+   the same transcript the terminal does, so the existing tailer, usage,
+   search, analytics, turn notifications and titles work unchanged. The
+   protocol's stdout is only the live half; it is not logged. What the
+   transcript cannot say — a request, its answer, a model switch, an
+   interrupt — goes into the session log as `Approval` and `Lifecycle` frames,
+   through the one writer (D2).
+3. **A session's mode is fixed at launch** (`sessions.mode`). A chat has no TUI
+   to switch to; turning one into the other would be a relaunch with `--resume`,
+   which is not built.
+4. **What the label says is what the CLI confirms (§28).** Claude's model and
+   effort are re-read with `get_settings` after every change. Codex documents
+   its per-turn override as holding for later turns and states a reroute, so
+   its label follows that.
+5. **A chat only starts in a folder the provider already trusts.** `-p` skips
+   the trust question; starting anyway would run an unknown repository's hooks
+   and MCP servers without consent. Trust stays read-only (D51 item 5).
+6. **"Always" never leaves the session.** Claude suggests `localSettings` for a
+   command, which writes a rule into the person's repository; every suggestion
+   is rewritten to `session`. Codex's `acceptForSession` is offered only where
+   the request lists it.
+7. **Any request a driver does not know is answered at once with an error.**
+   Unanswered, the CLI would wait forever on a question nobody can see.
+
+### What it costs
+
+- The drivers depend on two providers' protocols, one of which (app-server) is
+  labelled experimental. They are pinned by tests over captured lines and by
+  two ignored tests against the real CLIs; run those when either ships.
+- Anthropic has announced, and then paused, moving `claude -p` usage off the
+  subscription limits. Today a chat turn draws from the same windows as the
+  terminal (measured). If that changes, a chat would be billed differently from
+  a terminal for the same work, and the quota chips would need to say so.

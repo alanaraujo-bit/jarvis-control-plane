@@ -26,6 +26,7 @@ Working and verified against real agents on a real machine:
 | Terminal — real ConPTY, tabs, restore, both themes | Working |
 | Providers — Claude Code and Codex adapters, capability model | Working |
 | Conversation View — structured projection with official token usage | Working |
+| Chat mode — Claude Code and Codex as a chat, with permission cards and a model/effort picker (M29) | Built and tested against the real CLIs; app QA pending |
 | Missions — criteria, evidence, verification, autonomy | Working |
 | Mission Control — needs-attention first, empty sections vanish | Working |
 | Mission → Agent → Terminal → Conversation → Evidence thread | Working |

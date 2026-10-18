@@ -1026,6 +1026,16 @@ which is correct in isolation either way. See D48 and
 - [x] Verified end to end against the deployed server and in the app — see
       `docs/M28-COMMUNITY.md`, D53
 
+## M29 — Chat mode  ~
+- [x] Sessions have a mode; Claude Code (stream-json) and Codex (app-server)
+      can be a chat, read from the capability model
+- [x] Protocol drivers, runtime, permission and question cards, model and
+      effort picker, Stop, dictation and Notebook into the text box
+- [x] Folder-trust gate, session-scoped "always", Official waiting notification
+- [x] Verified against the real Claude Code and Codex CLIs
+- [ ] Seen running in the app, both themes and both languages — see the
+      handoff in `docs/M29-CHAT.md`, D54
+
 ## Next steps
 
 1. Re-verify voice dictation end to end by ear on a real microphone — the
