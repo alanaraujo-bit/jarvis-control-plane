@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "build": "tsc -p tsconfig.json", "start": "node dist/index.js", "typecheck": "tsc --noEmit" },
+  "scripts": { "build": "tsc -p tsconfig.json", "start": "node dist/index.js", "typecheck": "tsc --noEmit", "test": "node --test src/*.test.ts" },
+  "engines": { "node": ">=22" },
   "dependencies": { "google-auth-library": "^10.3.0", "pg": "^8.13.1" },
   "devDependencies": { "@types/node": "^22.0.0", "@types/pg": "^8.11.10", "typescript": "^5.9.0" }
 }

@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { createServer } from "node:http";
 import { OAuth2Client } from "google-auth-library";
 import { Pool } from "pg";
+import { parseDocuments } from "./documents.js";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined });
 const port = Number(process.env.PORT ?? 3000);
@@ -134,7 +135,18 @@ async function migrate() {
       created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
       touched_at BIGINT NOT NULL, deleted_at BIGINT,
       PRIMARY KEY (user_id, id));
-    CREATE INDEX IF NOT EXISTS identity_notes_user ON identity_notes(user_id);`);
+    CREATE INDEX IF NOT EXISTS identity_notes_user ON identity_notes(user_id);
+
+    -- ---- M27: everything else a person sets up -------------------------------
+    --
+    -- One last-write-wins table for every new kind (src/documents.ts), with the
+    -- same soft delete and touched_at clock as the notebook. See
+    -- docs/M27-ACCOUNT-SYNC.md for which kinds exist and why.
+    CREATE TABLE IF NOT EXISTS identity_documents (
+      user_id UUID NOT NULL REFERENCES identity_users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL, id TEXT NOT NULL, body JSONB NOT NULL,
+      touched_at BIGINT NOT NULL, deleted_at BIGINT,
+      PRIMARY KEY (user_id, kind, id));`);
   await pool.query("DELETE FROM identity_oauth_flows WHERE expires_at < now() - interval '1 day'");
   await pool.query("DELETE FROM identity_sessions WHERE expires_at < now() - interval '1 day'");
 }
@@ -164,7 +176,11 @@ async function stateFor(userId: string) {
     "SELECT id,name,position,created_at,updated_at,touched_at,deleted_at FROM identity_notebooks WHERE user_id=$1", [userId])).rows;
   const notes = (await pool.query(
     "SELECT id,notebook_id,title,body,pinned,created_at,updated_at,touched_at,deleted_at FROM identity_notes WHERE user_id=$1", [userId])).rows;
+  const documents = (await pool.query(
+    "SELECT kind,id,body,touched_at,deleted_at FROM identity_documents WHERE user_id=$1", [userId])).rows;
   return {
+    documents: documents.map((row) => ({ kind: row.kind, id: row.id, body: row.body,
+      touchedAt: Number(row.touched_at), deletedAt: row.deleted_at === null ? null : Number(row.deleted_at) })),
     settings: Object.fromEntries(settings.map((row) => [row.key, row.value])),
     notebook: {
       notebooks: notebooks.map((row) => ({ id: row.id, name: row.name, position: Number(row.position),
@@ -336,6 +352,25 @@ createServer(async (req, res) => { try {
         await client.query("COMMIT");
       } catch(error){await client.query("ROLLBACK");throw error;} finally {client.release();}
       return json(res,200,{notebook:(await stateFor(String(user.id))).notebook});
+    }
+    // M27: same rule as the notebook -- merged per document, the newer
+    // touchedAt wins, and a tombstone is just a newer document.
+    if(req.method==="PUT"&&url.pathname==="/v1/sync/documents") {
+      const b=await body(req,NOTEBOOK_LIMIT);
+      const documents=parseDocuments(b.documents);
+      if(!documents)return json(res,400,{error:"identity.invalidDocuments"});
+      const client=await pool.connect();
+      try {
+        await client.query("BEGIN");
+        for(const doc of documents)
+          await client.query(
+            `INSERT INTO identity_documents(user_id,kind,id,body,touched_at,deleted_at) VALUES($1,$2,$3,$4::jsonb,$5,$6)
+             ON CONFLICT(user_id,kind,id) DO UPDATE SET body=excluded.body,touched_at=excluded.touched_at,deleted_at=excluded.deleted_at
+             WHERE excluded.touched_at >= identity_documents.touched_at`,
+            [user.id,doc.kind,doc.id,JSON.stringify(doc.body),doc.touchedAt,doc.deletedAt]);
+        await client.query("COMMIT");
+      } catch(error){await client.query("ROLLBACK");throw error;} finally {client.release();}
+      return json(res,200,{documents:(await stateFor(String(user.id))).documents});
     }
     if(req.method==="PUT"&&url.pathname==="/v1/sync/settings") { const b=await body(req), settings=b.settings&&typeof b.settings==="object"&&!Array.isArray(b.settings)?b.settings as Record<string,unknown>:null; if(!settings)return json(res,400,{error:"identity.invalidSettings"}); const entries=Object.entries(settings); if(entries.some(([key,value])=>!carriedKeys.has(key)||JSON.stringify(value).length>4096))return json(res,400,{error:"identity.invalidSettings"}); const client=await pool.connect(); try{await client.query("BEGIN");for(const [key,value] of entries)await client.query("INSERT INTO identity_settings(user_id,key,value) VALUES($1,$2,$3::jsonb) ON CONFLICT(user_id,key) DO UPDATE SET value=excluded.value,updated_at=now()",[user.id,key,JSON.stringify(value)]);await client.query("COMMIT");}catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();} return json(res,200,{ok:true}); }
     if(req.method==="PUT"&&url.pathname==="/v1/sync/quota") { const b=await body(req); if(!b.snapshot||JSON.stringify(b.snapshot).length>28_000)return json(res,400,{error:"identity.invalidQuota"}); await pool.query("INSERT INTO identity_quota_snapshots(user_id,snapshot) VALUES($1,$2::jsonb) ON CONFLICT(user_id) DO UPDATE SET snapshot=excluded.snapshot,observed_at=now()",[user.id,JSON.stringify(b.snapshot)]); return json(res,200,{ok:true}); }
