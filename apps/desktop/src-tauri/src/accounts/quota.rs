@@ -361,6 +361,70 @@ pub struct AccountQuota {
     pub live_stale: bool,
 }
 
+/// When a window will run out at the pace it is being used. Always Estimated.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Eta {
+    pub at_ms: i64,
+    pub confidence: Confidence,
+}
+
+/// How far back the pace is measured.
+const ETA_SLOPE_MS: i64 = 30 * 60_000;
+
+/// Extrapolate a window's percentage to 100 from the provider's own readings
+/// over the last half hour of the current window (least squares).
+///
+/// `None` — "pace unknown", never a number — with fewer than two readings, a
+/// pace that is not rising, or an exhaustion that would land after the reset.
+pub fn eta(db: &Database, account_id: &str, window: &str, now_ms: i64) -> Option<Eta> {
+    let rows: Vec<(i64, f64, Option<i64>)> = db
+        .with(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT ts_ms, percent, resets_at_ms FROM account_limit_events
+                  WHERE account_id = ?1 AND window = ?2 AND percent IS NOT NULL
+                    AND ts_ms BETWEEN ?3 AND ?4
+                  ORDER BY ts_ms",
+            )?;
+            let rows = stmt
+                .query_map(params![account_id, window, now_ms - ETA_SLOPE_MS, now_ms], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(rows)
+        })
+        .ok()?;
+    // Only readings of the current window instance: the one that resets when
+    // the newest reading says.
+    let resets_at = rows.last()?.2;
+    let points: Vec<(f64, f64)> = rows
+        .iter()
+        .filter(|r| r.2 == resets_at)
+        .map(|r| (r.0 as f64, r.1))
+        .collect();
+    if points.len() < 2 {
+        return None;
+    }
+    let n = points.len() as f64;
+    let mean_x = points.iter().map(|p| p.0).sum::<f64>() / n;
+    let mean_y = points.iter().map(|p| p.1).sum::<f64>() / n;
+    let covariance: f64 = points.iter().map(|p| (p.0 - mean_x) * (p.1 - mean_y)).sum();
+    let variance: f64 = points.iter().map(|p| (p.0 - mean_x).powi(2)).sum();
+    if variance <= 0.0 {
+        return None;
+    }
+    let slope = covariance / variance; // percent per millisecond
+    if slope <= 0.0 {
+        return None;
+    }
+    let latest = points.last()?.1;
+    let at_ms = now_ms + ((100.0 - latest).max(0.0) / slope) as i64;
+    if resets_at.is_some_and(|reset| at_ms >= reset) {
+        return None;
+    }
+    Some(Eta { at_ms, confidence: Confidence::Estimated })
+}
+
 /// The latest thing the provider said about one window.
 ///
 /// `since` is the account's `subscription_since`: a directory that has been
@@ -803,6 +867,66 @@ pub fn report(db: &Database, provider: &str) -> Result<Vec<(Account, AccountQuot
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn limit_row(db: &Database, ts_ms: i64, percent: f64, resets_at_ms: i64) {
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO account_limit_events (account_id, ts_ms, window, status, resets_at_ms, percent)
+                 VALUES ('acct', ?1, 'five_hour', 'ok', ?2, ?3)",
+                rusqlite::params![ts_ms, resets_at_ms, percent],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    fn eta_db() -> Database {
+        let db = Database::open_in_memory().unwrap();
+        db.with(|conn| {
+            conn.execute(
+                "INSERT INTO provider_accounts (id, provider, label, config_dir, adopted, position, created_at)
+                 VALUES ('acct', 'claude-code', '', 'C:/a', 0, 0, 0)",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        db
+    }
+
+    #[test]
+    fn eta_from_rising_readings() {
+        let db = eta_db();
+        let now = 10 * 60 * 60_000;
+        let reset = now + 3 * 60 * 60_000;
+        limit_row(&db, now - 20 * 60_000, 40.0, reset);
+        limit_row(&db, now - 10 * 60_000, 50.0, reset);
+        limit_row(&db, now, 60.0, reset);
+        let eta = eta(&db, "acct", "five_hour", now).expect("a rising window has an ETA");
+        assert_eq!(eta.confidence, Confidence::Estimated);
+        assert!((eta.at_ms - (now + 40 * 60_000)).abs() < 60_000, "{}", eta.at_ms - now);
+    }
+
+    #[test]
+    fn eta_none_when_flat_or_single_reading() {
+        let db = eta_db();
+        let now = 10 * 60 * 60_000;
+        let reset = now + 3 * 60 * 60_000;
+        limit_row(&db, now, 60.0, reset);
+        assert!(eta(&db, "acct", "five_hour", now).is_none(), "one reading has no slope");
+        limit_row(&db, now - 10 * 60_000, 60.0, reset);
+        assert!(eta(&db, "acct", "five_hour", now).is_none(), "flat is not running out");
+    }
+
+    #[test]
+    fn eta_none_past_reset() {
+        let db = eta_db();
+        let now = 10 * 60 * 60_000;
+        let reset = now + 10 * 60_000;
+        limit_row(&db, now - 20 * 60_000, 10.0, reset);
+        limit_row(&db, now, 12.0, reset);
+        assert!(eta(&db, "acct", "five_hour", now).is_none(), "the window resets first");
+    }
 
     fn insert_account(db: &Database, id: &str, provider: &str) -> Account {
         db.with(|conn| {
