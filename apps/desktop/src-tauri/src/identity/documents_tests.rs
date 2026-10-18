@@ -44,10 +44,10 @@ fn only_a_newer_remote_document_is_applied() {
     crate::settings::set(&db, "startup.minimized", &true).unwrap();
     outgoing(&db, 100).unwrap();
 
-    apply(&db, dir.path(), &[remote("setting", "startup.minimized", json!(false), 50)]).unwrap();
+    apply(&db, dir.path(), &[remote("setting", "startup.minimized", json!("false"), 50)]).unwrap();
     assert_eq!(crate::settings::get::<bool>(&db, "startup.minimized"), Some(true), "older loses");
 
-    apply(&db, dir.path(), &[remote("setting", "startup.minimized", json!(false), 150)]).unwrap();
+    apply(&db, dir.path(), &[remote("setting", "startup.minimized", json!("false"), 150)]).unwrap();
     assert_eq!(crate::settings::get::<bool>(&db, "startup.minimized"), Some(false), "newer wins");
     let after = outgoing(&db, 200).unwrap();
     assert_eq!(find(&after, "setting", "startup.minimized").unwrap().touched_at, 150, "applying is not a local change");
@@ -127,6 +127,35 @@ fn an_account_tombstone_never_deletes_a_local_account() {
     tomb.deleted_at = Some(99);
     apply(&db, data.path(), &[tomb]).unwrap();
     assert!(crate::accounts::get(&db, &local.id).unwrap().is_some());
+}
+
+#[test]
+fn a_setting_stored_as_raw_text_travels_verbatim() {
+    // `autonomy.global` is written as bare text, not JSON (mission::store).
+    let db = db();
+    let data = tempfile::tempdir().unwrap();
+    db.with(|c| c.execute("INSERT INTO settings (key, value) VALUES ('autonomy.global', 'unattended')", [])).unwrap();
+    let out = outgoing(&db, 10).unwrap();
+    assert_eq!(find(&out, "setting", "autonomy.global").unwrap().body, json!("unattended"));
+
+    let other = self::db();
+    apply(&other, data.path(), &[remote("setting", "autonomy.global", json!("unattended"), 10)]).unwrap();
+    let raw: String = other.with(|c| c.query_row("SELECT value FROM settings WHERE key = 'autonomy.global'", [], |r| r.get(0))).unwrap();
+    assert_eq!(raw, "unattended", "written back exactly as it was stored");
+}
+
+#[test]
+fn a_machine_adopted_account_is_not_carried() {
+    // Every installation adopts its own machine accounts; carrying them would
+    // add a duplicate on each restore.
+    let db = db();
+    db.with(|c| c.execute(
+        "INSERT INTO provider_accounts (id, provider, label, config_dir, adopted, position, created_at) VALUES ('m', 'codex', '', 'C:/m', 1, 0, 0)",
+        [],
+    ))
+    .unwrap();
+    let out = outgoing(&db, 10).unwrap();
+    assert!(find(&out, "providerAccount", "m").is_none());
 }
 
 #[test]

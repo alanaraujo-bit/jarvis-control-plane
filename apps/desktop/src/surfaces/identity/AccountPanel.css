@@ -255,3 +255,21 @@
   font-size: var(--text-sm);
   color: var(--state-danger);
 }
+
+/* Whether this machine is saving to the account (M27). */
+.account__sync {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.account__sync > span { flex: 1; }
+.account__sync[data-state="ok"] svg:first-child { color: var(--state-success); }
+.account__sync[data-state="failed"] svg:first-child,
+.account__sync[data-state="disconnected"] svg:first-child { color: var(--state-warning); }
+.account__sync[data-state="disconnected"],
+.account__sync[data-state="failed"] { border-color: var(--border-default); }

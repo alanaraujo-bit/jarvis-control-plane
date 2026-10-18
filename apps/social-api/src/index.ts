@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { createServer } from "node:http";
 import { OAuth2Client } from "google-auth-library";
 import { Pool } from "pg";
-import { parseDocuments } from "./documents.js";
+import { deletedAtOf, parseDocuments } from "./documents.js";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined });
 const port = Number(process.env.PORT ?? 3000);
@@ -146,7 +146,13 @@ async function migrate() {
       user_id UUID NOT NULL REFERENCES identity_users(id) ON DELETE CASCADE,
       kind TEXT NOT NULL, id TEXT NOT NULL, body JSONB NOT NULL,
       touched_at BIGINT NOT NULL, deleted_at BIGINT,
-      PRIMARY KEY (user_id, kind, id));`);
+      PRIMARY KEY (user_id, kind, id));
+
+    -- M27 repair: until deletedAtOf, every notebook row pushed with
+    -- deletedAt: null was stored as deleted at the epoch. No real deletion
+    -- happens at time 0, so 0 means "never deleted". Idempotent.
+    UPDATE identity_notebooks SET deleted_at = NULL WHERE deleted_at = 0;
+    UPDATE identity_notes SET deleted_at = NULL WHERE deleted_at = 0;`);
   await pool.query("DELETE FROM identity_oauth_flows WHERE expires_at < now() - interval '1 day'");
   await pool.query("DELETE FROM identity_sessions WHERE expires_at < now() - interval '1 day'");
 }
@@ -333,7 +339,7 @@ createServer(async (req, res) => { try {
                deleted_at=excluded.deleted_at
              WHERE excluded.touched_at >= identity_notebooks.touched_at`,
             [user.id,id,String(raw.name??"").slice(0,200),num(raw.position)??0,num(raw.createdAt)??touched,
-             num(raw.updatedAt)??touched,touched,num(raw.deletedAt)]);
+             num(raw.updatedAt)??touched,touched,deletedAtOf(raw.deletedAt)]);
         }
         for(const raw of notes as Record<string,unknown>[]) {
           const id=typeof raw.id==="string"?raw.id:"", touched=num(raw.touchedAt);
@@ -347,7 +353,7 @@ createServer(async (req, res) => { try {
              WHERE excluded.touched_at >= identity_notes.touched_at`,
             [user.id,id,typeof raw.notebookId==="string"?raw.notebookId:null,String(raw.title??"").slice(0,500),
              String(raw.body??"").slice(0,200_000),raw.pinned===true,num(raw.createdAt)??touched,
-             num(raw.updatedAt)??touched,touched,num(raw.deletedAt)]);
+             num(raw.updatedAt)??touched,touched,deletedAtOf(raw.deletedAt)]);
         }
         await client.query("COMMIT");
       } catch(error){await client.query("ROLLBACK");throw error;} finally {client.release();}

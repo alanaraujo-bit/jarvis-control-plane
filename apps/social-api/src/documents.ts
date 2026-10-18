@@ -32,6 +32,12 @@ export interface SyncDocument {
 
 const clock = (value: unknown) => (typeof value === "number" && Number.isSafeInteger(value) ? value : null);
 
+/** A deletion time, or null for a row that was never deleted. Not `Number()`:
+ *  `Number(null)` is 0, and 0 stored as `deleted_at` marks the row deleted. */
+export function deletedAtOf(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
+}
+
 export function parseDocuments(input: unknown): SyncDocument[] | null {
   if (!Array.isArray(input) || input.length > MAX_DOCUMENTS) return null;
   const out: SyncDocument[] = [];
@@ -44,12 +50,15 @@ export function parseDocuments(input: unknown): SyncDocument[] | null {
     if (touched === null) return null;
     if (deletedAt !== null && deletedAt !== undefined && clock(deletedAt) === null) return null;
     if (kind === "setting" && !SETTING_KEYS.has(id)) return null;
-    if (kind === "providerAccount") {
+    const tombstone = clock(deletedAt) !== null;
+    // A tombstone says only that the document is gone; it carries no body.
+    if (kind === "providerAccount" && !tombstone) {
       if (!body || typeof body !== "object" || Object.keys(body).some((key) => !ACCOUNT_FIELDS.has(key))) return null;
     }
-    const encoded = JSON.stringify(body ?? null);
+    const kept = tombstone ? null : body ?? null;
+    const encoded = JSON.stringify(kept);
     if (encoded.length > MAX_BODY) return null;
-    out.push({ kind, id, body: body ?? null, touchedAt: touched, deletedAt: clock(deletedAt) });
+    out.push({ kind, id, body: kept, touchedAt: touched, deletedAt: clock(deletedAt) });
   }
   return out;
 }

@@ -1,18 +1,92 @@
 import { useEffect, useState } from "react";
-import { Bell, Gauge, LogIn, LogOut, Palette, SquareTerminal } from "lucide-react";
+import { Cloud, CloudOff, LogIn, LogOut, RefreshCw } from "lucide-react";
 import type { MessageKey } from "@jarvis/i18n";
 import { useT } from "../../app/i18n";
 import { invoke } from "../../app/platform";
 import { initials } from "./Auth";
+import { CARRIES } from "./carries";
 import { MIN_PASSWORD, useIdentity, type IdentityReport } from "./useIdentity";
 import "./AccountPanel.css";
 
-const CARRIED: { icon: typeof Palette; label: MessageKey }[] = [
-  { icon: Palette, label: "identity.carries.appearance" },
-  { icon: SquareTerminal, label: "identity.carries.terminal" },
-  { icon: Gauge, label: "identity.carries.autonomy" },
-  { icon: Bell, label: "identity.carries.notifications" },
-];
+
+/** `identity::commands::SyncStatus`. */
+interface SyncStatus {
+  signedIn: boolean;
+  connected: boolean;
+  ok: boolean | null;
+  at: number | null;
+  error: string | null;
+}
+
+const SYNC_ERRORS: Record<string, MessageKey> = {
+  "identity.serverUnreachable": "identity.sync.error.unreachable",
+  "identity.cloudSessionExpired": "identity.sync.error.expired",
+  "identity.serverRefused": "identity.sync.error.refused",
+};
+
+/**
+ * Whether this machine is actually saving to the account (M27). Sync used to
+ * fail silently, and a deleted server went unnoticed: this says what is true.
+ */
+function SyncLine({ onSignIn }: { onSignIn: () => void }) {
+  const t = useT();
+  const [status, setStatus] = useState<SyncStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const load = () => void invoke<SyncStatus>("identity_sync_status").then(setStatus).catch(() => undefined);
+    load();
+    const timer = window.setInterval(load, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!status) return null;
+  const syncNow = async () => {
+    setBusy(true);
+    try {
+      setStatus(await invoke<SyncStatus>("identity_sync_now"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const when = status.at ? new Date(status.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+
+  if (!status.connected) {
+    return (
+      <div className="account__sync" data-state="disconnected" role="status">
+        <CloudOff size={14} strokeWidth={1.8} aria-hidden="true" />
+        <span>{t("identity.sync.disconnected")}</span>
+        <button type="button" className="account__ghost" onClick={onSignIn}>
+          {t("identity.sync.signInAgain")}
+        </button>
+      </div>
+    );
+  }
+  const failed = status.ok === false;
+  return (
+    <div className="account__sync" data-state={failed ? "failed" : "ok"} role="status">
+      {failed ? (
+        <CloudOff size={14} strokeWidth={1.8} aria-hidden="true" />
+      ) : (
+        <Cloud size={14} strokeWidth={1.8} aria-hidden="true" />
+      )}
+      <span>
+        {failed
+          ? t("identity.sync.failed", {
+              reason: t(SYNC_ERRORS[status.error ?? ""] ?? "identity.sync.error.unknown"),
+              time: when,
+            })
+          : status.at
+            ? t("identity.sync.saved", { time: when })
+            : t("identity.sync.pending")}
+      </span>
+      <button type="button" className="account__ghost" disabled={busy} onClick={() => void syncNow()}>
+        <RefreshCw size={12} strokeWidth={1.9} aria-hidden="true" />
+        {busy ? t("identity.sync.syncing") : t("identity.sync.now")}
+      </button>
+    </div>
+  );
+}
 
 /**
  * The Account section of Settings (§64, M20).
@@ -140,10 +214,12 @@ export function AccountPanel() {
         </button>
       </header>
 
+      <SyncLine onSignIn={openAuth} />
+
       <section className="account__section">
         <h3 className="account__section-title">{t("identity.settings.carried")}</h3>
         <ul className="account__carried">
-          {CARRIED.map((item) => (
+          {CARRIES.map((item) => (
             <li key={item.label}>
               <item.icon size={13} strokeWidth={1.7} aria-hidden="true" />
               {t(item.label)}

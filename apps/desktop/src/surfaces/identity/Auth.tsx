@@ -2,12 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Bell,
   Eye,
   EyeOff,
-  Gauge,
-  Palette,
-  SquareTerminal,
 } from "lucide-react";
 import type { MessageKey } from "@jarvis/i18n";
 import { useT } from "../../app/i18n";
@@ -16,17 +12,12 @@ import { relative } from "../history/format";
 import { GoogleMark } from "./GoogleMark";
 import { domainSuggestion, STRENGTH_LABEL, strengthOf } from "./password";
 import { MIN_PASSWORD, useIdentity, type KnownAccount } from "./useIdentity";
+import { CARRIES } from "./carries";
 import "./Auth.css";
 
 type Mode = "signIn" | "signUp";
 
-/** The preferences an account carries, said in the order somebody meets them. */
-const CARRIES: { icon: typeof Palette; label: MessageKey }[] = [
-  { icon: Palette, label: "identity.carries.appearance" },
-  { icon: SquareTerminal, label: "identity.carries.terminal" },
-  { icon: Gauge, label: "identity.carries.autonomy" },
-  { icon: Bell, label: "identity.carries.notifications" },
-];
+
 
 /**
  * Sign in, or make an account (M20).

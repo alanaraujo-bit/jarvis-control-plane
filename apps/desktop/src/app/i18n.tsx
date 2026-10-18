@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { remember } from "./identityMemory";
 import {
   resolveLocale,
@@ -35,13 +35,20 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
 
+  // The document says which language it is in from the first paint, not only
+  // after somebody changes it. Signing up adopts the machine's language from
+  // here (useIdentity's `knownLocale`), and with index.html's static `en` every
+  // new account was recorded as English (found in M27 QA).
+  useLayoutEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   const setLocale = useCallback((next: Locale, remembered = true) => {
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
       // Non-fatal.
     }
-    document.documentElement.lang = next;
     setLocaleState(next);
     if (remembered) remember("appearance.locale", next);
   }, []);

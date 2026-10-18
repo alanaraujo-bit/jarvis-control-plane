@@ -78,12 +78,14 @@ fn path_key(path: &str) -> String {
 fn current(db: &Database) -> Result<HashMap<(String, String), Value>> {
     db.with(|conn| {
         let mut out = HashMap::new();
+        // The stored text, verbatim: most rows are JSON, but `autonomy.global`
+        // is bare text, and re-encoding either would change what its reader sees.
         for key in SETTING_KEYS {
             let raw: Option<String> = conn
                 .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| r.get(0))
                 .optional()?;
-            if let Some(value) = raw.and_then(|raw| serde_json::from_str::<Value>(&raw).ok()) {
-                out.insert(("setting".to_string(), key.to_string()), value);
+            if let Some(raw) = raw {
+                out.insert(("setting".to_string(), key.to_string()), Value::String(raw));
             }
         }
         let mut stmt = conn.prepare(
@@ -150,10 +152,11 @@ fn current(db: &Database) -> Result<HashMap<(String, String), Value>> {
             let (id, body) = row?;
             out.insert(("guardrailPolicy".to_string(), id), body);
         }
-        // A copied login is a copy of this machine's; it is not the person's to carry.
+        // A copied login is a copy of this machine's, and an adopted row is
+        // recreated by every installation: neither is the person's to carry.
         let mut stmt = conn.prepare(
             "SELECT id, provider, label, email, position, paused FROM provider_accounts
-              WHERE credential_origin = 'own'",
+              WHERE credential_origin = 'own' AND adopted = 0",
         )?;
         for row in stmt.query_map([], |r| {
             Ok((r.get::<_, String>(0)?, json!({
@@ -291,7 +294,7 @@ fn apply_one(db: &Database, data_dir: &Path, doc: &Document) -> Result<Applied> 
                     c.execute(
                         "INSERT INTO settings (key, value) VALUES (?1, ?2)
                          ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-                        params![doc.id, body.to_string()],
+                        params![doc.id, body.as_str().map_or_else(|| body.to_string(), str::to_string)],
                     )?;
                     Ok(())
                 })
