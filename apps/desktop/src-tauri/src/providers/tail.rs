@@ -31,6 +31,15 @@ impl JsonlTailer {
         &self.path
     }
 
+    /// Follow another file from the same byte offset.
+    ///
+    /// For a conversation that moved to another account (M26): the destination
+    /// copy starts with exactly the bytes already read here, so carrying the
+    /// offset over reads only what the new process appends.
+    pub fn retarget(&mut self, path: impl Into<PathBuf>) {
+        self.path = path.into();
+    }
+
     /// Read whatever has been appended and return the **complete** lines.
     ///
     /// A transcript is read while it is being written, so the last line is
@@ -106,6 +115,25 @@ mod tests {
             .open(path)
             .unwrap();
         f.write_all(bytes).unwrap();
+    }
+
+    #[test]
+    fn retarget_keeps_offset() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a.jsonl");
+        let b = dir.path().join("b.jsonl");
+        append(&a, "1
+2
+3
+");
+        let mut tailer = JsonlTailer::new(&a);
+        assert_eq!(tailer.poll().unwrap().len(), 3);
+        std::fs::copy(&a, &b).unwrap();
+        append(&b, "4
+5
+");
+        tailer.retarget(&b);
+        assert_eq!(tailer.poll().unwrap(), vec!["4".to_string(), "5".to_string()]);
     }
 
     #[test]

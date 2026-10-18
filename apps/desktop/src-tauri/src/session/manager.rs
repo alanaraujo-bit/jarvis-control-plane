@@ -116,6 +116,8 @@ pub struct LiveSession {
     pump_done: Mutex<Option<Receiver<()>>>,
     /// The terminal geometry, carried onto a replacement process.
     size: Mutex<(u16, u16)>,
+    /// Steers the transcript tailer when the conversation moves (M26).
+    tail: Mutex<Option<crate::session::transcript::TailControl>>,
     log_tx: Sender<LogCommand>,
     /// Whether a terminal view is currently rendering this session.
     view_attached: Arc<AtomicBool>,
@@ -169,6 +171,14 @@ impl LiveSession {
             payload,
         });
         Ok(())
+    }
+
+    pub fn set_tail(&self, control: crate::session::transcript::TailControl) {
+        *self.tail.lock() = Some(control);
+    }
+
+    pub fn tail(&self) -> Option<crate::session::transcript::TailControl> {
+        self.tail.lock().clone()
     }
 
     pub fn state(&self) -> SessionState {
@@ -364,6 +374,7 @@ impl SessionManager {
             retiring: Mutex::new(Arc::clone(&retiring)),
             pump_done: Mutex::new(Some(done_rx)),
             size: Mutex::new((cols, rows)),
+            tail: Mutex::new(None),
             log_tx: log_tx.clone(),
             view_attached: Arc::new(AtomicBool::new(false)),
             sink: Arc::new(Mutex::new(None)),

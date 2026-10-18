@@ -713,7 +713,7 @@ fn launch(
 
     // Follow the provider's structured transcript into the same log, so the
     // conversation and the terminal are two views of one stream (§23).
-    transcript::spawn(
+    let tail = transcript::spawn(
         Arc::clone(&session),
         Arc::clone(&state.db),
         project_id.clone(),
@@ -730,6 +730,7 @@ fn launch(
         // its transcript ever contains, exactly as before.
         resume.as_ref().map(|_| created_at),
     );
+    session.set_tail(tail);
 
     // Follow what the guard decided, in its separate process, into this same
     // log (§35). It cannot write the log itself — a session has one writer (D2).

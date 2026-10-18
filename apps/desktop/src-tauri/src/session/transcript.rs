@@ -117,6 +117,42 @@ fn is_replayed_line(line: &str, boundary_ms: i64) -> bool {
 /// `replay_boundary_ms` is set only for a **resumed** session (§88, D41): every
 /// line older than it is a replay of the conversation being continued and is
 /// dropped whole, before anything reads it. See `is_replayed_line`.
+/// Where a running tailer should read from next, and on whose account.
+#[derive(Debug, Clone)]
+pub struct Retarget {
+    pub path: std::path::PathBuf,
+    pub account_id: Option<String>,
+}
+
+/// Steers a running tailer after its session moved to another account (M26).
+#[derive(Clone)]
+pub struct TailControl(std::sync::mpsc::Sender<Retarget>);
+
+impl TailControl {
+    pub fn channel() -> (TailControl, std::sync::mpsc::Receiver<Retarget>) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        (TailControl(tx), rx)
+    }
+
+    pub fn retarget(&self, retarget: Retarget) {
+        let _ = self.0.send(retarget);
+    }
+}
+
+/// Apply any pending retargets before the next poll. The offset is kept, so
+/// a destination file that begins with the bytes already read yields only
+/// what was appended after them.
+pub fn drain_retargets(
+    rx: &std::sync::mpsc::Receiver<Retarget>,
+    tailer: &mut JsonlTailer,
+    account_id: &mut Option<String>,
+) {
+    while let Ok(retarget) = rx.try_recv() {
+        tailer.retarget(retarget.path);
+        *account_id = retarget.account_id;
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn(
     session: Arc<LiveSession>,
@@ -130,10 +166,12 @@ pub fn spawn(
     stop: Arc<AtomicBool>,
     mission_id: Option<String>,
     replay_boundary_ms: Option<i64>,
-) {
+) -> TailControl {
+    let (control, retargets) = TailControl::channel();
     if provider == "shell" {
-        return;
+        return control;
     }
+    let mut account_id = account_id;
 
     let session_id = session.id.clone();
     std::thread::Builder::new()
@@ -184,6 +222,7 @@ pub fn spawn(
             let mut tailer = JsonlTailer::new(path);
             let mut last_said: Option<String> = None;
             while !stop.load(Ordering::Relaxed) {
+                drain_retargets(&retargets, &mut tailer, &mut account_id);
                 match tailer.poll() {
                     Ok(lines) => {
                         for line in lines {
@@ -261,12 +300,6 @@ pub fn spawn(
                                 );
                             }
 
-                            if let Some(account_id) = account_id.as_deref() {
-                                let _ = crate::accounts::switch::maybe_rotate_recorded(
-                                    &db,
-                                    account_id,
-                                );
-                            }
                         }
                     }
                     Err(e) => {
@@ -279,6 +312,7 @@ pub fn spawn(
             }
         })
         .expect("spawn transcript tailer");
+    control
 }
 
 /// Tell somebody the agent finished a turn (§49).
@@ -521,6 +555,36 @@ mod tests {
             })
             .unwrap();
         assert_eq!(usage_rows, 1);
+    }
+
+    #[test]
+    fn retarget_keeps_offset_and_new_account() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a.jsonl");
+        let b = dir.path().join("b.jsonl");
+        std::fs::write(&a, "{}
+{}
+{}
+").unwrap();
+        let mut tailer = crate::providers::tail::JsonlTailer::new(&a);
+        assert_eq!(tailer.poll().unwrap().len(), 3);
+        std::fs::copy(&a, &b).unwrap();
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&b)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, b"{}
+{}
+"))
+            .unwrap();
+
+        let (control, rx) = TailControl::channel();
+        control.retarget(Retarget { path: b.clone(), account_id: Some("b".into()) });
+        let mut account_id = Some("a".to_string());
+        drain_retargets(&rx, &mut tailer, &mut account_id);
+
+        assert_eq!(account_id.as_deref(), Some("b"));
+        assert_eq!(tailer.path(), b.as_path());
+        assert_eq!(tailer.poll().unwrap().len(), 2, "copied lines are not read twice");
     }
 
     #[test]
