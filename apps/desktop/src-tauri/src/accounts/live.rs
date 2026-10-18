@@ -376,9 +376,7 @@ fn account_command(
     account: &Account,
 ) -> std::result::Result<std::process::Command, String> {
     let mut command = crate::envscan::tool_command(bin, args).ok_or("toolMissing".to_string())?;
-    for (key, value) in super::session_env(account) {
-        command.env(key, value);
-    }
+    super::apply_env(&mut command, &super::provider_env(account));
     Ok(command)
 }
 

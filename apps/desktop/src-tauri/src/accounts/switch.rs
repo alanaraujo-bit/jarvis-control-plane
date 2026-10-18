@@ -29,9 +29,7 @@ pub fn sign_in_command(account: &Account, email: Option<&str>) -> Result<std::pr
     }
     let mut command = crate::envscan::tool_command(bin, &args)
         .ok_or_else(|| "accounts.providerMissing".to_string())?;
-    if let Some(key) = super::config_env_key(&account.provider) {
-        command.env(key, &account.config_dir);
-    }
+    super::apply_env(&mut command, &super::provider_env(account));
     Ok(command)
 }
 
@@ -44,9 +42,7 @@ pub fn sign_out_command(account: &Account) -> Result<std::process::Command> {
     };
     let mut command = crate::envscan::tool_command(bin, &args)
         .ok_or_else(|| "accounts.providerMissing".to_string())?;
-    if let Some(key) = super::config_env_key(&account.provider) {
-        command.env(key, &account.config_dir);
-    }
+    super::apply_env(&mut command, &super::provider_env(account));
     Ok(command)
 }
 

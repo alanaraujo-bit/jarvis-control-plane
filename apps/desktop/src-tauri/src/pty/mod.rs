@@ -41,6 +41,9 @@ pub struct PtyOptions {
     pub rows: u16,
     /// Extra environment for the child, on top of the inherited environment.
     pub env: Vec<(String, String)>,
+    /// Inherited variables to drop before `env` is applied — the ambient
+    /// overrides that would otherwise beat the account a session runs on.
+    pub env_remove: Vec<String>,
 }
 
 /// Environment prefixes scrubbed from every session.
@@ -168,6 +171,9 @@ pub fn spawn(options: PtyOptions) -> Result<(PtyHandle, Receiver<PtyEvent>)> {
     for key in scrubbed_env_keys() {
         command.env_remove(&key);
     }
+    for key in &options.env_remove {
+        command.env_remove(key);
+    }
     for (key, value) in &options.env {
         command.env(key, value);
     }
@@ -268,6 +274,7 @@ mod tests {
             cols: 80,
             rows: 24,
             env: vec![],
+            env_remove: Vec::new(),
         }
     }
 
@@ -338,6 +345,7 @@ mod tests {
             cols: 80,
             rows: 24,
             env: vec![],
+            env_remove: Vec::new(),
         })
         .expect("spawn shell");
 
@@ -361,6 +369,7 @@ mod tests {
             cols: 80,
             rows: 24,
             env: vec![],
+            env_remove: Vec::new(),
         })
         .expect("spawn shell");
 
@@ -407,6 +416,27 @@ mod tests {
             !text.contains("marker=[1]"),
             "the child inherited the parent agent's session marker: {text:?}"
         );
+    }
+
+    /// A removal named by the caller beats the inherited environment, so an
+    /// ambient `ANTHROPIC_API_KEY` cannot override the account a session runs on.
+    #[test]
+    fn pty_env_remove_beats_inherited() {
+        // SAFETY: set before the child starts; this variable is unique to the test.
+        unsafe { std::env::set_var("JARVIS_TEST_AMBIENT_OVERRIDE", "leaked") };
+        let command = if cfg!(windows) {
+            "echo ambient=[%JARVIS_TEST_AMBIENT_OVERRIDE%]"
+        } else {
+            "echo ambient=[$JARVIS_TEST_AMBIENT_OVERRIDE]"
+        };
+        let mut options = shell_options(command);
+        options.env_remove = vec!["JARVIS_TEST_AMBIENT_OVERRIDE".into()];
+        let (handle, rx) = spawn(options).expect("spawn pty");
+        let text = drain_until(&handle, &rx, "ambient=", Duration::from_secs(20));
+        let _ = handle.kill();
+        unsafe { std::env::remove_var("JARVIS_TEST_AMBIENT_OVERRIDE") };
+        assert!(text.contains("ambient="), "no output: {text:?}");
+        assert!(!text.contains("leaked"), "the removal did not apply: {text:?}");
     }
 
     /// Pins the account-isolation contract against the provider CLIs actually
@@ -487,6 +517,7 @@ mod tests {
                 "CLAUDE_CONFIG_DIR".into(),
                 claude_root.to_string_lossy().into_owned(),
             )],
+            env_remove: Vec::new(),
         })
         .expect("start the real Claude CLI");
         let _ = drain_until(
@@ -530,6 +561,7 @@ mod tests {
                 "CODEX_HOME".into(),
                 codex_root.to_string_lossy().into_owned(),
             )],
+            env_remove: Vec::new(),
         })
         .expect("start the real Codex CLI");
         let _ = drain_until(&codex, &codex_rx, "session id", Duration::from_secs(20));
@@ -550,6 +582,7 @@ mod tests {
             cols: 80,
             rows: 24,
             env: vec![],
+            env_remove: Vec::new(),
         });
         assert!(matches!(result, Err(PtyError::Spawn { .. })));
     }

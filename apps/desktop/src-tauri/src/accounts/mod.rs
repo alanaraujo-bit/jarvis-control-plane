@@ -160,6 +160,52 @@ pub fn session_env(account: &Account) -> Vec<(String, String)> {
     }
 }
 
+/// Variables that would override the account a provider process runs on.
+///
+/// Inherited from whoever started J.A.R.V.I.S. — a terminal with an API key
+/// exported, an IDE, another agent's host — and each of them beats the
+/// configuration directory: an API key or OAuth token replaces the account's
+/// login, a base URL sends its requests through somebody else's proxy, and a
+/// stray `CLAUDE_CONFIG_DIR`/`CODEX_HOME` would point the probe at another root.
+const AMBIENT_OVERRIDES: &[&str] = &[
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CONFIG_DIR",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "CODEX_HOME",
+];
+
+/// The whole environment change a process needs to run on one account: what to
+/// remove from the inherited environment, then what to set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderEnv {
+    pub remove: Vec<String>,
+    pub set: Vec<(String, String)>,
+}
+
+/// Environment for any provider process that runs on a registered account —
+/// sessions, quota probes, identity checks and sign-in alike, so no route can
+/// read a different account than the one the card names.
+pub fn provider_env(account: &Account) -> ProviderEnv {
+    ProviderEnv {
+        remove: AMBIENT_OVERRIDES.iter().map(|key| key.to_string()).collect(),
+        set: session_env(account),
+    }
+}
+
+/// Apply a [`ProviderEnv`] to a plain command, removals first.
+pub fn apply_env(command: &mut std::process::Command, env: &ProviderEnv) {
+    for key in &env.remove {
+        command.env_remove(key);
+    }
+    for (key, value) in &env.set {
+        command.env(key, value);
+    }
+}
+
 /// Where this provider writes the transcripts for sessions on this account.
 ///
 /// This is the reason `account_id` is on the sessions table. The transcript
@@ -495,11 +541,16 @@ fn same_text(a: &Option<String>, b: &Option<String>) -> bool {
 pub fn read_identity(provider: &str, config_dir: &Path, adopted: bool) -> Option<Identity> {
     match provider {
         "claude-code" => {
-            let env = Some((
-                "CLAUDE_CONFIG_DIR".to_string(),
-                config_dir.to_string_lossy().to_string(),
-            ));
-            let out = crate::envscan::run_tool("claude", &["auth", "status", "--json"], env)?;
+            let mut command = crate::envscan::tool_command("claude", &["auth", "status", "--json"])?;
+            for key in AMBIENT_OVERRIDES {
+                command.env_remove(key);
+            }
+            command.env("CLAUDE_CONFIG_DIR", config_dir);
+            let output = command.output().ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            let out = String::from_utf8_lossy(&output.stdout).to_string();
             let mut identity = parse_claude_identity(&out)?;
             identity.account_uuid = claude_account_uuid(config_dir, adopted, &identity);
             Some(identity)

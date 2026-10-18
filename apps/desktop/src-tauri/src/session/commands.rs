@@ -633,8 +633,13 @@ fn launch(
             resume.as_ref().map(|r| r.provider_session_id.as_str()),
             local.as_ref(),
         );
+    // Without an account nothing is removed: someone on an API key or a proxy
+    // with no accounts registered keeps exactly the environment they had.
+    let mut env_remove = Vec::new();
     if let Some(account) = account.as_ref() {
-        env.extend(crate::accounts::session_env(account));
+        let provider_env = crate::accounts::provider_env(account);
+        env_remove = provider_env.remove;
+        env.extend(provider_env.set);
     }
 
     let created_at = timestamp();
@@ -680,6 +685,7 @@ fn launch(
             cols,
             rows,
             env,
+            env_remove,
         },
     )?;
     if let Some(account_id) = account_id.as_deref() {

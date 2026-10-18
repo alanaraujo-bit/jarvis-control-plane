@@ -110,6 +110,7 @@ mod tests {
                     cols: 80,
                     rows: 24,
                     env: vec![],
+                    env_remove: Vec::new(),
                 },
             )
             .expect("start session")
@@ -245,6 +246,7 @@ mod tests {
                     cols: 194,
                     rows: 34,
                     env: vec![],
+                    env_remove: Vec::new(),
                 },
             )
             .expect("start claude session");

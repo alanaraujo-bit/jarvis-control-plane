@@ -1126,3 +1126,24 @@ fn importing_an_account_skips_the_caches_and_keeps_the_credentials() {
         );
     }
 }
+
+#[test]
+fn provider_env_strips_ambient_overrides() {
+    for (provider, key) in [("claude-code", "CLAUDE_CONFIG_DIR"), ("codex", "CODEX_HOME")] {
+        let value = account("a", provider, 0, true);
+        let env = provider_env(&value);
+        for name in [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_BASE_URL",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "CLAUDE_CONFIG_DIR",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+            "CODEX_HOME",
+        ] {
+            assert!(env.remove.iter().any(|r| r == name), "{provider} keeps {name}");
+        }
+        assert_eq!(env.set, vec![(key.to_string(), value.config_dir.clone())]);
+    }
+}

@@ -1111,6 +1111,7 @@ mod briefing_capability {
             cols: 100,
             rows: 30,
             env: vec![],
+            env_remove: Vec::new(),
         })
         .expect("claude must be on PATH for this test");
 
