@@ -39,6 +39,7 @@ import type { SessionKind } from "./app/sessions";
 import { Settings } from "./surfaces/settings/Settings";
 import { Notebook } from "./surfaces/notebook/Notebook";
 import { CATEGORIES, CATEGORY } from "./surfaces/settings/categories";
+import { RotationPrompt } from "./shell/RotationPrompt";
 import { openSettingsCategory } from "./surfaces/settings/settingsNav";
 import { useEnvironmentStore } from "./surfaces/environment/useEnvironment";
 import { useProjects } from "./surfaces/projects/useProjects";
@@ -808,6 +809,7 @@ export function App() {
       )}
 
       <Toasts items={toasts} onOpen={openNotification} onDismiss={dismiss} />
+      <RotationPrompt />
 
       <CommandPalette
         open={paletteOpen && !authShowing}

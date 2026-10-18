@@ -1,0 +1,102 @@
+/* Account rotation cards (M26). Top-centre, under the title bar: away from the
+   toast stack bottom-right and from the prompt the person is typing into. */
+.rotation-prompts {
+  position: fixed;
+  top: calc(var(--titlebar-height, 36px) + var(--space-5));
+  left: 50%;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: min(380px, calc(100vw - var(--space-8)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.rotation-prompts > * { pointer-events: auto; }
+
+.rotation-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  animation: rotation-in var(--duration-base) var(--ease-out);
+}
+
+/* The leading edge in the state's colour: amber is agent work moving. */
+.rotation-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--state-working);
+}
+.rotation-card[data-kind="exhausted"]::before { background: var(--state-warning); }
+.rotation-card[data-kind="failed"]::before { background: var(--state-danger); }
+
+.rotation-card__icon { flex: none; margin-top: 1px; color: var(--state-working); }
+.rotation-card[data-kind="failed"] .rotation-card__icon { color: var(--state-danger); }
+
+.rotation-card__text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; flex: 1; }
+.rotation-card__text strong { color: var(--text-primary); font-weight: var(--weight-medium); font-size: var(--text-sm); }
+.rotation-card__estimated { color: var(--state-warning); font-style: normal; font-weight: var(--weight-regular, 400); }
+.rotation-card__muted { color: var(--text-tertiary); }
+
+.rotation-card__actions { display: flex; gap: var(--space-3); margin-top: var(--space-3); }
+.rotation-card__actions button,
+.rotation-card--pill button {
+  height: 26px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: var(--text-xs);
+}
+.rotation-card__actions button:hover,
+.rotation-card--pill button:hover { color: var(--text-primary); border-color: var(--border-default); }
+.rotation-card__actions .rotation-card__primary {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+.rotation-card__actions .rotation-card__primary:hover { color: var(--accent-hover); }
+.rotation-card button:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 1px; }
+
+.rotation-card__dismiss {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+.rotation-card__dismiss:hover { color: var(--text-primary); background: var(--bg-inset); }
+
+.rotation-card--pill {
+  align-items: center;
+  justify-content: space-between;
+  width: auto;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
+  border-radius: var(--radius-full);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes rotation-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotation-card { animation: none; }
+}

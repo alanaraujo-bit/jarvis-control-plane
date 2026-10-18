@@ -1,0 +1,105 @@
+/* The quota of the account a session runs on (M26). Compact in the tab strip,
+   the same quiet weight as the tab labels beside it; colour reports state. */
+.session-quota {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 24px;
+  margin-left: auto;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.session-quota:hover { border-color: var(--border-default); color: var(--text-primary); }
+.session-quota:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 1px; }
+.session-quota--none { color: var(--text-tertiary); border-style: dashed; }
+
+.session-quota__account {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+.session-quota__muted { color: var(--text-tertiary); }
+
+.session-quota[data-band="warning"] .session-quota__figure:first-of-type { color: var(--state-warning); }
+.session-quota[data-band="critical"] .session-quota__figure:first-of-type,
+.session-quota[data-band="exhausted"] .session-quota__figure:first-of-type { color: var(--state-danger); }
+
+/* An estimate never reads like a measurement (§28): dotted, not solid. */
+.session-quota__eta[data-confidence="estimated"],
+.session-quota__figure[data-confidence="estimated"] {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.session-quota__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 320px;
+  padding: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-quota__window { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.session-quota__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-primary);
+}
+.session-quota__row.session-quota__muted { color: var(--text-tertiary); font-size: var(--text-micro); }
+
+.session-quota__badge {
+  margin-left: var(--space-3);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+}
+.session-quota__badge[data-confidence="official"] { color: var(--text-secondary); }
+.session-quota__badge[data-confidence="estimated"] { color: var(--state-warning); }
+
+.session-quota__bar {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+.session-quota__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--text-secondary);
+  transition: width var(--duration-base) var(--ease-out);
+}
+.session-quota__bar[data-band="warning"] > span { background: var(--state-warning); }
+.session-quota__bar[data-band="critical"] > span,
+.session-quota__bar[data-band="exhausted"] > span { background: var(--state-danger); }
+
+.session-quota__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.session-quota__tokens { display: flex; gap: var(--space-5); color: var(--text-tertiary); }
+.session-quota__tokens b { color: var(--text-primary); font-weight: var(--weight-medium); }
+
+.session-quota__segments { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.session-quota__segments li { display: flex; justify-content: space-between; gap: var(--space-3); }
+
+.session-quota__destination { display: flex; justify-content: space-between; gap: var(--space-3); width: 100%; }

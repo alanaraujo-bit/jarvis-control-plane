@@ -22,6 +22,7 @@ import { TerminalView } from "../terminal/TerminalView";
 import { useTerminals, type SplitDirection } from "../terminal/useTerminals";
 import type { Project } from "../projects/useProjects";
 import { VoiceButton } from "./VoiceButton";
+import { SessionQuota } from "./SessionQuota";
 import "./ProjectWorkspace.css";
 
 interface ProjectWorkspaceProps {
@@ -389,6 +390,12 @@ export function ProjectWorkspace({
             A historical tab has no terminal to toggle to — there is nothing
             running to attach a PTY view to — so it skips the pill entirely
             and always shows as a conversation below. */}
+        {activeTab_ &&
+          !activeTab_.historical &&
+          (activeTab_.kind === "claude-code" || activeTab_.kind === "codex") && (
+            <SessionQuota sessionId={activeTab_.sessionId} />
+          )}
+
         {activeTab_ && !activeTab_.historical && (
           <VoiceButton projectId={project.id} sessionId={activeTab_.sessionId} locale={locale} />
         )}
