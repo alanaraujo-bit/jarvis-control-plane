@@ -1246,6 +1246,7 @@ export const en = {
   "performance.contextWindow": "Context window",
   "performance.contextShare": "{used} of {total}",
   "performance.localModel": "Local · {model}",
+  "friends.loadFailed": "Could not load your network.",
 } as const;
 
 export type MessageKey = keyof typeof en;
