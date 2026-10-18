@@ -274,8 +274,9 @@ pub fn spawn(
                                         last_said = Some(text.clone());
                                     }
                                 }
-                                if !matches!(item, ConversationItem::TurnEnded { .. }) {
-                                    // Anything else means a turn is under way.
+                                if item.is_turn_work() {
+                                    // The agent is working again: the last
+                                    // finished turn is no longer a safe point.
                                     crate::accounts::rotation::engine::turn_started(&session_id);
                                 }
                                 if matches!(item, ConversationItem::TurnEnded { .. }) {

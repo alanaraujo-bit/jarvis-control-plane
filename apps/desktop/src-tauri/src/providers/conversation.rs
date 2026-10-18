@@ -146,6 +146,16 @@ pub enum ConversationItem {
 }
 
 impl ConversationItem {
+    /// Whether this is the agent working (or being spoken to): what shows a
+    /// turn is under way. Titles and file checkpoints arrive after a turn has
+    /// ended and say nothing about the next one.
+    pub fn is_turn_work(&self) -> bool {
+        matches!(
+            self,
+            Self::Message { .. } | Self::Thinking { .. } | Self::ToolCall { .. } | Self::ToolResult { .. }
+        )
+    }
+
     pub fn ts_ms(&self) -> i64 {
         match self {
             Self::Message { ts_ms, .. }
@@ -220,6 +230,17 @@ pub fn truncate(text: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_agent_work_marks_a_turn_under_way() {
+        // Claude Code writes the title after `turn_duration` closes the turn;
+        // it must not read as the next turn starting (found in M26 app QA).
+        let title = ConversationItem::Title { text: "t".into(), ts_ms: 0 };
+        let change = ConversationItem::FileChange { path: "a".into(), ts_ms: 0 };
+        let error = ConversationItem::Error { message: "e".into(), ts_ms: 0 };
+        assert!(!title.is_turn_work() && !change.is_turn_work() && !error.is_turn_work());
+        assert!(ConversationItem::Thinking { text: "x".into(), ts_ms: 0 }.is_turn_work());
+    }
 
     #[test]
     fn parses_provider_timestamps() {
