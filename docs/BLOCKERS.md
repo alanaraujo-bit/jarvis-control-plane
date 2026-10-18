@@ -133,8 +133,9 @@ Authenticode certificate and SmartScreen may show “unknown publisher”.
 ---
 
 ## B6 — Signing in to the second, third and fourth Claude accounts (§66, M13)
-**Status:** Blocked on an interactive browser sign-in. Blocks one verification,
-not the feature.
+**Status:** Resolved by M26 (2026-10-18); see the last update below. (Was:
+blocked on an interactive browser sign-in; blocked one verification, not the
+feature.)
 
 M13 gives each account its own provider configuration directory
 (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`) — see `docs/M13-ACCOUNTS.md` §2.5 for why
@@ -226,6 +227,30 @@ a thing to do while he is away.
 **What is left for Alan on B6:** nothing, unless he wants a third genuine Claude
 subscription. The remaining item is a run to schedule, not a credential to
 supply.
+
+### B6 — update after M26 (2026-10-18)
+
+**Resolved for what it was blocking.** The run B6 waited for, work carrying on
+from one authenticated account to another, was done against the real CLIs, on
+scratch repositories, and it no longer needs a new session:
+
+- `real_claude_relay_continues_conversation`: an interactive Claude Code session
+  on one J.A.R.V.I.S. account moved in place to the other, and the agent there
+  recalled the word it had heard before the move.
+- `real_codex_resume_across_homes`: the same for Codex, between the app's Codex
+  account and a second, separately signed-in `CODEX_HOME`.
+
+The registered accounts changed since the M18 table. Today there are two
+genuine Claude subscriptions (`…2a@gmail` and `…1a@outlook`) and one Codex
+account. `…2a@gmail` was adopted from the machine and is now marked as a
+*copied* login (migration 21). It is never a rotation destination until it is
+signed in from the app ("Sign in here").
+
+One thing remains unobserved, and it is not a blocker: a provider refusing a
+turn *in the installed app* and the engine moving the session on the exhausted
+trigger. The engine's logic is covered by tests, and the move itself by the two
+real runs above. Observing it live means spending an account to zero, which is
+Alan's call.
 
 ### B2 — update after the 0.5.0 build (2026-08-25)
 

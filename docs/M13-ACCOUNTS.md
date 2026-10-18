@@ -314,6 +314,9 @@ O relé de autopilot inicia uma sessão nova na conta destino, reconstitui o
 contexto pelo brief do Brain e `opening_instruction`, mantém orçamento/progresso
 da run e deixa o processo antigo vivo. Não copia transcript e não usa
 `--resume`. A confiança da pasta é checada na conta destino antes da troca.
+(Substituído pelo M26: a sessão agora troca de conta no lugar, copiando o
+transcript e usando `--resume` — ver §4 passo 7 e
+`docs/M26-ACCOUNT-ROTATION.md`.)
 
 ---
 
@@ -360,9 +363,17 @@ e a decisão precisa ser tomada de propósito, não descoberta no meio:
 
 - Um processo Claude Code em execução **não pode** trocar de conta. Continuidade
   significa necessariamente **uma sessão nova na conta nova**.
-- **`--resume` não atravessa contas**: o transcript da conversa gravada sob a
+- **Corrigido pelo M26 (2026-10-18):** a frase abaixo estava errada. O
+  `--resume` atravessa contas **quando o transcript é copiado**: com
+  `<id>.jsonl` (e a pasta `<id>/` dos subagentes) copiado para o `projects/`
+  da conta B, `claude --resume <id>` sob B continua a mesma conversa e acrescenta
+  ao mesmo arquivo. Isso foi medido contra o CLI real
+  (`real_claude_relay_continues_conversation`). O M26 move a sessão no lugar
+  por esse caminho (`docs/M26-ACCOUNT-ROTATION.md`, D51); o relé pelo Brain
+  descrito aqui ficou para trás.
+- ~~**`--resume` não atravessa contas**: o transcript da conversa gravada sob a
   conta A está no config dir da conta A e é invisível para um `--resume` sob a
-  conta B. Ou se copia arquivo interno do provedor entre diretórios (feio,
+  conta B.~~ Ou se copia arquivo interno do provedor entre diretórios (feio,
   frágil), ou se **restabelece o contexto pelo caminho que o produto já tem** —
   o brief do Brain (§38, D21/D23) mais a instrução de abertura da missão
   (`plan::opening_instruction`), com o estado da missão inteiro já persistido em

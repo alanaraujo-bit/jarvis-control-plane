@@ -2193,3 +2193,74 @@ reach back to when J.A.R.V.I.S. was first running. A leverage ratio computed
 over thirty days of one and two days of the other would be the most flattering
 number on the screen and the least true, so the row carries the date it is
 measured from.
+
+
+## D51 — A session changes account in place, by copying its conversation
+**Date:** 2026-10-18 (M26, supersedes M13 §4 step 7)
+
+M13 decided that a running agent could not change account, and that
+continuity meant a *new* session on the new account, rebuilt from the Brain
+brief. That rested on one claim, "`--resume` does not cross accounts", which
+was never measured. M26 measured it, and the claim was wrong: the conversation
+is a file under the account's directory, and a copy of that file is enough.
+
+### What is decided
+
+1. **The session moves in place.** Same J.A.R.V.I.S. session id, log, terminal
+   and transcript tailer. Only the provider process is replaced
+   (`LiveSession::replace_process_with`). Between the old exit and the new
+   start, the transcript is copied into the destination account's directory at
+   the same relative path: `<id>.jsonl` plus the `<id>/` subagents dir for
+   Claude, the `rollout-…-<id>.jsonl` for Codex. The new process runs
+   `claude --resume <id>` (no `--fork-session`) or `codex resume <id>`, so it
+   appends to the same file. The tailer is retargeted at the same byte offset,
+   so nothing is counted twice.
+2. **Measured, not assumed, for both providers.**
+   `real_claude_relay_continues_conversation` (Claude Code 2.1.302) and
+   `real_codex_resume_across_homes` (Codex 0.163.0): an interactive session on
+   A hears a word, moves, and the agent on B says it back. For Codex, before the
+   copy B answers "no rollout found for thread id". `CODEX_RESUME_VERIFIED`
+   records the measurement; it was `false` until the run.
+3. **Credentials are never cloned.** A copied Claude login shares an OAuth
+   lineage with the machine, so a refresh on either side can revoke the other.
+   Migration 21 adds `provider_accounts.credential_origin`. A `copied` login is
+   never a destination, and fixing one drops only the app-owned copy and runs
+   the provider's own sign-in. It never runs `claude auth logout`, which would
+   revoke the machine's token.
+4. **The core owns the decision, not a screen.** `accounts/rotation/engine.rs`
+   probes quota on a clock, decides once per (account, window, reset, reason),
+   moves near-limit work at the end of a turn and exhausted work at once, asks
+   in Ask mode, and waits for a reset when every account is out. The UI only
+   hears events.
+5. **Trust and first run are the person's steps, in the provider's own screens.**
+   A destination must already trust every session's folder (Claude
+   `.claude.json`, Codex `config.toml`) and have finished first run. Both are
+   read and never written. A destination that would open on one of those
+   screens is not chosen: the relay types into the terminal, and an Enter
+   typed there would answer the question for the person.
+
+### Why not the Brain relay M13 chose
+
+It produced a new conversation that *looked* continuous. A summary is not the
+conversation: the agent loses the tool results, the files it read and the
+exact wording it was given, and the person's terminal changes under them. A
+copied transcript loses nothing, and its failure mode is visible: if the
+destination refuses, the copy goes back and the original account resumes.
+
+### What it costs, and the traps that came with it
+
+- The relay depends on two provider-internal facts: the transcript layout and
+  `--resume` appending without forking. Both are pinned by `#[ignore]` tests
+  against the real CLIs; run them when either provider ships a version.
+- Nothing is killed until the transcript exists. A brand-new session has no
+  conversation yet, so it is not moved.
+- `Idle` is 16 ms of quiet, which happens between spinner frames. It is not
+  "the turn is over". The safe point is a `TurnEnded` that no later transcript
+  activity has superseded.
+- Claude restates one reset with a different sub-second part on each probe.
+  Resets are compared to the minute, or every probe is a new window.
+- Engine passes run from four threads (clock, finished turn, answer, manual
+  switch) and a relay takes seconds, so passes hold one lock.
+- An exit within 5 s is the only refusal signal. A destination that parks on a
+  login screen without exiting reads as a success. Trust and first run are
+  checked beforehand for exactly that reason.

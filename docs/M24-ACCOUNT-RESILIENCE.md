@@ -48,6 +48,23 @@ change it. Autopilot can relay onto a fresh process with preserved context. An
 ordinary interactive terminal must start a fresh session/tab to use the newly
 active account; it no longer needs a manual provider `/login`.
 
+## After M26 (2026-10-18)
+
+Two parts of this document are superseded by
+[M26](M26-ACCOUNT-ROTATION.md) (D51):
+
+- **Credential cloning is closed.** Invariant 3 copied credentials as opaque
+  files. A copied Claude login shares an OAuth lineage with the machine: a
+  refresh on either side can revoke the other. Credentials are no longer copied.
+  Migration 21 adds `provider_accounts.credential_origin` and marks adopted rows
+  `copied`. A copied login is never a rotation destination. The Accounts screen
+  offers "Sign in here": it drops only the app-owned copy (no provider logout,
+  which would revoke the machine's token) and runs the provider's own sign-in.
+- **The runtime boundary moved.** A running session no longer needs a new tab
+  to use another account. The provider process is replaced in place, and the
+  transcript is copied so `--resume` continues the same conversation. Invariant
+  7 is replaced by the M26 ranking ("use it or lose it", not most headroom).
+
 ## Verification
 
 - Account unit suite: 48 passed, 4 ignored machine diagnostics.

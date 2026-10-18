@@ -1007,6 +1007,15 @@ box — settled by measuring the real markup headlessly, not by reading the CSS,
 which is correct in isolation either way. See D48 and
 [`docs/M20-IDENTITY.md`](M20-IDENTITY.md).
 
+## M26 — Seamless account rotation (§66)  ✅
+- [x] A live session moves to another account in place: process replaced,
+      transcript copied, `--resume` / `codex resume` continues the conversation
+- [x] Core-owned engine: near-limit at the end of a turn, exhausted at once,
+      Ask mode, wait-for-reset when every account is out
+- [x] Credentials never cloned (migration 21, `credential_origin`)
+- [x] Verified against the real Claude Code and Codex CLIs and in the app —
+      see `docs/M26-ACCOUNT-ROTATION.md`, D51
+
 ## Next steps
 
 1. Re-verify voice dictation end to end by ear on a real microphone — the
@@ -1049,7 +1058,7 @@ which is correct in isolation either way. See D48 and
    special case, because `onSelect` opens a project workspace and a notebook
    note has no project to open. A protocol change deserves its own pass.
 
-8. **The account-rotation end-to-end run is now set up and unrun.** B6 was
+8. **Done in M26 (2026-10-18).** ~~The account-rotation end-to-end run is now set up and unrun.~~ B6 was
    blocked on a browser sign-in; that is done, and there are two genuine Claude
    subscriptions on this machine sitting at opposite ends — one refusing, one
    with room. What is left is a real run: make the exhausted account active,

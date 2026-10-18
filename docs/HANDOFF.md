@@ -420,6 +420,18 @@ writing `id_token_claims` into `auth.json`, silently); the dial's track was the
 same colour as the panel behind it; and a signed-out card drew two empty meters
 reading "allowance unknown" above the one sentence that explained why.
 
+*Seamless account rotation (M26, D51), in the dev build over a copy of the
+database.* A Claude session on an account at 97% of its weekly window was asked
+about ("Continue on Claude 2?"), moved in place after the turn when the question
+was accepted, and the agent on the other account answered with the word it had
+been told before the move. Activity recorded the relay, `active` followed it,
+and the session popover listed both accounts. The same move was proven against
+the real CLIs for Claude Code and Codex (`#[ignore]` tests named in
+`docs/M26-ACCOUNT-ROTATION.md`). Running it found three bugs the suite did not:
+a question that never came once another account freed up, an approved move that
+never happened because Claude writes the title *after* the turn ends, and no
+Codex session starting at all on this machine (items 69 and 71).
+
 ### Not built — deliberately absent, not stubbed
 
 Push notification (needs a developer account), and starting a mission from
@@ -1085,6 +1097,42 @@ Every one of these is real and already cost time.
     report the **wrapper's** exit, not the build's. Twice a screenshot was taken
     of the previous binary and read as evidence that a fix had not worked. Run
     the build as the tracked background command itself, or wait on the log.
+
+68. **Never `claude auth logout` a login that was copied from the machine.**
+    The copy shares the machine's OAuth lineage, so logging it out revokes the
+    token Claude Code uses everywhere else on this computer. A copied login is
+    fixed by dropping the app-owned copy (`forget_copied_login`) and signing in
+    from the app (M26, D51). Never write `hasTrustDialogAccepted` or
+    `hasCompletedOnboarding` either: both are the person's answers in the
+    provider's own screens, and are only ever read.
+
+69. **`SessionState::Idle` is 16 ms of quiet, not "the turn is over".** The
+    pump flips to Idle between spinner frames of a running turn. Anything that
+    must wait for the end of a turn (a near-limit account move, an autopilot
+    step) needs the transcript's `TurnEnded`, and must forget it as soon as the
+    transcript shows the next turn starting. A remembered turn end once let a
+    move kill a tool call mid-run.
+
+70. **Claude states one quota reset with a different sub-second part on every
+    probe** (`…:59.557` then `…:00.495`, crossing the second). Compare resets
+    through `accounts::quota::reset_key` (to the minute), or every probe is a
+    "new window": a declined question comes back every minute and the ETA
+    never finds two points in one window.
+
+71. **`npm i -g` installs an extensionless shell script beside every `.cmd`.**
+    The PTY handed `codex` (the script) to CreateProcessW and got `os error
+    193`, so no Codex session could start on this machine until `pty::spawn`
+    resolved bare names the way `cmd` does (PATHEXT first, per directory). A
+    tool that "works in the terminal" can still fail here: Git Bash runs the
+    script, CreateProcess cannot.
+
+72. **Codex sets up its Windows sandbox on the first run in each `CODEX_HOME`,
+    and drops every keystroke until it is ready.** It shows "Input disabled
+    until setup completes" for up to a few minutes, then "Sandbox ready".
+    Anything typed into a fresh home in that window is lost. The relay types
+    the continue instruction after an exhausted move, so a Codex destination
+    that has never run a session may not receive it. Open one session on a new
+    Codex account first, the same advice as Claude's first run.
 
 ---
 
