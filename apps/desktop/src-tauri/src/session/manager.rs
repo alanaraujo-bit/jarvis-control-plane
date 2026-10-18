@@ -104,7 +104,18 @@ struct AttachedView {
 /// A running session.
 pub struct LiveSession {
     pub id: String,
-    pty: Arc<PtyHandle>,
+    /// The current provider process. Behind a lock because an account switch
+    /// replaces it while the session goes on (M26).
+    pty: Mutex<Arc<PtyHandle>>,
+    /// The current pump's retirement flag. `replace_process` sets it on the
+    /// pump it is retiring, so that pump records the exit without ending the
+    /// session; each pump gets its own, so the new process is never mistaken
+    /// for the old one.
+    retiring: Mutex<Arc<AtomicBool>>,
+    /// Signalled by a pump when it finishes; `replace_process` waits on it.
+    pump_done: Mutex<Option<Receiver<()>>>,
+    /// The terminal geometry, carried onto a replacement process.
+    size: Mutex<(u16, u16)>,
     log_tx: Sender<LogCommand>,
     /// Whether a terminal view is currently rendering this session.
     view_attached: Arc<AtomicBool>,
@@ -137,7 +148,7 @@ impl LiveSession {
         if let Some(watch) = self.watch.lock().as_ref() {
             let _ = watch.send(crate::notify::watch::Beat::Input);
         }
-        self.pty.write(data)?;
+        self.pty.lock().write(data)?;
         Ok(())
     }
 
@@ -150,7 +161,8 @@ impl LiveSession {
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {
-        self.pty.resize(cols, rows)?;
+        self.pty.lock().resize(cols, rows)?;
+        *self.size.lock() = (cols, rows);
         let payload = serde_json::to_vec(&Lifecycle::Resized { cols, rows }).unwrap_or_default();
         let _ = self.log_tx.send(LogCommand::Append {
             kind: EventKind::Lifecycle,
@@ -221,11 +233,49 @@ impl LiveSession {
         true
     }
 
+    /// Replace the provider process, keeping this session — id, log, attached
+    /// view, watcher — exactly as it is (M26).
+    ///
+    /// The old child is killed and its pump allowed to finish: it records the
+    /// exit, but does not stop the log writer, tell the notification watcher
+    /// the session ended, or mark it finished. Then the new process starts at
+    /// the same terminal size on a new pump feeding the same log.
+    pub fn replace_process(&self, options: PtyOptions) -> Result<()> {
+        // Retire the current pump before its process dies.
+        self.retiring.lock().store(true, Ordering::SeqCst);
+        let old_done = self.pump_done.lock().take();
+        let _ = self.pty.lock().kill();
+
+        let (cols, rows) = *self.size.lock();
+        let relaunched = Lifecycle::Relaunched {
+            command: format!("{} {}", options.program, options.args.join(" ")),
+        };
+        let (handle, rx) = pty::spawn(PtyOptions { cols, rows, ..options })?;
+        let handle = Arc::new(handle);
+        // Swapping drops the last strong reference to the old pseudoconsole.
+        // On Windows that is what ends the old reader: ConPTY yields EOF only
+        // once it is closed, not when the child exits.
+        let old = std::mem::replace(&mut *self.pty.lock(), Arc::clone(&handle));
+        drop(old);
+        if let Some(done) = old_done {
+            let _ = done.recv_timeout(Duration::from_secs(15));
+        }
+
+        self.log(EventKind::Lifecycle, serde_json::to_vec(&relaunched).unwrap_or_default());
+        *self.state.lock() = SessionState::Starting;
+        let retiring = Arc::new(AtomicBool::new(false));
+        *self.retiring.lock() = Arc::clone(&retiring);
+        let (done_tx, done_rx) = channel();
+        *self.pump_done.lock() = Some(done_rx);
+        spawn_pump(self, &handle, rx, self.log_tx.clone(), done_tx, retiring);
+        Ok(())
+    }
+
     pub fn kill(&self) -> Result<()> {
         // Stop the follower first: it must not keep polling a transcript for a
         // session that no longer exists.
         self.stopped.store(true, Ordering::SeqCst);
-        self.pty.kill()?;
+        self.pty.lock().kill()?;
         let _ = self.log_tx.send(LogCommand::Stop);
         Ok(())
     }
@@ -302,12 +352,18 @@ impl SessionManager {
             })
             .expect("spawn session log writer");
 
+        let (cols, rows) = (options.cols, options.rows);
         let (handle, pty_rx) = pty::spawn(options)?;
         let pty = Arc::new(handle);
 
+        let (done_tx, done_rx) = channel();
+        let retiring = Arc::new(AtomicBool::new(false));
         let session = Arc::new(LiveSession {
             id: id.clone(),
-            pty: Arc::clone(&pty),
+            pty: Mutex::new(Arc::clone(&pty)),
+            retiring: Mutex::new(Arc::clone(&retiring)),
+            pump_done: Mutex::new(Some(done_rx)),
+            size: Mutex::new((cols, rows)),
             log_tx: log_tx.clone(),
             view_attached: Arc::new(AtomicBool::new(false)),
             sink: Arc::new(Mutex::new(None)),
@@ -317,7 +373,7 @@ impl SessionManager {
             watch: Arc::new(Mutex::new(None)),
         });
 
-        spawn_pump(Arc::clone(&session), pty, pty_rx, log_tx);
+        spawn_pump(&session, &pty, pty_rx, log_tx, done_tx, retiring);
 
         self.sessions.lock().insert(id, Arc::clone(&session));
         Ok(session)
@@ -326,11 +382,16 @@ impl SessionManager {
 
 /// The pump: PTY output → log, → UI, and terminal-query handling.
 fn spawn_pump(
-    session: Arc<LiveSession>,
-    pty: Arc<PtyHandle>,
+    session: &LiveSession,
+    pty: &Arc<PtyHandle>,
     rx: Receiver<PtyEvent>,
     log_tx: Sender<LogCommand>,
+    done: Sender<()>,
+    replacing: Arc<AtomicBool>,
 ) {
+    // Weak: the pump must not keep a replaced pseudoconsole alive (see
+    // `replace_process`).
+    let pty = Arc::downgrade(pty);
     let sink = Arc::clone(&session.sink);
     let view_gate = Arc::clone(&session.view_gate);
     let view_attached = Arc::clone(&session.view_attached);
@@ -393,7 +454,9 @@ fn spawn_pump(
                         if !view_attached.load(Ordering::SeqCst)
                             && contains(&bytes, DSR_QUERY)
                         {
-                            let _ = pty.write(DSR_REPLY);
+                            if let Some(pty) = pty.upgrade() {
+                                let _ = pty.write(DSR_REPLY);
+                            }
                         }
 
                         {
@@ -424,6 +487,11 @@ fn spawn_pump(
                             payload: serde_json::to_vec(&Lifecycle::Exited { code })
                                 .unwrap_or_default(),
                         });
+                        // A planned replacement: the session goes on under the
+                        // next process, so nothing downstream may hear it ended.
+                        if replacing.load(Ordering::SeqCst) {
+                            break;
+                        }
                         *state.lock() = match code {
                             Some(0) | None => SessionState::Completed,
                             Some(_) => SessionState::Failed,
@@ -447,11 +515,14 @@ fn spawn_pump(
                     Err(RecvTimeoutError::Disconnected) => {
                         let _boundary = view_gate.lock();
                         flush(&mut pending, &mut pending_owner);
-                        let _ = log_tx.send(LogCommand::Stop);
+                        if !replacing.load(Ordering::SeqCst) {
+                            let _ = log_tx.send(LogCommand::Stop);
+                        }
                         break;
                     }
                 }
             }
+            let _ = done.send(());
             tracing::debug!(session = %id, "session pump finished");
         })
         .expect("spawn session pump");
@@ -546,6 +617,85 @@ mod tests {
             found,
             "an unattended session must still run and record its output"
         );
+    }
+
+    /// An account switch swaps the provider process under a session that keeps
+    /// its id, its log and its attached view (M26).
+    #[test]
+    fn replace_process_keeps_id_log_and_attachment() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = SessionManager::default();
+        let id = new_session_id();
+        let echo = |word: &str| {
+            if cfg!(windows) {
+                ("cmd".to_string(), vec!["/c".to_string(), format!("echo {word}& ping -n 30 127.0.0.1 >NUL")])
+            } else {
+                ("sh".to_string(), vec!["-c".to_string(), format!("echo {word}; sleep 30")])
+            }
+        };
+        let options = |word: &str| {
+            let (program, args) = echo(word);
+            PtyOptions {
+                program,
+                args,
+                cwd: std::env::temp_dir(),
+                cols: 80,
+                rows: 24,
+                env: vec![],
+                env_remove: Vec::new(),
+            }
+        };
+        let session = manager.start(id.clone(), dir.path().to_path_buf(), options("first-proc")).unwrap();
+        let (watch_tx, watch_rx) = channel();
+        session.set_watch(watch_tx);
+
+        let read_log = || {
+            let reader = super::super::log::SessionLogReader::open(dir.path()).unwrap();
+            String::from_utf8_lossy(&reader.replay_pty(usize::MAX).unwrap()).to_string()
+        };
+        let wait_for = |needle: &str| {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while Instant::now() < deadline {
+                if read_log().contains(needle) {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(150));
+            }
+            false
+        };
+        assert!(wait_for("first-proc"));
+
+        let started = Instant::now();
+        session.replace_process(options("second-proc")).expect("replace");
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the old pump must finish promptly, not time out: {:?}",
+            started.elapsed()
+        );
+        assert!(wait_for("second-proc"), "the new process must write into the same log");
+        assert_eq!(session.id, id);
+        assert!(manager.get(&id).is_ok());
+        assert!(
+            !matches!(session.state(), SessionState::Completed | SessionState::Failed),
+            "a replaced process is not a finished session"
+        );
+
+        let reader = super::super::log::SessionLogReader::open(dir.path()).unwrap();
+        let lifecycle: Vec<String> = reader
+            .read_from(0)
+            .unwrap()
+            .iter()
+            .filter(|e| e.kind == EventKind::Lifecycle)
+            .map(|e| String::from_utf8_lossy(&e.payload).to_string())
+            .collect();
+        assert!(lifecycle.iter().any(|l| l.contains("relaunched")), "{lifecycle:?}");
+
+        let beats: Vec<_> = watch_rx.try_iter().collect();
+        assert!(
+            !beats.iter().any(|b| matches!(b, crate::notify::watch::Beat::Exited(_))),
+            "the notification watcher must not hear about a planned replacement"
+        );
+        let _ = session.kill();
     }
 
     /// Input written to a session is recorded before it is sent.

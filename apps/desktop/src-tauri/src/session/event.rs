@@ -128,6 +128,15 @@ pub enum Lifecycle {
     Resized { cols: u16, rows: u16 },
     #[serde(rename_all = "camelCase")]
     Exited { code: Option<i32> },
+    /// The provider process was replaced under this session, which goes on
+    /// (M26). `command` is the new process, as `Started` records the first.
+    #[serde(rename_all = "camelCase")]
+    Relaunched { command: String },
+    /// Work moved from one provider account to another inside this session.
+    /// `reason` is a stable id: `nearLimit`, `exhausted`, `manual`,
+    /// `resumeAfterWait`.
+    #[serde(rename_all = "camelCase")]
+    AccountSwitch { from: String, to: String, reason: String },
 }
 
 /// What an agent session is doing right now (§21).
