@@ -69,6 +69,9 @@ pub const MACHINE_CARRIED: &[&str] = &[
     // switch looked like it followed the person and never did. An allowlist is
     // only closed when both halves are closed at the same time.
     crate::settings::PERFORMANCE_HUD_ENABLED_KEY,
+    // Chat or terminal for new agents (M29): a preference about how somebody
+    // likes to work, so it follows them.
+    crate::settings::AGENTS_OPEN_AS_KEY,
 ];
 
 /// Every key an account may hold, machine-mirrored or not.

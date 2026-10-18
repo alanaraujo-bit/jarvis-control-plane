@@ -100,6 +100,8 @@ pub struct Preferences {
     pub notifications_sound: bool,
     /// Compact live statistics over the focused session.
     pub performance_hud_enabled: bool,
+    /// `"terminal"` or `"chat"`: how a new agent opens (M29).
+    pub agents_open_as: String,
 }
 
 /// Whether J.A.R.V.I.S. starts with the machine, and how (§93).
@@ -161,6 +163,9 @@ pub const MAX_TERMINAL_SCROLLBACK: u32 = 100_000;
 
 pub const PERFORMANCE_HUD_ENABLED_KEY: &str = "performance.hudEnabled";
 
+/// Whether new agents open as a chat or a terminal (M29).
+pub const AGENTS_OPEN_AS_KEY: &str = "agents.openAs";
+
 #[tauri::command]
 pub fn settings_preferences(state: tauri::State<'_, crate::AppState>) -> Preferences {
     let db = &state.db;
@@ -175,6 +180,7 @@ pub fn settings_preferences(state: tauri::State<'_, crate::AppState>) -> Prefere
         notifications_sound: get_or(db, crate::notify::SOUND_KEY, true),
         // Opt-in: this panel deliberately sits over working content.
         performance_hud_enabled: get_or(db, PERFORMANCE_HUD_ENABLED_KEY, false),
+        agents_open_as: agents_open_as(db),
     }
 }
 
@@ -226,6 +232,34 @@ pub fn settings_set_launch(
         set(&state.db, START_MINIMIZED_KEY, &minimized)?;
     }
     Ok(settings_launch(app, state))
+}
+
+/// Choose whether new agents open as a chat or a terminal (M29).
+///
+/// Two values and nothing else. `"terminal"` clears the row rather than
+/// storing it: unset is the default (D33).
+#[tauri::command]
+pub fn settings_set_agents_open_as(
+    state: tauri::State<'_, crate::AppState>,
+    value: String,
+) -> Result<Preferences> {
+    store_agents_open_as(&state.db, &value)?;
+    Ok(settings_preferences(state))
+}
+
+fn store_agents_open_as(db: &Database, value: &str) -> Result<()> {
+    match value {
+        "chat" => set(db, AGENTS_OPEN_AS_KEY, &value),
+        "terminal" => clear(db, AGENTS_OPEN_AS_KEY),
+        _ => Err("settings.outOfRange".into()),
+    }
+}
+
+fn agents_open_as(db: &Database) -> String {
+    match get::<String>(db, AGENTS_OPEN_AS_KEY).as_deref() {
+        Some("chat") => "chat".into(),
+        _ => "terminal".into(),
+    }
 }
 
 /// Show or hide the live performance HUD.
@@ -308,6 +342,28 @@ pub fn settings_set_preference(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agents_open_as_defaults_to_terminal() {
+        let db = Database::open_in_memory().unwrap();
+        assert_eq!(agents_open_as(&db), "terminal");
+    }
+
+    #[test]
+    fn agents_open_as_accepts_only_its_two_values() {
+        let db = Database::open_in_memory().unwrap();
+        store_agents_open_as(&db, "chat").unwrap();
+        assert_eq!(agents_open_as(&db), "chat");
+        assert_eq!(store_agents_open_as(&db, "tui"), Err("settings.outOfRange".to_string()));
+        assert_eq!(agents_open_as(&db), "chat", "a refused value changes nothing");
+        store_agents_open_as(&db, "terminal").unwrap();
+        assert_eq!(get::<String>(&db, AGENTS_OPEN_AS_KEY), None, "the default is the absence of a row");
+    }
+
+    #[test]
+    fn the_choice_follows_the_person() {
+        assert!(crate::identity::prefs::is_carried(AGENTS_OPEN_AS_KEY));
+    }
 
     #[test]
     fn a_preference_survives_a_round_trip() {

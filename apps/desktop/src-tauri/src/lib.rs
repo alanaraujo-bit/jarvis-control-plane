@@ -429,6 +429,7 @@ pub fn run() {
             settings::settings_set_preference,
             settings::settings_set_notification,
             settings::settings_set_performance_hud,
+            settings::settings_set_agents_open_as,
             settings::settings_launch,
             settings::settings_set_launch,
             preview::preview_detect,
