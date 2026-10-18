@@ -7,5 +7,6 @@
 //! questions, whether a turn is running, and which model and effort are in use.
 
 pub mod claude;
+pub mod codex;
 pub mod model;
 pub mod process;
