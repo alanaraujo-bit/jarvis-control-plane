@@ -242,7 +242,7 @@ fn preferred_executable(candidates: &[String]) -> Option<String> {
     candidates.iter().min_by_key(|c| rank(c)).cloned()
 }
 
-fn which(bin: &str) -> Option<String> {
+pub(crate) fn which(bin: &str) -> Option<String> {
     let locator = if cfg!(windows) { "where" } else { "which" };
     let mut cmd = Command::new(locator);
     cmd.arg(bin);

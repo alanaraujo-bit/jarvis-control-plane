@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use super::model::{
     asked, interrupted, resolved, settings_logged, ChatAction, ChatAnswer, ChatEvent, ChatModel,
-    ChatOption, ChatQuestion, ChatRequest, Driver, Effect, RequestKind,
+    ChatOption, ChatQuestion, ChatRequest, Driver, Effect, RequestKind, CANCELLED,
 };
 use crate::session::event::SessionState;
 
@@ -175,6 +175,10 @@ impl CodexDriver {
             }
             Call::TurnStart if failed => {
                 self.starting = false;
+                // What waited for this turn goes out as the next one, in order.
+                if !self.queued.is_empty() {
+                    return self.flush();
+                }
                 vec![Effect::Emit(ChatEvent::Busy { busy: false }), Effect::State(self.idle_state())]
             }
             Call::Steer(text) if failed => {
@@ -201,16 +205,22 @@ impl CodexDriver {
 
         let (kind, request) = match method {
             "item/commandExecution/requestApproval" => {
-                // `commandActions` holds what the agent asked to run; `command`
-                // is that wrapped in the shell invocation.
-                let detail = params
+                // `command` is exactly what will run, wrapped in the shell
+                // invocation. A single parsed action that it contains reads
+                // better and hides nothing; anything else — several actions,
+                // which a compound `a; b` becomes — shows the whole command, so
+                // a harmless last part can never stand for the rest (M29 review).
+                let raw = text("command");
+                let actions: Vec<&str> = params
                     .get("commandActions")
                     .and_then(Value::as_array)
-                    .and_then(|actions| actions.last())
-                    .and_then(|a| a.get("command"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-                    .unwrap_or_else(|| text("command"));
+                    .map(|actions| actions.iter().filter_map(|a| a.get("command").and_then(Value::as_str)).collect())
+                    .unwrap_or_default();
+                let detail = match actions.as_slice() {
+                    [only] if raw.contains(only) => (*only).to_string(),
+                    _ if raw.is_empty() => actions.join("\n"),
+                    _ => raw.clone(),
+                };
                 (
                     Approval::Command,
                     ChatRequest {
@@ -290,6 +300,13 @@ impl CodexDriver {
                 self.turn_id = None;
                 self.starting = false;
                 let mut effects = self.close_draft();
+                // A request still up belongs to a turn that is over.
+                let mut left: Vec<String> = self.pending.drain().map(|(id, _)| id).collect();
+                left.sort();
+                for id in left {
+                    effects.push(resolved(&id, CANCELLED));
+                    effects.push(Effect::Emit(ChatEvent::Resolved { id }));
+                }
                 effects.push(Effect::Emit(ChatEvent::Busy { busy: false }));
                 effects.push(Effect::State(self.idle_state()));
                 // A message that arrived as the turn ended starts the next.
@@ -348,10 +365,19 @@ impl CodexDriver {
                     Some(other) => other.to_string(),
                     None => return Vec::new(),
                 };
+                // Only reaches here when the server settled it without us —
+                // our own answers already took the request out.
                 if self.pending.remove(&key).is_none() {
                     return Vec::new();
                 }
-                vec![Effect::Emit(ChatEvent::Resolved { id: key }), Effect::State(SessionState::Working)]
+                let state = if !self.pending.is_empty() {
+                    SessionState::Waiting
+                } else if self.turn_id.is_some() {
+                    SessionState::Working
+                } else {
+                    SessionState::Idle
+                };
+                vec![resolved(&key, CANCELLED), Effect::Emit(ChatEvent::Resolved { id: key }), Effect::State(state)]
             }
             "model/rerouted" => {
                 // The provider moved the turn to another model; say so (§28).
@@ -708,6 +734,53 @@ mod tests {
         }
         let allow = writes(&driver.answer("0", ChatAnswer::Allow { always: false }).unwrap());
         assert_eq!(allow[0], json!({ "jsonrpc": "2.0", "id": 0, "result": { "decision": "accept" } }));
+    }
+
+    /// Codex splits `a; b` into several actions. Showing only the last would
+    /// let `echo done` stand for `rm -rf x; echo done`.
+    #[test]
+    fn a_compound_command_is_shown_whole() {
+        let mut driver = ready();
+        let line = r#"{"method":"item/commandExecution/requestApproval","id":4,"params":{"threadId":"t","turnId":"turn-1","itemId":"e","command":"\"powershell.exe\" -Command \"Remove-Item -Recurse x; echo done\"","commandActions":[{"type":"unknown","command":"Remove-Item -Recurse x"},{"type":"unknown","command":"echo done"}]}}"#;
+        match emitted(&driver.on_line(line)).as_slice() {
+            [ChatEvent::Request { request }] => {
+                assert!(request.detail.contains("Remove-Item -Recurse x"), "{}", request.detail);
+                assert!(request.detail.contains("echo done"));
+            }
+            other => panic!("expected one request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_card_left_up_when_the_turn_ends_is_taken_away() {
+        let mut driver = ready();
+        driver.send("go");
+        driver.on_line(TURN_STARTED);
+        driver.on_line(APPROVAL);
+        let end = driver.on_line(TURN_COMPLETED);
+        assert!(emitted(&end).contains(&ChatEvent::Resolved { id: "0".into() }));
+        assert!(end.contains(&Effect::State(SessionState::Idle)));
+    }
+
+    #[test]
+    fn a_request_the_server_settled_itself_is_logged_and_does_not_fake_work() {
+        let mut driver = ready();
+        driver.on_line(APPROVAL);
+        let effects = driver.on_line(r#"{"method":"serverRequest/resolved","params":{"threadId":"t","requestId":0}}"#);
+        assert!(effects.iter().any(|e| matches!(e, Effect::Log(EventKind::Approval, payload)
+            if String::from_utf8_lossy(payload).contains("cancelled"))));
+        assert!(effects.contains(&Effect::State(SessionState::Idle)), "no turn is running");
+    }
+
+    #[test]
+    fn a_failed_turn_start_sends_what_waited_for_it() {
+        let mut driver = ready();
+        let first = writes(&driver.send("one"));
+        let id = first[0]["id"].as_u64().unwrap();
+        assert!(writes(&driver.send("two")).is_empty(), "held for the turn");
+        let retried = writes(&driver.on_line(&format!(r#"{{"id":{id},"error":{{"code":-32000,"message":"busy"}}}}"#)));
+        assert_eq!(retried[0]["method"], "turn/start");
+        assert_eq!(retried[0]["params"]["input"][0]["text"], "two");
     }
 
     #[test]

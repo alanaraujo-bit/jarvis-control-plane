@@ -171,13 +171,18 @@ pub fn interrupted() -> Effect {
     Effect::Log(EventKind::Lifecycle, serde_json::to_vec(&Lifecycle::Interrupted).unwrap_or_default())
 }
 
-/// The detail of a request, from the input field that names it. Line breaks
-/// are kept: a multi-line command is read as one by the person approving it.
+/// The detail of a request, from the input field that names it — whole. Line
+/// breaks are kept and nothing is cut: a command padded past any limit would
+/// otherwise hide its tail from the person approving it (M29 review). The card
+/// scrolls.
 pub fn first_text(input: &Value, keys: &[&str]) -> String {
-    const MAX_CHARS: usize = 4000;
     keys.iter()
         .find_map(|key| input.get(*key).and_then(Value::as_str))
         .or_else(|| input.as_object().and_then(|map| map.values().find_map(Value::as_str)))
-        .map(|text| text.chars().take(MAX_CHARS).collect())
+        .map(str::to_string)
         .unwrap_or_default()
 }
+
+/// The decision a request was settled with when nobody answered it: the CLI
+/// withdrew it, or its turn ended around it.
+pub const CANCELLED: &str = "cancelled";

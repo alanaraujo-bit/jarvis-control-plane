@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 
 use super::model::{
     asked, first_text, interrupted, resolved, settings_logged, ChatAction, ChatAnswer, ChatEvent,
-    ChatModel, ChatOption, ChatQuestion, ChatRequest, Driver, Effect, RequestKind,
+    ChatModel, ChatOption, ChatQuestion, ChatRequest, Driver, Effect, RequestKind, CANCELLED,
 };
 use crate::session::event::SessionState;
 
@@ -366,7 +366,7 @@ impl Driver for ClaudeDriver {
                     return Vec::new();
                 }
                 vec![
-                    resolved(id, "cancelled"),
+                    resolved(id, CANCELLED),
                     Effect::Emit(ChatEvent::Resolved { id: id.to_string() }),
                     Effect::State(if self.turns > 0 { SessionState::Working } else { self.idle_state() }),
                 ]
@@ -388,6 +388,14 @@ impl Driver for ClaudeDriver {
                     None => self.turns.saturating_sub(1),
                 };
                 if self.turns == 0 {
+                    // A turn cannot end while it waits on an answer, so a
+                    // card still up belongs to a turn that is over.
+                    let mut left: Vec<String> = self.pending.drain().map(|(id, _)| id).collect();
+                    left.sort();
+                    for id in left {
+                        effects.push(resolved(&id, CANCELLED));
+                        effects.push(Effect::Emit(ChatEvent::Resolved { id }));
+                    }
                     effects.push(Effect::Emit(ChatEvent::Busy { busy: false }));
                     effects.push(Effect::State(self.idle_state()));
                 }
@@ -426,7 +434,9 @@ impl Driver for ClaudeDriver {
                         .suggestions
                         .into_iter()
                         .map(|mut s| {
-                            s["destination"] = json!("session");
+                            if let Some(map) = s.as_object_mut() {
+                                map.insert("destination".into(), json!("session"));
+                            }
                             s
                         })
                         .collect();
@@ -435,10 +445,17 @@ impl Driver for ClaudeDriver {
                 (response, if always { "allowAlways" } else { "allow" })
             }
             (RequestKind::Question, ChatAnswer::Answers { answers }) => {
-                let mut input = pending.input;
                 let joined: serde_json::Map<String, Value> =
                     answers.into_iter().map(|(question, chosen)| (question, json!(chosen.join(", ")))).collect();
-                input["answers"] = Value::Object(joined);
+                // The CLI's own input travels back with the answers; anything
+                // but an object would have nowhere to put them.
+                let mut input = pending.input;
+                match input.as_object_mut() {
+                    Some(map) => {
+                        map.insert("answers".into(), Value::Object(joined));
+                    }
+                    None => input = json!({ "answers": joined }),
+                }
                 (json!({ "behavior": "allow", "updatedInput": input }), "answered")
             }
             (kind, _) => {
@@ -704,6 +721,41 @@ mod tests {
         let effects = driver.on_line(r#"{"type":"control_cancel_request","request_id":"ccc97ffa"}"#);
         assert!(emitted(&effects).contains(&ChatEvent::Resolved { id: "ccc97ffa".into() }));
         assert_eq!(driver.answer("ccc97ffa", ChatAnswer::Deny), Err("chat.requestGone".to_string()));
+    }
+
+    #[test]
+    fn a_card_left_up_when_the_turn_ends_is_taken_away() {
+        let mut driver = ready();
+        driver.send("rm it");
+        driver.on_line(BASH_REQUEST);
+        let end = driver.on_line(RESULT);
+        assert!(emitted(&end).contains(&ChatEvent::Resolved { id: "ccc97ffa".into() }));
+        assert!(end.contains(&Effect::State(SessionState::Idle)), "not left waiting on a finished turn");
+        assert!(end.iter().any(|e| matches!(e, Effect::Log(EventKind::Approval, payload)
+            if String::from_utf8_lossy(payload).contains("cancelled"))));
+    }
+
+    /// Protocol data is untrusted: a suggestion or an input that is not an
+    /// object must not panic the command answering it.
+    #[test]
+    fn odd_shapes_in_a_request_do_not_panic_the_answer() {
+        let mut driver = ready();
+        driver.on_line(r#"{"type":"control_request","request_id":"o1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"},"permission_suggestions":["weird"]}}"#);
+        assert!(driver.answer("o1", ChatAnswer::Allow { always: true }).is_ok());
+        driver.on_line(r#"{"type":"control_request","request_id":"o2","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":"not an object","requires_user_interaction":true}}"#);
+        let answers = [("q".to_string(), vec!["a".to_string()])].into_iter().collect();
+        assert!(driver.answer("o2", ChatAnswer::Answers { answers }).is_ok());
+    }
+
+    #[test]
+    fn a_long_command_is_shown_whole() {
+        let mut driver = ready();
+        let padded = format!("echo {} && rm -rf ~", " ".repeat(6000));
+        let line = json!({"type":"control_request","request_id":"p1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":padded}}}).to_string();
+        match emitted(&driver.on_line(&line)).as_slice() {
+            [ChatEvent::Request { request }] => assert!(request.detail.ends_with("rm -rf ~"), "the tail is never hidden"),
+            other => panic!("expected a request, got {other:?}"),
+        }
     }
 
     #[test]
