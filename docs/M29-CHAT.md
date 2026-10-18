@@ -59,9 +59,16 @@ execpolicy amendment and `cancel`, with neither `acceptForSession` nor
 `request_user_input` is unavailable and Codex asks inside the message instead
 (`agentMessage.questions`), which the chat turns into quick replies.
 
-Two parser bugs surfaced and are fixed for the terminal too: a `/model` echo
-rendered as "You" bubbles, and 0.163.0's command argument lists left every
-Codex Shell row empty.
+Three parser bugs surfaced and are fixed for the terminal too: a `/model` echo
+rendered as "You" bubbles; 0.163.0's command argument lists left every Codex
+Shell row empty; and a message sent while Claude works is recorded only as a
+`queued_command` attachment — 42 of them on this machine, every one missing
+from Conversation View and search until now.
+
+Folder trust was read from the wrong file without an account
+(`~/.claude/.claude.json`, no projects; Claude reads `~/.claude.json`), and a
+config with no `projects` counted as unknown. Both let a chat start unasked;
+both are fixed and tested.
 
 ## How it is built
 
@@ -92,14 +99,18 @@ Codex Shell row empty.
 
 ## Verified
 
-- `cargo test --lib`: 777 passed (24 ignored), including 37 for the chat core.
+- `cargo test --lib`: 789 passed (24 ignored). An independent review of the
+  branch found eleven issues; all were fixed with tests, among them a closed
+  Codex chat leaving its process tree alive (the test fails without the fix),
+  a card showing only part of a compound command, and quadratic Markdown
+  parsing.
 - `real_claude_chat_turn` and `real_codex_chat_turn` (ignored; run with
   `cargo test --lib chat::real_tests -- --ignored --test-threads=1`): a file
   created after an allowed request; two back-to-back messages ending busy
   once; a model switch confirmed by the CLI and leaving `~/.claude/settings.json`
   byte-identical; the transcript on disk where the tailer looks; a Codex steer
   into a running turn; a model switch carried by the next `turn/start`.
-- `pnpm --filter @jarvis/desktop test`: 25 passed (Markdown, activity, thread).
+- `pnpm --filter @jarvis/desktop test`: 28 passed (Markdown, activity, thread).
 - `pnpm typecheck`, i18n tests, lint (no new warnings in the chat files).
 
 ## Not built, deliberately
