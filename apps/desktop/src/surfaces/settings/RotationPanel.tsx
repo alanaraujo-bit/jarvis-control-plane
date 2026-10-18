@@ -118,7 +118,6 @@ export function RotationPanel() {
           : t("rotation.trigger.exhaustedHelp")}
       </p>
       <p className="rotation-settings__help">{t("rotation.order")}</p>
-      <p className="rotation-settings__help">{t("rotation.codexNote")}</p>
     </div>
   );
 }

@@ -1261,7 +1261,6 @@ export const en = {
   "rotation.trigger.nearLimitHelp": "Waits for the agent to finish its reply, then continues on the next account. Where a provider states no percentage, the trigger uses an estimate and the card says so.",
   "rotation.trigger.exhaustedHelp": "Switches as soon as the provider refuses a turn, and tells the agent to carry on where it stopped.",
   "rotation.order": "The next account is the one whose quota resets soonest — allowance that would otherwise go unused. Accounts with no window running are kept in reserve.",
-  "rotation.codexNote": "Codex sessions are not moved yet: continuing a Codex conversation on another account has not been verified.",
   "accounts.rotation.title": "Rotation",
   "accounts.rotation.off": "Off — sessions stay on their account.",
   "accounts.rotation.summary": "{mode} · {trigger}",

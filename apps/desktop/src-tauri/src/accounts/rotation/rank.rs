@@ -155,6 +155,7 @@ pub fn candidate_for(
             account.adopted,
             root,
         ),
+        ("codex", Some(root)) => crate::providers::codex::folder_is_trusted_in(Path::new(&account.config_dir), root),
         _ => None,
     };
     // Read, never written: finishing first-run is the person's step in the

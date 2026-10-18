@@ -387,11 +387,103 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
     }
 }
 
+/// Account-scoped folder trust, read and never written: Codex asks once per
+/// repository and records the answer in `<CODEX_HOME>/config.toml` as
+/// `[projects.'<root>'] trust_level = "trusted"`, keyed by the Git root's long
+/// path, lowercased on Windows (verified on 0.163.0). A destination that has
+/// not trusted the folder opens on that question, and typing into it would
+/// answer it for the person.
+pub fn folder_is_trusted_in(home: &Path, cwd: &Path) -> Option<bool> {
+    let config = match std::fs::read_to_string(home.join("config.toml")) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(false),
+        Err(_) => return None,
+    };
+    let root = cwd.ancestors().find(|dir| dir.join(".git").exists()).unwrap_or(cwd);
+    Some(trusted_in(&config, &trust_key(root)))
+}
+
+/// A folder spelled the way Codex keys it.
+fn trust_key(path: &Path) -> String {
+    let long = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let text = long.to_string_lossy();
+    normalise_trust_path(text.strip_prefix(r"\\?\").unwrap_or(&text))
+}
+
+fn normalise_trust_path(text: &str) -> String {
+    if cfg!(windows) {
+        text.replace('/', "\\").trim_end_matches('\\').to_lowercase()
+    } else {
+        text.trim_end_matches('/').to_string()
+    }
+}
+
+/// The lookup itself, over `config.toml` text. A line scan rather than a TOML
+/// parser: only `[projects.'…']` tables and their `trust_level` matter.
+pub fn trusted_in(config_toml: &str, key: &str) -> bool {
+    let unquote = |text: &str| -> Option<String> {
+        if let Some(inner) = text.strip_prefix('\'').and_then(|t| t.strip_suffix('\'')) {
+            return Some(inner.to_string());
+        }
+        text.strip_prefix('"').and_then(|t| t.strip_suffix('"')).map(|inner| inner.replace("\\\\", "\\"))
+    };
+    let mut current: Option<String> = None;
+    for line in config_toml.lines().map(str::trim) {
+        if let Some(header) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            current = header
+                .strip_prefix("projects.")
+                .and_then(unquote)
+                .map(|path| normalise_trust_path(&path));
+            continue;
+        }
+        if current.as_deref() == Some(key) {
+            if let Some((name, value)) = line.split_once('=') {
+                if name.trim() == "trust_level" {
+                    return value.trim().trim_matches('"') == "trusted";
+                }
+            }
+        }
+    }
+    false
+}
+
 pub fn parse_rollout(text: &str) -> Vec<ConversationItem> {
     text.lines()
         .filter(|l| !l.trim().is_empty())
         .flat_map(parse_line)
         .collect()
+}
+
+#[cfg(test)]
+mod trust_tests {
+    use super::*;
+
+    #[test]
+    fn trust_reads_the_captured_config() {
+        // As Codex 0.163.0 wrote it on this machine.
+        let config = "cli_auth_credentials_store = \"file\"\n\n[projects.'c:\\users\\me\\appdata\\local\\temp\\.tmpmejody']\ntrust_level = \"trusted\"\n\n[windows]\nsandbox = \"elevated\"\n";
+        assert!(trusted_in(config, r"c:\users\me\appdata\local\temp\.tmpmejody"));
+        assert!(!trusted_in(config, r"c:\users\me\elsewhere"));
+    }
+
+    #[test]
+    fn trust_is_keyed_by_the_repository_root() {
+        let home = tempfile::tempdir().unwrap();
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(repo.path().join(".git")).unwrap();
+        let inner = repo.path().join("src");
+        std::fs::create_dir_all(&inner).unwrap();
+        assert_eq!(folder_is_trusted_in(home.path(), &inner), Some(false), "no config: Codex will ask");
+
+        std::fs::write(
+            home.path().join("config.toml"),
+            format!("[projects.'{}']\ntrust_level = \"trusted\"\n", trust_key(repo.path())),
+        )
+        .unwrap();
+        assert_eq!(folder_is_trusted_in(home.path(), &inner), Some(true));
+        let other = tempfile::tempdir().unwrap();
+        assert_eq!(folder_is_trusted_in(home.path(), other.path()), Some(false));
+    }
 }
 
 #[cfg(test)]

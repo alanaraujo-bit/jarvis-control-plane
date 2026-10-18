@@ -1180,7 +1180,6 @@ export const ptBR: Record<MessageKey, string> = {
   "rotation.trigger.nearLimitHelp": "Espera o agente terminar a resposta e continua na próxima conta. Quando o provedor não informa o percentual, o gatilho usa uma estimativa e o cartão avisa.",
   "rotation.trigger.exhaustedHelp": "Troca assim que o provedor recusa um turno e manda o agente continuar de onde parou.",
   "rotation.order": "A próxima conta é a que tem a cota que reseta mais cedo — cota que, sem uso, seria perdida. Contas sem janela aberta ficam de reserva.",
-  "rotation.codexNote": "Sessões do Codex ainda não são movidas: continuar uma conversa do Codex em outra conta ainda não foi verificado.",
   "accounts.rotation.title": "Rodízio",
   "accounts.rotation.off": "Desligado — as sessões ficam na conta delas.",
   "accounts.rotation.summary": "{mode} · {trigger}",

@@ -16,9 +16,12 @@ use crate::session::event::{EventKind, Lifecycle};
 use crate::session::manager::LiveSession;
 
 /// Whether `codex resume <id>` has been measured to continue a rollout copied
-/// into another `CODEX_HOME`. Until it has, Codex sessions are not moved: a
+/// into another `CODEX_HOME`. Until it was, Codex sessions were not moved: a
 /// fresh conversation presented as a continuation would be a lie (§81).
-pub const CODEX_RESUME_VERIFIED: bool = false;
+/// Measured on Codex 0.163.0 (2026-10-18): before the copy, B answers "no
+/// rollout found"; after it, B recalls A's word and appends to the copied
+/// file (`real_codex_resume_across_homes`).
+pub const CODEX_RESUME_VERIFIED: bool = true;
 
 /// A destination that exits this soon after starting refused the work — a
 /// signed-out or broken login — and the session goes back where it was.
@@ -802,6 +805,158 @@ mod tests {
 
         assert_eq!(outcome, Err("accounts.sessionLost".to_string()));
         assert_eq!(session.state(), crate::session::event::SessionState::Failed);
+    }
+
+    /// What made `CODEX_RESUME_VERIFIED` true, against the real CLI: an
+    /// interactive Codex session in `CODEX_HOME` A hears a word, the session
+    /// moves to `CODEX_HOME` B in place (rollout copied, `codex resume <id>`),
+    /// and the agent on B still knows the word.
+    ///
+    /// Needs two signed-in Codex homes, given as `JARVIS_TEST_CODEX_A` and
+    /// `JARVIS_TEST_CODEX_B`, each with `cli_auth_credentials_store = "file"`.
+    /// Runs in a scratch git repository under the temp dir and answers the
+    /// CLI's own trust prompt for that folder.
+    ///
+    /// `cargo test real_codex_resume -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_codex_resume_across_homes() {
+        let (Ok(a_dir), Ok(b_dir)) =
+            (std::env::var("JARVIS_TEST_CODEX_A"), std::env::var("JARVIS_TEST_CODEX_B"))
+        else {
+            panic!("set JARVIS_TEST_CODEX_A and JARVIS_TEST_CODEX_B");
+        };
+        let (a, b) = (account("a", "codex", Path::new(&a_dir)), account("b", "codex", Path::new(&b_dir)));
+        let repo = tempfile::tempdir().unwrap();
+        let status = std::process::Command::new("git").arg("init").arg("-q").current_dir(repo.path()).status().unwrap();
+        assert!(status.success());
+        let logs = tempfile::tempdir().unwrap();
+        let id = new_session_id();
+        let db = db_with_session(&id, "a");
+
+        // No update prompt: Enter on it would install a new CLI mid-test.
+        let options = |acct: &Account, mut args: Vec<String>| {
+            args.extend(["-c".to_string(), "check_for_update_on_startup=false".to_string()]);
+            let env = crate::accounts::provider_env(acct);
+            PtyOptions {
+                program: "codex".into(),
+                args,
+                cwd: repo.path().to_path_buf(),
+                cols: 120,
+                rows: 30,
+                env: env.set,
+                env_remove: env.remove,
+            }
+        };
+        let manager = SessionManager::default();
+        let session = manager.start(id.clone(), logs.path().to_path_buf(), options(&a, vec![])).unwrap();
+
+        let screen = || {
+            let reader = crate::session::log::SessionLogReader::open(logs.path()).unwrap();
+            String::from_utf8_lossy(&reader.replay_pty(usize::MAX).unwrap()).to_string()
+        };
+        let tail = || screen().chars().rev().take(3000).collect::<String>().chars().rev().collect::<String>();
+        let ready = |label: &str, start: usize| {
+            // First run in a home sets up the Windows sandbox, minutes long.
+            let deadline = Instant::now() + Duration::from_secs(420);
+            let mut answered = 0;
+            let mut answered_at = start;
+            let mut previous = 0;
+            let mut stable = 0;
+            while Instant::now() < deadline {
+                let text = screen();
+                let fresh = squash(&text[answered_at.min(text.len())..]);
+                let asking = fresh.contains("trust") && (fresh.contains("yes") || fresh.contains("continue"));
+                // Input typed while this shows is dropped.
+                let recent = squash(&text.chars().rev().take(1500).collect::<String>().chars().rev().collect::<String>());
+                // The TUI redraws only changed cells, so "Input disabled" can
+                // arrive in pieces; the setup's own start and end lines do not.
+                let busy = recent.contains("inputdisabled")
+                    || (fresh.contains("settingupsandbox") && !fresh.contains("sandboxready"));
+                stable = if text.len() == previous { stable + 1 } else { 0 };
+                previous = text.len();
+                if asking && answered < 4 && stable >= 2 {
+                    // The CLI's own trust screen, answered with its default.
+                    session.write(b"\r").unwrap();
+                    answered += 1;
+                    answered_at = text.len();
+                    stable = 0;
+                } else if !asking
+                    && !busy
+                    && stable >= 6
+                    && session.state() == crate::session::event::SessionState::Idle
+                {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            panic!("{label}: the CLI never became ready:\n{}", tail());
+        };
+        let ask = |text: &str| {
+            crate::session::typing::type_text(&session, text).unwrap();
+            crate::session::typing::submit(&session).unwrap();
+        };
+        // The rollout that holds this conversation, and whether the agent said `needle`.
+        let rollout_with = |dir: &str, marker: &str| -> Option<PathBuf> {
+            fn walk(dir: &Path, marker: &str) -> Option<PathBuf> {
+                for entry in std::fs::read_dir(dir).ok()?.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        if let Some(found) = walk(&path, marker) {
+                            return Some(found);
+                        }
+                    } else if std::fs::read_to_string(&path).is_ok_and(|t| t.contains(marker)) {
+                        return Some(path);
+                    }
+                }
+                None
+            }
+            walk(&Path::new(dir).join("sessions"), marker)
+        };
+        let agent_said = |path: &Path, needle: &str| {
+            std::fs::read_to_string(path)
+                .unwrap_or_default()
+                .lines()
+                .any(|l| (l.contains("\"role\":\"assistant\"") || l.contains("agent_message")) && l.contains(needle))
+        };
+        let wait_reply = |dir: &str, marker: &str, needle: &str| -> PathBuf {
+            let deadline = Instant::now() + Duration::from_secs(180);
+            while Instant::now() < deadline {
+                if let Some(path) = rollout_with(dir, marker) {
+                    if agent_said(&path, needle) {
+                        return path;
+                    }
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            let dump = std::env::temp_dir().join("jarvis-codex-relay-screen.txt");
+            let _ = std::fs::write(&dump, screen());
+            panic!("no agent reply containing {needle} in {dir} (screen: {})", dump.display());
+        };
+
+        // Unique per run, so an earlier run's rollout is never the one found.
+        let word = format!("HERON-{}", &id[id.len() - 6..]).to_uppercase();
+        ready("home A", 0);
+        ask(&format!("Remember the codeword {word}. Reply with exactly: NOTED"));
+        let rollout = wait_reply(&a_dir, &word, "NOTED");
+        let name = rollout.file_stem().unwrap().to_string_lossy().to_string();
+        let thread = name[name.len() - 36..].to_string();
+        std::thread::sleep(Duration::from_secs(3));
+
+        let resume = |acct: &Account| Ok(options(acct, vec!["resume".into(), thread.clone()]));
+        let before_relay = screen().len();
+        relay_with(&db, &session, &a, &b, &thread, Reason::Manual, &resume).expect("relay to B");
+        assert_eq!(session_account(&db, &id).as_deref(), Some("b"));
+
+        ready("home B", before_relay);
+        ask("What was the codeword? Reply with only the word.");
+        let carried = wait_reply(&b_dir, &word, &word);
+        assert_eq!(
+            carried.strip_prefix(&b_dir).unwrap(),
+            rollout.strip_prefix(&a_dir).unwrap(),
+            "B appends to the copied rollout, at the same relative path"
+        );
+        let _ = session.kill();
     }
 
     #[test]
