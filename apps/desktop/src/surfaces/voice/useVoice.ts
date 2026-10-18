@@ -29,6 +29,9 @@ interface VoiceState {
   micError: string | null;
   /** The most recently typed transcript, shown briefly then cleared. */
   lastTranscript: string | null;
+  /** Which session it was dictated into. A chat's text box takes it from
+      here, because the core does not type into a chat (M29). */
+  lastTranscriptSession: string | null;
 
   /**
    * Live captions while recording (§54 streaming, D31) — settled text that
@@ -57,6 +60,7 @@ export const useVoice = create<VoiceState>((set, get) => ({
   micState: "idle",
   micError: null,
   lastTranscript: null,
+  lastTranscriptSession: null,
 
   captionCommitted: "",
   captionTail: "",
@@ -127,7 +131,7 @@ export const useVoice = create<VoiceState>((set, get) => ({
         sessionId,
         locale,
       });
-      set({ micState: "idle", lastTranscript: result.text || null });
+      set({ micState: "idle", lastTranscript: result.text || null, lastTranscriptSession: sessionId });
       // The mic is already closed by now, so unlike the start chime this one
       // has no self-recording risk to wait out.
       void playFinishChime();
@@ -147,5 +151,5 @@ export const useVoice = create<VoiceState>((set, get) => ({
     }
   },
 
-  clearTranscript: () => set({ lastTranscript: null }),
+  clearTranscript: () => set({ lastTranscript: null, lastTranscriptSession: null }),
 }));

@@ -10,6 +10,9 @@ interface PopoverProps {
   children: ReactNode;
   /** Horizontal edge of the anchor to align to. */
   align?: "start" | "end";
+  /** Which side of the anchor it opens on. A control at the foot of the
+      window — the chat's text box (M29) — opens upwards. */
+  placement?: "below" | "above";
 }
 
 /**
@@ -23,7 +26,7 @@ interface PopoverProps {
  * Position is measured from the anchor and re-measured on scroll and resize, so
  * the popover never drifts away from the control that opened it.
  */
-export function Popover({ anchor, open, onClose, children, align = "start" }: PopoverProps) {
+export function Popover({ anchor, open, onClose, children, align = "start", placement = "below" }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
@@ -40,7 +43,9 @@ export function Popover({ anchor, open, onClose, children, align = "start" }: Po
       const left = align === "end" ? rect.right - width : rect.left;
       // Keep it inside the window, with a small margin.
       const clamped = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-      setPosition({ top: rect.bottom + 6, left: clamped });
+      const height = ref.current?.offsetHeight ?? 0;
+      const top = placement === "above" ? Math.max(8, rect.top - height - 6) : rect.bottom + 6;
+      setPosition({ top, left: clamped });
     };
 
     place();
@@ -50,7 +55,7 @@ export function Popover({ anchor, open, onClose, children, align = "start" }: Po
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open, anchor, align]);
+  }, [open, anchor, align, placement]);
 
   useEffect(() => {
     if (!open) return;

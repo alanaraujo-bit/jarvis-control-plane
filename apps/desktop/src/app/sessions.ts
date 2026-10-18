@@ -27,6 +27,9 @@ export type SessionState =
   | "blocked"
   | "failed";
 
+/** How a session is worked with, chosen at launch and never changed (M29). */
+export type SessionMode = "terminal" | "chat";
+
 export interface SessionInfo {
   id: string;
   projectId: string;
@@ -36,6 +39,7 @@ export interface SessionInfo {
   state: SessionState;
   createdAt: number;
   live: boolean;
+  mode: SessionMode;
 }
 
 export async function startSession(params: {
@@ -50,6 +54,8 @@ export async function startSession(params: {
   /// its own log; this is what makes it a continuation rather than a fresh
   /// start that happens to be in the same folder.
   resumeFrom?: string;
+  /** Terminal unless asked otherwise (M29). */
+  mode?: SessionMode;
 }): Promise<SessionInfo> {
   return invoke<SessionInfo>("session_start", {
     projectId: params.projectId,
@@ -59,6 +65,7 @@ export async function startSession(params: {
     rows: params.rows,
     missionId: params.missionId ?? null,
     resumeFrom: params.resumeFrom ?? null,
+    mode: params.mode ?? null,
   });
 }
 

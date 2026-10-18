@@ -55,6 +55,29 @@ export function hasLiveTerminal(sessionId: string): boolean {
   return live.has(sessionId);
 }
 
+/**
+ * The chat text boxes on screen, by session id (M29). A chat has no terminal
+ * to paste into, so the Notebook hands its text here instead: into the box,
+ * never sent, exactly as for a terminal (§54).
+ */
+const composers = new Map<string, (text: string) => void>();
+
+export function registerComposer(sessionId: string, insert: (text: string) => void) {
+  composers.set(sessionId, insert);
+}
+
+export function unregisterComposer(sessionId: string) {
+  composers.delete(sessionId);
+}
+
+/** Put text in a chat's box. False when that session has no chat on screen. */
+export function insertIntoComposer(sessionId: string, text: string): boolean {
+  const insert = composers.get(sessionId);
+  if (!insert) return false;
+  insert(text);
+  return true;
+}
+
 export interface LiveTokenProgress {
   elapsedSeconds: number;
   outputTokens: number;
