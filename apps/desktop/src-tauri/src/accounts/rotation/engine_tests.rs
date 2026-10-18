@@ -202,6 +202,45 @@ fn declined_window_is_not_asked_again() {
 }
 
 #[test]
+fn near_limit_asks_once_a_destination_frees_up() {
+    let (db, fake, engine) =
+        setup(Policy { mode: Mode::Ask, trigger: Trigger::NearLimit { percent: 80 } });
+    reading(&db, "a", 92.0, Some(3 * HOUR));
+    reading(&db, "b", 100.0, Some(HOUR));
+    reading(&db, "c", 100.0, Some(2 * HOUR));
+    live(&fake, "s1", "a", true);
+    engine.tick(NOW);
+    assert!(fake.events.lock().is_empty(), "nowhere to go yet: nothing to ask");
+
+    reading(&db, "b", 0.0, None);
+    engine.tick(NOW + HOUR + MIN);
+    let last = fake.events.lock().last().cloned();
+    match last {
+        Some(RotationEvent::Ask { to_account_id, .. }) => assert_eq!(to_account_id, "b"),
+        other => panic!("expected Ask once b reset, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_settled_near_limit_window_still_acts_when_it_runs_out() {
+    let (db, fake, engine) = setup(AUTO_NEAR);
+    reading(&db, "a", 92.0, Some(3 * HOUR));
+    reading(&db, "b", 100.0, Some(HOUR));
+    reading(&db, "c", 100.0, Some(2 * HOUR));
+    live(&fake, "s1", "a", true);
+    engine.tick(NOW);
+    assert!(fake.events.lock().is_empty());
+
+    reading(&db, "a", 100.0, Some(3 * HOUR));
+    engine.tick(NOW + MIN);
+    let events = fake.events.lock().clone();
+    assert!(
+        matches!(events.last(), Some(RotationEvent::AllExhausted { .. })),
+        "the same window running out is a new trip: {events:?}"
+    );
+}
+
+#[test]
 fn all_exhausted_then_resume_at_reset() {
     let (db, fake, engine) = setup(AUTO_EXHAUSTED);
     reading(&db, "a", 100.0, Some(3 * HOUR));

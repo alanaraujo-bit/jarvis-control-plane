@@ -103,8 +103,10 @@ enum Stage {
     Waiting { until_ms: i64 },
 }
 
-/// (account, window, reset): one trip of one window, decided once.
-type Key = (String, String, Option<i64>);
+/// (account, window, reset, reason): one trip of one window, decided once. The
+/// reason is part of it so a window that was near its limit and then runs out
+/// is a new trip.
+type Key = (String, String, Option<i64>, &'static str);
 
 #[derive(Debug, Clone)]
 struct Decision {
@@ -269,7 +271,7 @@ impl<H: Host> Engine<H> {
             let Some(trip) = tripped(&candidate_for(&self.db, &from, root, now_ms), trigger) else {
                 continue;
             };
-            let key: Key = (from.id.clone(), trip.window.to_string(), trip.resets_at_ms);
+            let key: Key = (from.id.clone(), trip.window.to_string(), trip.resets_at_ms, trip.reason.id());
             if self.inner.lock().settled.contains(&key) {
                 continue;
             }
@@ -309,11 +311,9 @@ impl<H: Host> Engine<H> {
                     }
                 }
                 // Near the limit with nowhere better to go: the account still
-                // works, so there is nothing to ask about.
-                None if trip.reason == Reason::NearLimit => {
-                    self.inner.lock().settled.insert(key);
-                    continue;
-                }
+                // works, so there is nothing to ask about yet. Not settled, so
+                // the next tick asks once another account frees up.
+                None if trip.reason == Reason::NearLimit => continue,
                 None => {
                     let (next_account_id, next_reset_ms) = self.next_available(&from, root, now_ms);
                     decision.stage = Stage::AllExhausted { next_reset_ms };
