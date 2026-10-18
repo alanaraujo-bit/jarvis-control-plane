@@ -6,7 +6,6 @@ use tauri::State;
 use crate::AppState;
 
 use super::quota::AccountQuota;
-use super::switch::AutoSwitchPolicy;
 use super::{Account, Result};
 
 /// One account card. Trust is scoped to the project currently being viewed;
@@ -18,6 +17,9 @@ pub struct AccountCard {
     pub account: Account,
     pub quota: AccountQuota,
     pub folder_trusted: Option<bool>,
+    /// `Some(false)` when this directory's CLI never finished its first-run
+    /// screens; rotation will not move a conversation onto it until it has.
+    pub onboarded: Option<bool>,
     /// Ids of the other accounts drawing on this same subscription.
     ///
     /// Computed here rather than in the surface so there is exactly one rule for
@@ -32,8 +34,7 @@ pub struct AccountCard {
 #[serde(rename_all = "camelCase")]
 pub struct AccountsReport {
     pub accounts: Vec<AccountCard>,
-    pub auto_switch: AutoSwitchPolicy,
-    pub threshold_percent: f64,
+    pub rotation: super::rotation::policy::Policy,
 }
 
 fn project_path(state: &AppState, project_id: Option<&str>) -> Option<String> {
@@ -86,10 +87,12 @@ fn report(state: &AppState, project_id: Option<&str>) -> Result<AccountsReport> 
                     .flatten()
             });
             let quota = super::quota::for_account(&state.db, &account);
+            let onboarded = super::rotation::rank::candidate_for(&state.db, &account, None, now_ms()).onboarded;
             AccountCard {
                 account,
                 quota,
                 folder_trusted,
+                onboarded,
                 shared_with,
             }
         })
@@ -97,8 +100,7 @@ fn report(state: &AppState, project_id: Option<&str>) -> Result<AccountsReport> 
 
     Ok(AccountsReport {
         accounts,
-        auto_switch: super::switch::policy(&state.db),
-        threshold_percent: super::quota::NEARING_PERCENT,
+        rotation: super::rotation::policy::policy(&state.db),
     })
 }
 
@@ -213,6 +215,19 @@ pub fn account_set_active(state: State<'_, AppState>, account_id: String) -> Res
     super::switch::set_active(&state.db, &account_id)
 }
 
+/// Replace a login copied from the machine with one made for this directory:
+/// drop the local copy, then start the provider's sign-in.
+#[tauri::command]
+pub fn account_sign_in_own(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    account_id: String,
+) -> Result<()> {
+    super::forget_copied_login(&state.db, &state.data_dir, &account_id)?;
+    let email = super::get(&state.db, &account_id)?.and_then(|account| account.email);
+    account_begin_sign_in(app, state, account_id, email)
+}
+
 #[tauri::command]
 pub fn account_rotation_policy(state: State<'_, AppState>) -> super::rotation::policy::Policy {
     super::rotation::policy::policy(&state.db)
@@ -227,10 +242,6 @@ pub fn account_set_rotation_policy(
     Ok(super::rotation::policy::policy(&state.db))
 }
 
-#[tauri::command]
-pub fn account_set_auto_switch(state: State<'_, AppState>, policy: AutoSwitchPolicy) -> Result<()> {
-    super::switch::set_policy(&state.db, policy)
-}
 
 /// Start the provider-owned OAuth flow and return immediately. The spawned CLI
 /// owns browser login; J.A.R.V.I.S. never receives a password or token.
@@ -439,4 +450,11 @@ pub async fn account_sign_out(state: State<'_, AppState>, account_id: String) ->
         .map_err(|error| format!("accounts.signOutFailed: {error}"))?;
     let _ = super::refresh_identity(&state.db, &account_id);
     Ok(())
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or_default()
 }

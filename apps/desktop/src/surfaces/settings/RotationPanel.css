@@ -1,0 +1,16 @@
+.rotation-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.rotation-settings [data-disabled] {
+  opacity: 0.5;
+}
+
+.rotation-settings__help {
+  max-width: 62ch;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}

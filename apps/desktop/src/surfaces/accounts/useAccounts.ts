@@ -7,7 +7,14 @@ const SIGN_IN_EVENT = "accounts:signIn";
 export type ProviderId = "claude-code" | "codex";
 export type Confidence = "official" | "observed" | "estimated" | "unknown";
 export type AccountHealth = "ready" | "nearing" | "exhausted" | "paused" | "signedOut";
-export type AutoSwitchPolicy = "off" | "onExhaustion" | "onThreshold";
+/** Who decides when a trigger fires (M26). */
+export type RotationMode = "off" | "ask" | "auto";
+/** What makes rotation act: a used percentage, or a refused turn. */
+export type RotationTrigger = { kind: "nearLimit"; percent: number } | { kind: "exhausted" };
+export interface RotationPolicy {
+  mode: RotationMode;
+  trigger: RotationTrigger;
+}
 
 export interface Account {
   id: string;
@@ -47,6 +54,12 @@ export interface Account {
   position: number;
   createdAt: number;
   lastUsedAt: number | null;
+  /**
+   * `copied` when this directory's login was imported from the machine and
+   * still shares its OAuth lineage with Claude Code outside the app; such an
+   * account is kept out of rotation until it is signed in here.
+   */
+  credentialOrigin: "own" | "copied";
 }
 
 export interface QuotaWindow {
@@ -138,6 +151,8 @@ export interface AccountCard {
   account: Account;
   quota: AccountQuota;
   folderTrusted: boolean | null;
+  /** `false` when the CLI here never finished its first-run screens. */
+  onboarded: boolean | null;
   /**
    * Ids of the other accounts drawing on this same subscription.
    *
@@ -150,8 +165,7 @@ export interface AccountCard {
 
 export interface AccountsReport {
   accounts: AccountCard[];
-  autoSwitch: AutoSwitchPolicy;
-  thresholdPercent: number;
+  rotation: RotationPolicy;
 }
 
 interface AccountsState {
@@ -184,8 +198,10 @@ interface AccountsState {
   pause: (accountId: string, paused: boolean) => Promise<void>;
   remove: (accountId: string) => Promise<void>;
   activate: (accountId: string) => Promise<void>;
-  setAutoSwitch: (policy: AutoSwitchPolicy) => Promise<void>;
+  setRotation: (policy: RotationPolicy) => Promise<void>;
   beginSignIn: (accountId: string, email?: string) => Promise<void>;
+  /** Replace a login copied from the machine with one made for this directory. */
+  signInOwn: (accountId: string) => Promise<void>;
   /** Sign one directory out, so a different account can be signed into it. */
   signOut: (accountId: string) => Promise<void>;
   /** Hand the provider the code copied out of the browser. */
@@ -321,8 +337,18 @@ export const useAccounts = create<AccountsState>((set, get) => ({
     await get().load("cached");
   },
 
-  setAutoSwitch: async (policy) => {
-    await invoke("account_set_auto_switch", { policy });
+  setRotation: async (policy) => {
+    await invoke("account_set_rotation_policy", { policy });
+    await get().load("cached");
+  },
+
+  signInOwn: async (accountId) => {
+    set({ signIn: { accountId, url: null }, error: null });
+    try {
+      await invoke("account_sign_in_own", { accountId });
+    } catch (cause) {
+      set({ error: String(cause), signIn: null });
+    }
     await get().load("cached");
   },
 

@@ -159,28 +159,6 @@
   color: var(--text-primary);
 }
 
-.accounts__policy {
-  display: inline-flex;
-  padding: 2px;
-  gap: 2px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-inset);
-}
-
-.accounts__policy button {
-  height: 24px;
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-  font-size: var(--text-micro);
-}
-.accounts__policy button[data-active] {
-  color: var(--text-primary);
-  background: var(--bg-overlay);
-  box-shadow: var(--shadow-sm);
-}
-
 .accounts__grid {
   display: grid;
   /* One column until there is genuinely room for two dials side by side.
@@ -741,6 +719,7 @@
 }
 .accounts__trust-note svg { flex: none; margin-top: 1px; color: var(--state-waiting); }
 .accounts__trust-note[data-warning] svg { color: var(--state-warning); }
+.accounts__trust-note .accounts__button { flex: none; margin-left: auto; }
 
 .accounts__refusal {
   margin-top: var(--space-5);

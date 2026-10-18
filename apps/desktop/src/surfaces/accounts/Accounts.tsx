@@ -43,7 +43,7 @@ import {
   useAccounts,
   type Account,
   type AccountCard,
-  type AutoSwitchPolicy,
+  type RotationPolicy,
   type LiveReading,
   type LiveWindow,
   type ProviderId,
@@ -65,7 +65,15 @@ import {
 import "./Accounts.css";
 
 const PROVIDERS: ProviderId[] = ["claude-code", "codex"];
-const POLICIES: AutoSwitchPolicy[] = ["off", "onExhaustion", "onThreshold"];
+/** "Ask first · Near the limit (90%)" — the policy as one line. */
+function policySummary(policy: RotationPolicy, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
+  if (policy.mode === "off") return t("accounts.rotation.off");
+  const trigger =
+    policy.trigger.kind === "nearLimit"
+      ? `${t("rotation.trigger.nearLimit")} (${policy.trigger.percent}%)`
+      : t("rotation.trigger.exhausted");
+  return t("accounts.rotation.summary", { mode: t(`rotation.mode.${policy.mode}`), trigger });
+}
 
 /**
  * A window's translated name, falling back to the provider's own spelling.
@@ -852,6 +860,15 @@ function AccountCardView({
         </div>
       )}
 
+      {account.credentialOrigin === "copied" && <CopiedLoginNote account={account} />}
+
+      {account.provider === "claude-code" && account.signedIn && card.onboarded === false && (
+        <div className="accounts__trust-note" data-warning>
+          <ShieldAlert size={14} aria-hidden="true" />
+          <span>{t("accounts.notOnboarded")}</span>
+        </div>
+      )}
+
       {quota.refusalDetail && (
         <blockquote className="accounts__refusal">{quota.refusalDetail}</blockquote>
       )}
@@ -1167,7 +1184,33 @@ function SignInProgress() {
 // The screen
 // ---------------------------------------------------------------------------
 
-export function Accounts({ projectId = null }: { projectId?: string | null }) {
+/**
+ * A login imported from the machine shares one OAuth lineage with Claude Code
+ * outside the app, so a logout there can sign this card out. Says so, and
+ * offers the one fix: a login made here.
+ */
+function CopiedLoginNote({ account }: { account: Account }) {
+  const t = useT();
+  const signInOwn = useAccounts((state) => state.signInOwn);
+  return (
+    <div className="accounts__trust-note" data-warning>
+      <ShieldAlert size={14} aria-hidden="true" />
+      <span>{t("accounts.copiedLogin")}</span>
+      <button type="button" className="accounts__button" onClick={() => void signInOwn(account.id)}>
+        {t("accounts.copiedLogin.action")}
+      </button>
+    </div>
+  );
+}
+
+export function Accounts({
+  projectId = null,
+  onConfigureRotation,
+}: {
+  projectId?: string | null;
+  /** Opens Settings at the rotation section. */
+  onConfigureRotation?: () => void;
+}) {
   const t = useT();
   const report = useAccounts((state) => state.report);
   const loading = useAccounts((state) => state.loading);
@@ -1175,7 +1218,6 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
   const error = useAccounts((state) => state.error);
   const load = useAccounts((state) => state.load);
   const ensureFresh = useAccounts((state) => state.ensureFresh);
-  const setAutoSwitch = useAccounts((state) => state.setAutoSwitch);
   const watchSignIn = useAccounts((state) => state.watchSignIn);
   const [provider, setProvider] = useState<ProviderId>("claude-code");
   const [adding, setAdding] = useState(false);
@@ -1354,29 +1396,14 @@ export function Accounts({ projectId = null }: { projectId?: string | null }) {
         {report && (
           <section className="accounts__automation">
             <div>
-              <h2>{t("accounts.autoSwitch.title")}</h2>
-              <p>
-                {report.autoSwitch === "onThreshold"
-                  ? t("accounts.autoSwitch.thresholdDisclosure", {
-                      percent: report.thresholdPercent,
-                    })
-                  : t("accounts.autoSwitch.body")}
-              </p>
+              <h2>{t("accounts.rotation.title")}</h2>
+              <p>{policySummary(report.rotation, t)}</p>
             </div>
-            <div className="accounts__policy" role="radiogroup">
-              {POLICIES.map((policy) => (
-                <button
-                  key={policy}
-                  type="button"
-                  role="radio"
-                  aria-checked={report.autoSwitch === policy}
-                  data-active={report.autoSwitch === policy || undefined}
-                  onClick={() => void setAutoSwitch(policy)}
-                >
-                  {t(`accounts.autoSwitch.${policy}` as MessageKey)}
-                </button>
-              ))}
-            </div>
+            {onConfigureRotation && (
+              <button type="button" className="accounts__button" onClick={onConfigureRotation}>
+                {t("accounts.rotation.configure")}
+              </button>
+            )}
           </section>
         )}
 

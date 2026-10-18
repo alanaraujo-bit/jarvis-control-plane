@@ -5,14 +5,12 @@
 //! loaded at startup; touching it would break the continuity this feature is
 //! meant to preserve.
 
-use serde::{Deserialize, Serialize};
 
 
 use crate::db::Database;
 
 use super::{get, Account, Result};
 
-pub const POLICY_KEY: &str = "accounts.autoSwitch";
 
 /// Build the provider's own persistent sign-in flow for one configuration
 /// directory. The caller spawns it off the Tauri command thread.
@@ -71,25 +69,6 @@ pub fn authorize_url(line: &str) -> Option<String> {
 }
 
 /// When J.A.R.V.I.S. may move new work away from an account.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum AutoSwitchPolicy {
-    #[default]
-    Off,
-    /// Move only after the provider has explicitly refused a turn.
-    OnExhaustion,
-    /// Also move at the estimated nearing threshold.
-    OnThreshold,
-}
-
-pub fn policy(db: &Database) -> AutoSwitchPolicy {
-    crate::settings::get_or(db, POLICY_KEY, AutoSwitchPolicy::Off)
-}
-
-pub fn set_policy(db: &Database, value: AutoSwitchPolicy) -> Result<()> {
-    crate::settings::set(db, POLICY_KEY, &value)
-}
-
 /// Make one account the destination for future sessions.
 pub fn set_active(db: &Database, account_id: &str) -> Result<Account> {
     let account = get(db, account_id)?.ok_or_else(|| "accounts.notFound".to_string())?;

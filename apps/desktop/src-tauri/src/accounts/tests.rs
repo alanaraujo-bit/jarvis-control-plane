@@ -1056,3 +1056,41 @@ fn real_isolation_ignores_ambient_overrides() {
     assert_eq!(polluted.email, clean.email);
     assert!(polluted.signed_in);
 }
+
+/// Giving a copied account its own login must not revoke anything: the copy is
+/// dropped locally, inside the app's directory, and nothing is sent to the
+/// provider — a `logout` there could invalidate the machine's own session.
+#[test]
+fn forgetting_a_copied_login_only_removes_the_app_owned_copy() {
+    let data = tempfile::tempdir().unwrap();
+    let db = Database::open_in_memory().unwrap();
+    let dir = data.path().join("accounts").join("claude-code").join("machine");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(".credentials.json"), b"{}").unwrap();
+    std::fs::write(dir.join(".claude.json"), b"{}").unwrap();
+    let mut machine = account("machine", "claude-code", 0, true);
+    machine.config_dir = dir.to_string_lossy().to_string();
+    insert(&db, &machine);
+    set_credential_origin(&db, "machine", "copied").unwrap();
+
+    forget_copied_login(&db, data.path(), "machine").unwrap();
+    assert!(!dir.join(".credentials.json").exists());
+    assert!(dir.join(".claude.json").exists(), "only the credential copy goes");
+    assert!(!get(&db, "machine").unwrap().unwrap().signed_in);
+
+    // An account with its own login is never touched this way.
+    std::fs::write(dir.join(".credentials.json"), b"{}").unwrap();
+    set_credential_origin(&db, "machine", "own").unwrap();
+    assert!(forget_copied_login(&db, data.path(), "machine").is_err());
+    assert!(dir.join(".credentials.json").exists());
+
+    // Nor a directory outside the app's own.
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(outside.path().join(".credentials.json"), b"{}").unwrap();
+    let mut stray = account("stray", "claude-code", 1, false);
+    stray.config_dir = outside.path().to_string_lossy().to_string();
+    insert(&db, &stray);
+    set_credential_origin(&db, "stray", "copied").unwrap();
+    assert!(forget_copied_login(&db, data.path(), "stray").is_err());
+    assert!(outside.path().join(".credentials.json").exists());
+}

@@ -10,6 +10,7 @@ import { CompanionPanel } from "./CompanionPanel";
 import { NotificationsPanel, Switch } from "./NotificationsPanel";
 import { NumberSetting } from "./NumberSetting";
 import { StartupPanel } from "./StartupPanel";
+import { RotationPanel } from "./RotationPanel";
 import { useSettingsCategory } from "./settingsNav";
 import { PREF, usePreferences } from "./usePreferences";
 import { Updates } from "./Updates";
@@ -147,6 +148,14 @@ function Section({ id }: { id: CategoryId }) {
         <>
           <Head id="account" />
           <AccountPanel />
+        </>
+      );
+
+    case "rotation":
+      return (
+        <>
+          <Head id="rotation" />
+          <RotationPanel />
         </>
       );
 

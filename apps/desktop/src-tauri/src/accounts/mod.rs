@@ -1008,6 +1008,43 @@ pub fn set_credential_origin(db: &Database, id: &str, origin: &str) -> Result<()
     .map_err(|e| e.to_string())
 }
 
+/// Drop a copied login so the directory can be signed in on its own (M26).
+///
+/// Deliberately **not** the provider's `logout`: that asks the server to
+/// revoke the token, and a copied token is the machine's token — revoking it
+/// would sign out Claude Code outside the app, the very coupling this undoes.
+/// Only the opaque credential file inside the app's own account directory is
+/// removed. Refused for an account with its own login, and for any directory
+/// outside `<data_dir>/accounts`.
+pub fn forget_copied_login(db: &Database, data_dir: &Path, id: &str) -> Result<()> {
+    let account = get(db, id)?.ok_or_else(|| "accounts.notFound".to_string())?;
+    if account.credential_origin != "copied" {
+        return Err("accounts.loginNotCopied".into());
+    }
+    let root = std::fs::canonicalize(data_dir.join("accounts")).map_err(|e| e.to_string())?;
+    let dir = std::fs::canonicalize(&account.config_dir).map_err(|e| e.to_string())?;
+    if !dir.starts_with(&root) {
+        return Err("accounts.outsideAppData".into());
+    }
+    let file = match account.provider.as_str() {
+        "claude-code" => ".credentials.json",
+        "codex" => "auth.json",
+        _ => return Err("accounts.unknownProvider".into()),
+    };
+    let path = dir.join(file);
+    if path.is_file() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    db.with(|conn| {
+        conn.execute(
+            "UPDATE provider_accounts SET signed_in = 0, credential_origin = 'own' WHERE id = ?1",
+            [id],
+        )?;
+        Ok(())
+    })
+    .map_err(|e| e.to_string())
+}
+
 /// Create a new account, with its own configuration directory.
 ///
 /// The directory is created empty. Nothing is copied from another account —

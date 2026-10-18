@@ -764,7 +764,13 @@ export function App() {
             ) : surface === "analytics" ? (
               <Analytics />
             ) : surface === "accounts" ? (
-              <Accounts projectId={accountsProjectId} />
+              <Accounts
+                projectId={accountsProjectId}
+                onConfigureRotation={() => {
+                  goTo("settings");
+                  openSettingsCategory("rotation");
+                }}
+              />
             ) : surface === "local" ? (
               <LocalRuntime />
             ) : surface === "missions" ? (

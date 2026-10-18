@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   Bell,
   CircleUser,
   Download,
@@ -35,6 +36,7 @@ export const CATEGORIES = [
   // are, and the one somebody looks for when they have just been offered an
   // account and want to know what happened to that choice (M20).
   "account",
+  "rotation",
   "appearance",
   "terminal",
   "autonomy",
@@ -77,6 +79,16 @@ export const CATEGORY: Record<CategoryId, Category> = {
     blurb: "identity.settings.blurb",
     keywords:
       "account sign in out profile password login conta entrar sair perfil senha cadastro login",
+  },
+  // Provider accounts and how work moves between them (M26). Beside the
+  // person's own account, because both answer "which account am I on".
+  rotation: {
+    id: "rotation",
+    icon: ArrowLeftRight,
+    label: "settings.rotation",
+    blurb: "settings.rotation.blurb",
+    keywords:
+      "rotation accounts quota switch claude codex limit rodízio rodizio contas cota troca trocar limite",
   },
   // Ordered by how often somebody actually comes here. Appearance is the first
   // thing anyone changes in a new app; Updates is the thing you visit twice a

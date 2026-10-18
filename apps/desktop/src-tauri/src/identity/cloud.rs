@@ -534,8 +534,17 @@ pub fn push_quota(db: &Database, report: &crate::accounts::commands::AccountsRep
         .collect();
     let snapshot = serde_json::json!({
         "accounts": accounts,
-        "autoSwitch": report.auto_switch,
-        "thresholdPercent": report.threshold_percent,
+        // The synced snapshot keeps its M16 shape; the M26 policy maps onto it.
+        "autoSwitch": match (report.rotation.mode, report.rotation.trigger) {
+            (crate::accounts::rotation::policy::Mode::Off, _) => "off",
+            (_, crate::accounts::rotation::policy::Trigger::Exhausted) => "onExhaustion",
+            _ => "onThreshold",
+        },
+        "thresholdPercent": match report.rotation.trigger {
+            crate::accounts::rotation::policy::Trigger::NearLimit { percent } => f64::from(percent),
+            crate::accounts::rotation::policy::Trigger::Exhausted => crate::accounts::quota::NEARING_PERCENT,
+        },
+        "rotation": report.rotation,
     });
     std::thread::spawn(move || {
         let payload = serde_json::json!({"snapshot": snapshot}).to_string();
