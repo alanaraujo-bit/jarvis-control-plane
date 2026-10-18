@@ -28,8 +28,8 @@
 - **Clients.** Project skills go to both Claude Code (`.claude/skills`) and
   Codex (`.agents/skills`), because the product drives both. No project
   `.codex/` config: that folder is generated product state and gitignored.
-- **Context7** was looked up through official sources, because its MCP needed
-  authentication during setup.
+- **Context7** was unavailable during setup (OAuth pending), so library facts
+  came from official sources; it was authenticated and validated afterwards.
 
 ## Components
 
@@ -38,7 +38,7 @@
 | Superpowers 7.0.0 | installed (`claude plugin install superpowers@claude-plugins-official`) | user | loaded: its skills appear in the session |
 | Ponytail 5.3.2 | installed; optional webhook/ledger options left unset (they send data out) | user | loaded |
 | Caveman 4.0.1 | installed. The install noted that its pnpm-lockfile packages were not installed | user | loaded (skills and agents discovered) |
-| Context7 | plugin `context7@claude-plugins-official` | user | **pending: needs OAuth.** Run `/mcp` in Claude Code and authenticate `context7`. No live query yet |
+| Context7 | plugin `context7@claude-plugins-official` | user | authenticated via `/mcp` after a client restart. Live query on 2026-10-18: resolved Tauri to `/websites/tauri_app` and returned the `tauri dev` watch/`beforeDevCommand` docs |
 | RTK 0.50.0 | `winget install rtk-ai.rtk` (upstream release is 1.0.1; winget lags). `rtk init --global` added the `rtk hook claude` PreToolUse hook, `~/.claude/RTK.md`, and `@RTK.md` in the user CLAUDE.md | user | hook rewrite tested (`git status` becomes `rtk git status`). Takes effect after restarting Claude Code. Codex hook not installed |
 | Graphify 0.9.92 (uv 0.13.1) | `uv tool install graphifyy`, then `graphify install --platform claude` (adds a skill and a line in the user CLAUDE.md) | user + project | code-only graph built: 4184 nodes, 9645 edges, 173 communities; `graphify query` answered. `graphify-out/` gitignored; `.graphifyignore` versioned. No semantic/LLM extraction, no Git hook |
 | Vercel web skills: `vercel-react-best-practices`, `vercel-composition-patterns`, `web-design-guidelines`, `writing-guidelines`, `vercel-react-view-transitions` | installed: the UI is React 19 | project | discovered by Claude Code. Codex discovery not checked |
@@ -152,8 +152,8 @@ excluding vendored skills. 11 findings, dispositioned:
 
 ## Pending work and next delivery
 
-1. **You:** restart Claude Code to activate RTK, then run `/mcp` to
-   authenticate Context7. Run one real Context7 query to validate it.
+1. Done after setup: Claude Code restarted (RTK hook active, `rtk gain`
+   records commands) and Context7 authenticated and queried.
 2. Decide on CI: a GitHub Actions workflow running `pnpm verify` on Windows.
    It needs a push.
 3. Burn down lint warnings rule by rule, then promote each rule to `error`.
