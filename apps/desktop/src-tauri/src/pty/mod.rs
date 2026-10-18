@@ -152,6 +152,30 @@ impl PtyHandle {
 ///
 /// Returns the handle and a receiver of output. The reader runs on its own
 /// thread because the read is blocking and must never stall the UI.
+/// The program to hand CreateProcess for a bare name: the first PATH directory
+/// holding it with an executable `PATHEXT` extension, the way `cmd` searches.
+/// Without this the extensionless file wins, and `npm i -g` puts exactly that
+/// beside every `.cmd` it installs — a shell script CreateProcess cannot run
+/// (`os error 193`), which kept every Codex session on this machine from
+/// starting. Anything else is returned unchanged.
+#[cfg(windows)]
+fn resolve_program(program: &str, path: Option<&std::ffi::OsStr>, pathext: Option<&str>) -> String {
+    let bare = std::path::Path::new(program);
+    if program.is_empty() || bare.extension().is_some() || bare.components().count() != 1 {
+        return program.to_string();
+    }
+    let extensions: Vec<&str> = pathext.unwrap_or(".COM;.EXE;.BAT;.CMD").split(';').filter(|e| !e.is_empty()).collect();
+    for dir in std::env::split_paths(path.unwrap_or_default()) {
+        for ext in &extensions {
+            let candidate = dir.join(format!("{program}{}", ext.to_ascii_lowercase()));
+            if candidate.is_file() {
+                return candidate.to_string_lossy().into_owned();
+            }
+        }
+    }
+    program.to_string()
+}
+
 pub fn spawn(options: PtyOptions) -> Result<(PtyHandle, Receiver<PtyEvent>)> {
     let system = NativePtySystem::default();
     let pair = system
@@ -163,7 +187,15 @@ pub fn spawn(options: PtyOptions) -> Result<(PtyHandle, Receiver<PtyEvent>)> {
         })
         .map_err(|e| PtyError::Open(e.to_string()))?;
 
-    let mut command = CommandBuilder::new(&options.program);
+    #[cfg(windows)]
+    let program = resolve_program(
+        &options.program,
+        std::env::var_os("PATH").as_deref(),
+        std::env::var("PATHEXT").ok().as_deref(),
+    );
+    #[cfg(not(windows))]
+    let program = options.program.clone();
+    let mut command = CommandBuilder::new(&program);
     command.args(&options.args);
     command.cwd(&options.cwd);
 
@@ -258,6 +290,21 @@ pub fn spawn(options: PtyOptions) -> Result<(PtyHandle, Receiver<PtyEvent>)> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    #[test]
+    fn a_bare_name_runs_the_executable_beside_an_npm_shell_script() {
+        let dir = tempfile::tempdir().unwrap();
+        // What `npm i -g` leaves: a shell script for Git Bash and a .cmd.
+        std::fs::write(dir.path().join("tool"), "#!/bin/sh\n").unwrap();
+        std::fs::write(dir.path().join("tool.cmd"), "@echo off\n").unwrap();
+        let path = std::env::join_paths([dir.path()]).unwrap();
+
+        let resolved = super::resolve_program("tool", Some(&path), Some(".COM;.EXE;.BAT;.CMD"));
+        assert_eq!(std::path::Path::new(&resolved), dir.path().join("tool.cmd"));
+        assert_eq!(super::resolve_program("tool.cmd", Some(&path), None), "tool.cmd", "an extension is kept");
+        assert_eq!(super::resolve_program("nothing-here", Some(&path), None), "nothing-here");
+    }
+
     use super::*;
     use std::time::{Duration, Instant};
 
