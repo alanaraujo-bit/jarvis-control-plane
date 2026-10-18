@@ -22,7 +22,7 @@ use serde_json::Value;
 
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use super::{
-    BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
+    BriefingSupport, ChatSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
     ProviderCapabilities, ResumeSupport, TitleSupport, UsageReporting,
 };
 use crate::session::event::Confidence;
@@ -54,6 +54,10 @@ impl Provider for ClaudeCode {
             // `--resume <id> --fork-session` honours our `--session-id` and
             // writes a new transcript named for it. Verified on 2.1.241.
             resume_support: ResumeSupport::Fork,
+            // Measured on 2.1.302: stream-json in and out keeps one process
+            // across turns, and `--permission-prompt-tool stdio` hands every
+            // permission request and `AskUserQuestion` to us (M29).
+            chat: ChatSupport::StreamJson,
         }
     }
 
@@ -209,10 +213,27 @@ fn is_internal_noise(value: &Value) -> bool {
         "system" => true,
 
         // Messages the harness injected into the user turn, not typed by a human.
-        "user" => value
-            .get("isMeta")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        //
+        // A slash command (`/model`, or a chat's model switch, M29) is echoed
+        // as two more `user` lines that carry no `isMeta`: the command itself
+        // and its output. Measured on 2.1.302; both rendered as "You" bubbles.
+        "user" => {
+            value
+                .get("isMeta")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+                || value
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(Value::as_str)
+                    .map(|text| {
+                        let text = text.trim_start();
+                        ["<command-name>", "<local-command-stdout>", "<local-command-stderr>"]
+                            .iter()
+                            .any(|tag| text.starts_with(tag))
+                    })
+                    .unwrap_or(false)
+        }
 
         _ => false,
     }
@@ -667,6 +688,22 @@ mod tests {
             parse_line(meta).is_empty(),
             "isMeta turns were not typed by a person"
         );
+    }
+
+    /// Captured from a real 2.1.302 transcript after a `set_model` (M29). The
+    /// caveat before them carries `isMeta`; these two do not.
+    #[test]
+    fn a_slash_command_echo_is_not_a_person_speaking() {
+        let command = r#"{"type":"user","message":{"role":"user","content":"<command-name>/model</command-name>\n            <command-message>model</command-message>\n            <command-args>sonnet</command-args>"},"timestamp":"2026-10-18T21:10:00.000Z"}"#;
+        let output = r#"{"type":"user","message":{"role":"user","content":"<local-command-stdout>Set model to `sonnet (claude-sonnet-5-5)`</local-command-stdout>"},"timestamp":"2026-10-18T21:10:00.000Z"}"#;
+        assert!(parse_line(command).is_empty(), "the command echo is not a person speaking");
+        assert!(parse_line(output).is_empty(), "the command's output is not a person speaking");
+
+        let typed = r#"{"type":"user","message":{"role":"user","content":"Use the AskUserQuestion tool"},"timestamp":"2026-10-18T21:10:00.000Z"}"#;
+        assert!(matches!(
+            parse_line(typed).as_slice(),
+            [ConversationItem::Message { role: Role::User, .. }]
+        ));
     }
 
     #[test]

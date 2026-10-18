@@ -13,6 +13,6 @@ pub mod title;
 pub mod transcript;
 pub mod typing;
 
-pub use event::{EventKind, Lifecycle, SessionState};
+pub use event::{EventKind, Lifecycle, SessionMode, SessionState};
 pub use log::{SessionLog, SessionLogReader};
 pub use manager::{SessionInfo, SessionManager};

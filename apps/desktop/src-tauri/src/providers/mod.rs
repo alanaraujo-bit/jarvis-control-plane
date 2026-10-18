@@ -154,6 +154,26 @@ impl ResumeSupport {
     }
 }
 
+/// Whether a provider can be driven as a chat rather than a terminal (M29).
+///
+/// A chat needs a structured protocol the provider speaks itself: one that
+/// carries the person's message, the provider's permission requests and
+/// questions, and a model or effort change, without anything reading a screen.
+/// Both CLIs have one and they are different protocols, measured on this
+/// machine against Claude Code 2.1.302 and Codex 0.163.0 — see
+/// `docs/M29-CHAT.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ChatSupport {
+    /// `claude -p --input-format stream-json --output-format stream-json`,
+    /// with permission requests routed to us by `--permission-prompt-tool stdio`.
+    StreamJson,
+    /// `codex app-server`: JSON-RPC over stdio, approvals as server requests.
+    AppServer,
+    /// No measured protocol, so the terminal is the only way in.
+    None,
+}
+
 /// What a provider can do. Rendered from, never assumed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -187,6 +207,8 @@ pub struct ProviderCapabilities {
     pub account_switching: bool,
     /// Where this provider's sessions get their names (§88).
     pub titles: TitleSupport,
+    /// Whether a session can be a chat instead of a terminal (M29).
+    pub chat: ChatSupport,
 }
 
 /// How a project brief can be handed to a session before it starts (§38).
@@ -372,6 +394,22 @@ mod tests {
     #[test]
     fn the_local_adapter_does_not_promise_what_the_model_decides() {
         assert!(!local::LocalModel.capabilities().images);
+    }
+
+    /// The difference the chat mode turns on (M29). Both CLIs can be chatted
+    /// with over protocols that share nothing, and the local runner has not
+    /// been measured; if these collapsed, the launcher would speak one
+    /// protocol to the other's process.
+    #[test]
+    fn only_providers_that_speak_a_structured_protocol_offer_chat() {
+        assert_eq!(claude::ClaudeCode.capabilities().chat, ChatSupport::StreamJson);
+        assert_eq!(codex::Codex.capabilities().chat, ChatSupport::AppServer);
+        assert_eq!(local::LocalModel.capabilities().chat, ChatSupport::None);
+        assert_ne!(
+            claude::ClaudeCode.capabilities().chat,
+            codex::Codex.capabilities().chat,
+            "the two chat protocols are different and must say so"
+        );
     }
 
     #[test]

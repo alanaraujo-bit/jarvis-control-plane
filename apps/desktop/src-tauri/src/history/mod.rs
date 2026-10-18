@@ -106,6 +106,8 @@ pub struct Entry {
     /// the difference so it offers reading rather than a Continue that the core
     /// would refuse (`session.cwdMissing`).
     pub project_exists: bool,
+    /// Terminal or chat (M29). Continuing a session reopens it the same way.
+    pub mode: crate::session::SessionMode,
 }
 
 /// What the caller is asking for.
@@ -197,7 +199,7 @@ const SELECT: &str = "
            (SELECT COUNT(*) FROM session_events e WHERE e.session_id = s.id),
            (SELECT SUM(COALESCE(u.input_tokens, 0) + COALESCE(u.output_tokens, 0))
               FROM usage_samples u WHERE u.session_id = s.id),
-           s.provider_session_id, s.resumed_from, p.path
+           s.provider_session_id, s.resumed_from, p.path, s.mode
       FROM sessions s
       JOIN projects p ON p.id = s.project_id
       LEFT JOIN missions m ON m.id = s.mission_id
@@ -231,6 +233,7 @@ fn read_entry(row: &rusqlite::Row<'_>, snippet: Option<String>) -> rusqlite::Res
         resumable: resume_available(&provider) && row.get::<_, Option<String>>(15)?.is_some(),
         resumed_from: row.get(16)?,
         project_exists: std::path::Path::new(&row.get::<_, String>(17)?).is_dir(),
+        mode: crate::session::SessionMode::parse(&row.get::<_, String>(18)?),
         provider,
     })
 }

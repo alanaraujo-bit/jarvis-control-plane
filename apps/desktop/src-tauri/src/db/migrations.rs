@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 22;
+pub const SCHEMA_VERSION: u32 = 23;
 
 struct Migration {
     version: u32,
@@ -1026,6 +1026,18 @@ const MIGRATIONS: &[Migration] = &[Migration {
         PRIMARY KEY (kind, id)
     ) WITHOUT ROWID;
 "#,
+    },
+    Migration {
+        version: 23,
+        sql: r#"
+    -- ---- Terminal or chat (M29) ----------------------------------------------
+    --
+    -- How a session is worked with, chosen at launch and never changed: a chat
+    -- runs the provider's structured protocol and has no terminal to switch to.
+    -- NOT NULL with a default, so every session recorded before chat existed
+    -- reads as the terminal it was.
+    ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'terminal';
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -1153,6 +1165,7 @@ mod tests {
             (20, 0xe28b_da2d_45a4_8c06),
             (21, 0x1583_2a3b_e4f3_f630),
             (22, 0xb635_c9be_897e_eb64),
+            (23, 0x39aa_00ac_a3be_2a55),
         ];
 
         for migration in MIGRATIONS {
@@ -1216,6 +1229,40 @@ mod tests {
         };
         assert_eq!(origin("machine"), "copied");
         assert_eq!(origin("added"), "own");
+    }
+
+    /// Every session recorded before chat existed was a terminal, and must
+    /// still read as one after the upgrade (M29).
+    #[test]
+    fn migration_23_reads_every_existing_session_as_a_terminal() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)",
+            [],
+        )
+        .unwrap();
+        for migration in MIGRATIONS.iter().filter(|m| m.version <= 22) {
+            conn.execute_batch(&format!("BEGIN; {} COMMIT;", migration.sql)).unwrap();
+            conn.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)",
+                [migration.version],
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO projects (id, name, path, created_at, last_opened_at) VALUES ('p', 'p', 'C:/p', 0, 0);
+             INSERT INTO sessions (id, project_id, provider, cwd, state, log_dir, created_at)
+             VALUES ('old', 'p', 'claude-code', 'C:/p', 'completed', 'C:/l', 0);",
+        )
+        .unwrap();
+        run(&conn).unwrap();
+        let mode: String = conn
+            .query_row("SELECT mode FROM sessions WHERE id = 'old'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode, "terminal");
+        assert_eq!(crate::session::SessionMode::parse(&mode), crate::session::SessionMode::Terminal);
+        assert_eq!(crate::session::SessionMode::parse("chat"), crate::session::SessionMode::Chat);
+        assert_eq!(crate::session::SessionMode::parse("nonsense"), crate::session::SessionMode::Terminal);
     }
 
     #[test]

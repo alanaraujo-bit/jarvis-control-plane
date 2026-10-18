@@ -27,7 +27,7 @@
 //! and not tidiness.
 
 use super::{
-    BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
+    BriefingSupport, ChatSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
     ProviderCapabilities, ResumeSupport, TitleSupport, UsageReporting,
 };
 
@@ -70,6 +70,9 @@ impl Provider for LocalModel {
             // Nothing to switch. There is no account behind a local model.
             account_switching: false,
             titles: TitleSupport::Derived,
+            // `codex app-server` against a local runner was never measured, so
+            // a local session is a terminal (M29, §81).
+            chat: ChatSupport::None,
         }
     }
 

@@ -21,7 +21,7 @@ use serde_json::Value;
 
 use super::conversation::{parse_timestamp, truncate, ConversationItem, Role, TokenUsage};
 use super::{
-    BriefingSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
+    BriefingSupport, ChatSupport, ConversationSource, Correlation, GuardrailSupport, Provider,
     ProviderCapabilities, ResumeSupport, TitleSupport, UsageReporting,
 };
 use crate::session::event::Confidence;
@@ -59,6 +59,10 @@ impl Provider for Codex {
             // `codex resume <id>` appends to the rollout it was given rather
             // than creating one. Measured on 0.147.0; see ResumeSupport.
             resume_support: ResumeSupport::AppendInPlace,
+            // Measured on 0.163.0: `codex app-server` takes a turn per
+            // `turn/start`, with model and effort per turn, and asks for
+            // approvals as server requests (M29).
+            chat: ChatSupport::AppServer,
         }
     }
 
@@ -276,10 +280,15 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
                     }]
                 }
                 Some("CommandExecution") => {
-                    let command = item
-                        .get("command")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default();
+                    // 0.163.0 writes the argument list — the shell, its flag,
+                    // then the command — where older rollouts wrote one string.
+                    // The last argument is what the agent asked to run.
+                    let command = match item.get("command") {
+                        Some(Value::Array(args)) => args.last().and_then(Value::as_str),
+                        Some(other) => other.as_str(),
+                        None => None,
+                    }
+                    .unwrap_or_default();
                     vec![ConversationItem::ToolCall {
                         id: item
                             .get("id")
@@ -511,6 +520,19 @@ mod tests {
                 assert_eq!(text, "build me a thing");
             }
             other => panic!("expected a user message, got {other:?}"),
+        }
+    }
+
+    /// Captured from a 0.163.0 app-server rollout (M29): the command is the
+    /// argument list, and reading it as a string left every row empty.
+    #[test]
+    fn a_command_given_as_an_argument_list_still_has_a_summary() {
+        let line = r#"{"timestamp":"2026-10-18T21:15:42.564Z","type":"event_msg","payload":{"type":"item_completed","thread_id":"01a150de","turn_id":"01a150de","item":{"type":"CommandExecution","id":"exec-5bfba5b6","command":["C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe","-Command","Set-Content -LiteralPath 'hello2.txt' -Value 'hi' -NoNewline"]}}}"#;
+        match parse_line(line).as_slice() {
+            [ConversationItem::ToolCall { summary, .. }] => {
+                assert_eq!(summary, "Set-Content -LiteralPath 'hello2.txt' -Value 'hi' -NoNewline");
+            }
+            other => panic!("expected one tool call, got {other:?}"),
         }
     }
 

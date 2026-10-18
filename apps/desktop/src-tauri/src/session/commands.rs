@@ -10,7 +10,7 @@ use tauri::State;
 
 use super::attachment;
 use super::manager::{new_session_id, timestamp, Result, SessionInfo};
-use super::{transcript, SessionLogReader, SessionState};
+use super::{transcript, SessionLogReader, SessionMode, SessionState};
 use crate::providers::conversation::ConversationItem;
 use crate::pty::PtyOptions;
 use crate::session::event::EventKind;
@@ -820,6 +820,7 @@ fn launch(
             state: session.state(),
             created_at,
             live: true,
+            mode: SessionMode::Terminal,
         },
         session,
     })
@@ -984,7 +985,7 @@ pub fn session_list(state: State<'_, AppState>, project_id: String) -> Result<Ve
 
     let rows = state.db.with(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, project_id, provider, title, cwd, state, created_at
+            "SELECT id, project_id, provider, title, cwd, state, created_at, mode
                FROM sessions
               WHERE project_id = ?1 AND ended_at IS NULL
               ORDER BY created_at DESC",
@@ -999,6 +1000,7 @@ pub fn session_list(state: State<'_, AppState>, project_id: String) -> Result<Ve
                 cwd: row.get(4)?,
                 state: parse_state(&row.get::<_, String>(5)?),
                 created_at: row.get(6)?,
+                mode: SessionMode::parse(&row.get::<_, String>(7)?),
                 id,
             })
         })?;
@@ -1234,7 +1236,7 @@ pub fn mission_sessions(
 
     let rows = state.db.with(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, project_id, provider, title, cwd, state, created_at
+            "SELECT id, project_id, provider, title, cwd, state, created_at, mode
                FROM sessions
               WHERE mission_id = ?1
               ORDER BY created_at DESC",
@@ -1249,6 +1251,7 @@ pub fn mission_sessions(
                     cwd: row.get(4)?,
                     state: parse_state(&row.get::<_, String>(5)?),
                     created_at: row.get(6)?,
+                    mode: SessionMode::parse(&row.get::<_, String>(7)?),
                     id: row.get(0)?,
                 })
             })?

@@ -85,6 +85,8 @@ pub struct SessionInfo {
     pub created_at: i64,
     /// True while the process is alive.
     pub live: bool,
+    /// Terminal or chat (M29).
+    pub mode: super::event::SessionMode,
 }
 
 /// A message for the session's single log-writer thread.

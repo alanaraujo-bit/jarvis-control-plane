@@ -137,6 +137,43 @@ pub enum Lifecycle {
     /// `resumeAfterWait`.
     #[serde(rename_all = "camelCase")]
     AccountSwitch { from: String, to: String, reason: String },
+    /// A chat's model or effort changed, as the provider confirmed it (M29).
+    /// The transcript does not say this in any form a reader can use, so the
+    /// log is where "the next turn ran on Sonnet" is recorded.
+    #[serde(rename_all = "camelCase")]
+    ChatSettings { model: Option<String>, effort: Option<String> },
+    /// The person stopped the agent from a chat (M29).
+    Interrupted,
+}
+
+/// How a session is worked with (M29). Chosen at launch and never changed: a
+/// chat has no terminal to switch to, and a terminal session has no protocol
+/// to chat over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionMode {
+    #[default]
+    Terminal,
+    Chat,
+}
+
+impl SessionMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Terminal => "terminal",
+            Self::Chat => "chat",
+        }
+    }
+
+    /// Read from storage. Anything else is a terminal, which is what every
+    /// session was before chat existed.
+    pub fn parse(text: &str) -> Self {
+        if text == "chat" {
+            Self::Chat
+        } else {
+            Self::Terminal
+        }
+    }
 }
 
 /// What an agent session is doing right now (§21).
