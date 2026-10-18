@@ -50,6 +50,11 @@ English and Portuguese, built with `node apps/docs/build.mjs` and served with
 
 **Picking this up in a new session? Start with [`docs/HANDOFF.md`](docs/HANDOFF.md).**
 
+Agents: [`AGENTS.md`](AGENTS.md) · Scope: [`PRODUCT.md`](PRODUCT.md) ·
+Local setup: [`docs/onboarding.md`](docs/onboarding.md) · Design:
+[`docs/design.md`](docs/design.md) · Checks: [`docs/quality.md`](docs/quality.md) ·
+Toolkit and evidence: [`docs/setup.md`](docs/setup.md).
+
 `docs/ROADMAP.md` is the live plan. `docs/DECISIONS.md` records why things are
 the way they are, including several findings that only showed up by running the
 product rather than reasoning about it.
@@ -62,7 +67,9 @@ Requires Node 22+, pnpm, and a Rust toolchain with the MSVC build tools.
 
 ```bash
 pnpm install
-pnpm dev          # run the desktop app against Vite
+pnpm tauri dev    # desktop app with live reload (UI hot-reload, Rust rebuild)
+pnpm dev          # UI only, in a browser, on fixture data
+pnpm verify       # typecheck, lint, JS tests, cargo test
 pnpm tauri build  # produce the Windows installer
 ```
 

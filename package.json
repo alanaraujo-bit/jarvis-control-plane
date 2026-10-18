@@ -8,13 +8,26 @@
     "tauri": "pnpm --filter @jarvis/desktop tauri",
     "build": "pnpm --filter @jarvis/desktop build",
     "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:typed": "eslint -c eslint.typed.config.mjs .",
+    "lint:rules": "node scripts/verify-quality-rules.mjs",
+    "lint:rust": "cd apps/desktop/src-tauri && cargo clippy --all-targets",
     "test": "pnpm -r --if-present test && cd apps/desktop/src-tauri && cargo test",
     "docs": "pnpm --filter @jarvis/docs build",
     "docs:serve": "pnpm --filter @jarvis/docs serve",
-    "docs:test": "pnpm --filter @jarvis/docs test"
+    "docs:test": "pnpm --filter @jarvis/docs test",
+    "verify": "pnpm typecheck && pnpm lint && pnpm lint:rules && pnpm test"
   },
   "packageManager": "pnpm@11.20.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.2"
   }
 }

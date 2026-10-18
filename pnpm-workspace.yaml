@@ -6,3 +6,13 @@ packages:
 # without it. Every other package stays script-disabled by default.
 allowBuilds:
   esbuild: true
+
+# Security overrides for transitive dependencies (pnpm audit, 2026-10-18).
+# Each stays within its major version; remove once the parent ships the fix.
+#   dompurify    — pinned 3.2.7 by monaco-editor 0.55.1 (XSS advisories)
+#   undici       — via @vercel/blob in apps/relay
+#   source-map-js — via vite/postcss, build-time only
+overrides:
+  dompurify: ^3.4.16
+  undici: ^6.28.1
+  source-map-js: ^1.2.2

@@ -649,7 +649,7 @@ function AccountCardView({
    * so the provider has to be told to forget this one before it will ask
    * anybody anything.
    */
-  const useDifferentAccount = async () => {
+  const switchToDifferentAccount = async () => {
     setSwitching(true);
     try {
       await signOut(account.id);
@@ -752,7 +752,7 @@ function AccountCardView({
               <button
                 type="button"
                 className="accounts__button accounts__shared-action"
-                onClick={() => void useDifferentAccount()}
+                onClick={() => void switchToDifferentAccount()}
                 disabled={switching}
               >
                 <LogIn size={13} />

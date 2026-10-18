@@ -6,7 +6,7 @@
 # rename while the previous build is running. The failure arrives two minutes
 # in, after a full successful compile, as `os error 5`.
 set -e
-root="c:/Users/Alan Araujo/Projetos/j.a.r.v.i.s"
+root="$(cd "$(dirname "$0")/.." && pwd)"
 powershell -NoProfile -Command "Get-Process jarvis-desktop -ErrorAction SilentlyContinue | Stop-Process -Force" || true
 cd "$root/apps/desktop"
 pnpm tauri build --no-bundle

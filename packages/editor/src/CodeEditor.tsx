@@ -189,7 +189,6 @@ export function CodeEditor({ scope, path, value, theme, onChange, onSave }: Code
     if (model && model.getValue() !== value) {
       model.setValue(value);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   useEffect(() => {

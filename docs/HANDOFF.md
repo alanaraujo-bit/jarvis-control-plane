@@ -1115,7 +1115,7 @@ pnpm tauri build
 Install silently and drive the real app for visual review:
 
 ```powershell
-$root = "c:\Users\Alan Araujo\Projetos\j.a.r.v.i.s"
+$root = git rev-parse --show-toplevel
 $inst = "$env:LOCALAPPDATA\J.A.R.V.I.S"
 Start-Process "$root\apps\desktop\src-tauri\target\release\bundle\nsis\J.A.R.V.I.S_0.1.0_x64-setup.exe" -ArgumentList "/S" -Wait
 Start-Process "$inst\jarvis-desktop.exe"

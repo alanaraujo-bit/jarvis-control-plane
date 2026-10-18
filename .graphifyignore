@@ -1,0 +1,31 @@
+# Graphify exclusions. Never index secrets, dependencies, vendored skills or
+# generated output. Source: vibe-coding-toolkit templates/project/.graphifyignore.example
+.git/
+node_modules/
+dist/
+target/
+coverage/
+graphify-out/
+.agents/
+.claude/
+.codex/
+.vercel/
+.keys/
+.tmp/
+shots/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/icons/
+apps/docs/dist/
+apps/docs/public/
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+auth.json
+credentials.json
+*.log
+*.tsbuildinfo
+pnpm-lock.yaml
+Cargo.lock
