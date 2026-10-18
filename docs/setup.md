@@ -113,8 +113,9 @@ stripped the handler and executed nothing. Visual check of hovers in both themes
 inside the desktop window was not done.
 
 Pre-existing issue found: in web mode, `Friends.tsx` throws
-`No browser fixture for command "social_report"` (unhandled promise). It does
-not affect the desktop build.
+`No browser fixture for command "social_report"` (unhandled promise). Fixed in
+`62000ea` (fixture + handled rejection); Friends renders on fixture data with a
+clean console.
 
 ## Memory and harness evidence
 
@@ -158,8 +159,7 @@ excluding vendored skills. 11 findings, dispositioned:
    It needs a push.
 3. Burn down lint warnings rule by rule, then promote each rule to `error`.
    Split the largest files one at a time (docs/quality.md).
-4. Add a browser fixture for `social_report`, or have `Friends.tsx` handle its
-   rejection.
+4. Done: `social_report` browser fixture (`62000ea`).
 5. Run a repository-baseline security review with
    `docs/prompts/security-review.md`. Keep the report private.
 6. Optional: `rtk init --global --codex`; `cargo install cargo-audit`.
