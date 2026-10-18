@@ -13,6 +13,8 @@ export interface Preferences {
   notificationsSystem: boolean;
   notificationsSound: boolean;
   performanceHudEnabled: boolean;
+  /** How a new agent opens (M29). */
+  agentsOpenAs: "terminal" | "chat";
 }
 
 /**
@@ -58,6 +60,7 @@ const INITIAL: Preferences = {
   notificationsSound: true,
   // The HUD overlays the terminal, so the person opts in explicitly.
   performanceHudEnabled: false,
+  agentsOpenAs: "terminal",
 };
 
 let cache: Preferences = INITIAL;
@@ -163,7 +166,21 @@ export function usePreferences() {
     }
   }, []);
 
-  return { prefs, error, set, setSwitch, setPerformanceHud };
+  const setAgentsOpenAs = useCallback(async (value: "terminal" | "chat") => {
+    if (!isTauri()) {
+      publish({ ...cache, agentsOpenAs: value });
+      return;
+    }
+    try {
+      publish(await invoke<Preferences>("settings_set_agents_open_as", { value }));
+      remember("agents.openAs", value);
+      setError(null);
+    } catch (cause) {
+      setError(String(cause));
+    }
+  }, []);
+
+  return { prefs, error, set, setSwitch, setPerformanceHud, setAgentsOpenAs };
 }
 
 /** Read-only access, for surfaces that consume a preference but never set it. */

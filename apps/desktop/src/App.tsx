@@ -777,6 +777,8 @@ export function App() {
                     // evidence to something nobody chose (§86).
                     undefined,
                     { sessionId: entry.id, title: entry.title ?? undefined },
+                    // A chat continues as a chat (M29).
+                    entry.mode,
                   );
                 }}
                 onOpenMission={(missionId) => {

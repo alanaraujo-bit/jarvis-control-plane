@@ -9,6 +9,8 @@ interface VoiceButtonProps {
   projectId: string;
   sessionId: string;
   locale: string;
+  /** A chat takes the words into its text box instead of a prompt (M29). */
+  chat?: boolean;
 }
 
 /**
@@ -24,7 +26,7 @@ interface VoiceButtonProps {
  * `voice_stop_recording` on the Rust side for why, and `session::typing` for
  * how it avoids the character-loss failure a raw paste would hit.
  */
-export function VoiceButton({ projectId, sessionId, locale }: VoiceButtonProps) {
+export function VoiceButton({ projectId, sessionId, locale, chat = false }: VoiceButtonProps) {
   const t = useT();
   const modelPresent = useVoice((s) => s.modelPresent);
   const checkModel = useVoice((s) => s.checkModel);
@@ -82,7 +84,9 @@ export function VoiceButton({ projectId, sessionId, locale }: VoiceButtonProps) 
           ? micError ?? t("voice.error")
           : modelPresent === false
             ? t("voice.downloadNeeded")
-            : t("voice.start");
+            : chat
+              ? t("voice.startChat")
+              : t("voice.start");
 
   return (
     <div className="workspace__mic">

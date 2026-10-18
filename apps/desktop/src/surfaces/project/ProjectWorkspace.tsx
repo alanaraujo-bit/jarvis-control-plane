@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Columns2, Gauge, GitBranch, Grid2x2, Plus, Rows2, X } from "lucide-react";
+import { ChevronLeft, Columns2, Gauge, GitBranch, Grid2x2, MessageSquare, Plus, Rows2, X } from "lucide-react";
+import { ChatView } from "../chat/ChatView";
 import { ConversationView } from "../conversation/ConversationView";
 import { Popover } from "../../design/Popover";
 import { FilesView } from "../files/FilesView";
@@ -14,7 +15,8 @@ import { PerformanceHud } from "../performance/PerformanceHud";
 import { HistoricalTabBadge } from "../../shell/GlobalSearch";
 import { useI18n } from "../../app/i18n";
 import type { MessageKey } from "@jarvis/i18n";
-import { listSessions, type SessionKind } from "../../app/sessions";
+import { invoke, isTauri } from "../../app/platform";
+import { listSessions, type SessionKind, type SessionMode } from "../../app/sessions";
 import { useWorkspace } from "../../app/workspace";
 import { setVisibleSessions } from "../../app/notifications";
 import { useEnvironment } from "../environment/useEnvironment";
@@ -156,9 +158,13 @@ export function ProjectWorkspace({
   const split = projectTabs
     .map((tab) => tab.sessionId)
     .filter((id) => (slots[project.id] ?? []).includes(id));
-  const splitting = split.length > 1;
-  const layout = direction[project.id] ?? "columns";
   const active = activeTab[project.id];
+  // A chat on screen is shown alone; the split it interrupted is kept and
+  // returns with the next terminal (M29).
+  const activeIsChat = projectTabs.find((tab) => tab.sessionId === active)?.mode === "chat";
+  const terminalTabs = projectTabs.filter((tab) => tab.mode !== "chat");
+  const splitting = split.length > 1 && !activeIsChat;
+  const layout = direction[project.id] ?? "columns";
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLButtonElement | null>(null);
   const view = workspace?.view ?? "terminal";
@@ -240,14 +246,40 @@ export function ProjectWorkspace({
     return () => setVisibleSessions([]);
   }, [onScreenKey]);
 
-  const launch = (kind: SessionKind) => {
+  // Which agents can be a chat is the core's capability data (§26), asked
+  // once, never matched on here.
+  const [chatKinds, setChatKinds] = useState<SessionKind[]>([]);
+  useEffect(() => {
+    if (!isTauri()) return;
+    void invoke<{ id: string; chat: string }[]>("list_providers")
+      .then((providers) =>
+        setChatKinds(
+          providers
+            .filter((provider) => provider.chat !== "none")
+            .map((provider) => provider.id as SessionKind),
+        ),
+      )
+      .catch(() => setChatKinds([]));
+  }, []);
+
+  // The chat a folder-trust refusal was about, so the card can name it and
+  // open that agent's own trust step (M29 §6.4.1).
+  const [trustKind, setTrustKind] = useState<SessionKind | null>(null);
+
+  const launch = (kind: SessionKind, mode: SessionMode = "terminal") => {
     setMenuOpen(false);
+    if (mode === "chat") setTrustKind(kind);
     // A sensible starting geometry; the view corrects it on first fit.
-    void openTerminal(project.id, kind, { cols: 120, rows: 30 });
+    void openTerminal(project.id, kind, { cols: 120, rows: 30 }, undefined, undefined, mode);
   };
 
   const toolReady = (kind: Exclude<SessionKind, "shell">) =>
     report?.tools.find((tool) => tool.id === AGENT_TOOL_ID[kind])?.state === "ready";
+
+  const chatFirst = prefs.agentsOpenAs === "chat";
+  const readyChat = chatKinds.find((kind) => kind !== "shell" && toolReady(kind));
+  const agentName = (kind: SessionKind) =>
+    kind === "claude-code" ? t("chat.new.claude") : kind === "codex" ? t("chat.new.codex") : kind;
 
   return (
     <div className="workspace">
@@ -307,15 +339,19 @@ export function ProjectWorkspace({
               // there, the same gesture as the split button but aimed at a
               // specific terminal rather than the next one along. Discovered
               // through the tooltip rather than guessed at.
-              title={tab.historical ? undefined : t("terminal.split.addThis")}
+              title={tab.historical || tab.mode === "chat" ? undefined : t("terminal.split.addThis")}
               onMouseDown={(event) => {
-                if (event.altKey && !tab.historical) {
+                if (event.altKey && !tab.historical && tab.mode !== "chat") {
                   event.preventDefault();
                   addToSplit(project.id, tab.sessionId);
                 }
               }}
             >
-              <span className="workspace__tab-dot" data-kind={tab.kind} aria-hidden="true" />
+              {tab.mode === "chat" ? (
+                <MessageSquare size={11} strokeWidth={2} className="workspace__tab-chat" data-kind={tab.kind} aria-hidden="true" />
+              ) : (
+                <span className="workspace__tab-dot" data-kind={tab.kind} aria-hidden="true" />
+              )}
               {tab.title}
               {tab.historical && <HistoricalTabBadge title={t("search.historicalTab")} />}
             </button>
@@ -348,39 +384,72 @@ export function ProjectWorkspace({
           {/* A popover, not a modal: launching a terminal does not warrant
               taking over the window (§84). It is portalled because the tab
               strip scrolls and would otherwise clip it entirely. */}
+          {/* Two ways in (M29): a chat, or the terminal. The person's
+              preference decides which group comes first. */}
           <Popover anchor={menuAnchor} open={menuOpen} onClose={() => setMenuOpen(false)}>
-            <button
-              type="button"
-              role="menuitem"
-              className="popover__item"
-              onClick={() => launch("shell")}
-            >
-              {t("terminal.shell")}
-            </button>
-            {(["claude-code", "codex", "local"] as const).map((kind) => {
-              const ready = toolReady(kind);
-              const label =
-                kind === "claude-code"
-                  ? t("terminal.claudeCode")
-                  : kind === "codex"
-                    ? t("terminal.codex")
-                    : t("terminal.local");
-              return (
+            <div className="workspace__new-menu" data-chat-first={chatFirst || undefined}>
+              {chatKinds.length > 0 && (
+                <div className="workspace__new-group" data-group="chat">
+                  <p className="popover__heading">{t("chat.new.group")}</p>
+                  {chatKinds.map((kind) => {
+                    const ready = kind !== "shell" && toolReady(kind);
+                    const label = agentName(kind);
+                    return (
+                      <button
+                        key={kind}
+                        type="button"
+                        role="menuitem"
+                        className="popover__item"
+                        disabled={!ready}
+                        onClick={() => launch(kind, "chat")}
+                        title={ready ? undefined : t("terminal.notInstalled", { name: label })}
+                      >
+                        <span className="workspace__new-label">
+                          <MessageSquare size={12} strokeWidth={2} aria-hidden="true" />
+                          {label}
+                        </span>
+                        {!ready && <span className="popover__note">—</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="workspace__new-group" data-group="terminal">
+                {chatKinds.length > 0 && <p className="popover__heading">{t("chat.new.terminalGroup")}</p>}
                 <button
-                  key={kind}
                   type="button"
                   role="menuitem"
                   className="popover__item"
-                  disabled={!ready}
-                  onClick={() => launch(kind)}
-                  // Explain the disabled state rather than leaving a dead item.
-                  title={ready ? undefined : t("terminal.notInstalled", { name: label })}
+                  onClick={() => launch("shell")}
                 >
-                  {label}
-                  {!ready && <span className="popover__note">—</span>}
+                  {t("terminal.shell")}
                 </button>
-              );
-            })}
+                {(["claude-code", "codex", "local"] as const).map((kind) => {
+                  const ready = toolReady(kind);
+                  const label =
+                    kind === "claude-code"
+                      ? t("terminal.claudeCode")
+                      : kind === "codex"
+                        ? t("terminal.codex")
+                        : t("terminal.local");
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      role="menuitem"
+                      className="popover__item"
+                      disabled={!ready}
+                      onClick={() => launch(kind)}
+                      // Explain the disabled state rather than leaving a dead item.
+                      title={ready ? undefined : t("terminal.notInstalled", { name: label })}
+                    >
+                      {label}
+                      {!ready && <span className="popover__note">—</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </Popover>
         </div>
 
@@ -397,7 +466,12 @@ export function ProjectWorkspace({
           )}
 
         {activeTab_ && !activeTab_.historical && (
-          <VoiceButton projectId={project.id} sessionId={activeTab_.sessionId} locale={locale} />
+          <VoiceButton
+            projectId={project.id}
+            sessionId={activeTab_.sessionId}
+            locale={locale}
+            chat={activeTab_.mode === "chat"}
+          />
         )}
 
         {/* Split controls (§20).
@@ -406,15 +480,15 @@ export function ProjectWorkspace({
             is offered while there is room; the direction control replaces it
             once panes are on screen, because that is the choice that is
             actually live at that point. */}
-        {!splitting && projectTabs.length > 1 && activeTab_ && !activeTab_.historical && (
+        {!splitting && terminalTabs.length > 1 && activeTab_ && !activeTab_.historical && !activeIsChat && (
           <button
             type="button"
             className="workspace__split-button"
             onClick={() => {
-              // The obvious partner: the next tab along, wrapping. Splitting
-              // should be one click, not a click and then a chooser.
-              const index = projectTabs.findIndex((tab) => tab.sessionId === active);
-              const next = projectTabs[(index + 1) % projectTabs.length];
+              // The obvious partner: the next terminal along, wrapping.
+              // Splitting should be one click, not a click and then a chooser.
+              const index = terminalTabs.findIndex((tab) => tab.sessionId === active);
+              const next = terminalTabs[(index + 1) % terminalTabs.length];
               if (next) addToSplit(project.id, next.sessionId);
             }}
             aria-label={t("terminal.split.add")}
@@ -450,7 +524,8 @@ export function ProjectWorkspace({
 
         {/* Terminal/Conversation is meaningless in a split — see the note by
             the conversation projection below. */}
-        {activeTab_ && !activeTab_.historical && !splitting && (
+        {/* A chat has no terminal to switch to (M29). */}
+        {activeTab_ && !activeTab_.historical && !splitting && !activeIsChat && (
           <div className="workspace__view-toggle" role="radiogroup" aria-label={t("view.terminal")}>
             {(["terminal", "conversation"] as const).map((mode) => (
               <button
@@ -468,7 +543,7 @@ export function ProjectWorkspace({
           </div>
         )}
 
-        {activeTab_ && !activeTab_.historical && (
+        {activeTab_ && !activeTab_.historical && !activeIsChat && (
           <button
             type="button"
             className="workspace__stats-button"
@@ -490,15 +565,37 @@ export function ProjectWorkspace({
             move it into a layout would remount it, and remounting is how you
             lose a session's whole scrollback. */}
         <div className="workspace__body" data-split={splitting ? layout : undefined}>
-        {error && <p className="workspace__error">{error}</p>}
+        {error === "chat.folderNotTrusted" && trustKind ? (
+          // `-p` and the app-server skip the provider's own trust question, so
+          // a chat waits until the person has answered it on that provider's
+          // screen (M29 §6.4.1). Nothing here records trust.
+          <div className="workspace__trust" role="alert">
+            <p className="workspace__trust-title">{t("chat.trust.title")}</p>
+            <p className="workspace__trust-body">{t("chat.trust.body", { provider: agentName(trustKind) })}</p>
+            <button type="button" className="workspace__empty-action" onClick={() => launch(trustKind)}>
+              {t("chat.trust.open")}
+            </button>
+          </div>
+        ) : (
+          error && <p className="workspace__error">{t(error as MessageKey)}</p>
+        )}
 
         {projectTabs.length === 0 ? (
           <div className="workspace__empty">
             <p className="workspace__empty-title">{t("terminal.empty.title")}</p>
             <p className="workspace__empty-body">{t("terminal.empty.body")}</p>
-            <button type="button" className="workspace__empty-action" onClick={() => launch("shell")}>
-              {t("terminal.shell")}
-            </button>
+            <div className="workspace__empty-actions">
+              {/* Someone who prefers the chat is offered one first (M29). */}
+              {chatFirst && readyChat && (
+                <button type="button" className="workspace__empty-action" data-primary onClick={() => launch(readyChat, "chat")}>
+                  <MessageSquare size={13} strokeWidth={2} aria-hidden="true" />
+                  {t("chat.new.primary")}
+                </button>
+              )}
+              <button type="button" className="workspace__empty-action" onClick={() => launch("shell")}>
+                {t("terminal.shell")}
+              </button>
+            </div>
           </div>
         ) : (
           // Every tab stays mounted and only the active one is shown. Unmounting
@@ -547,6 +644,32 @@ export function ProjectWorkspace({
                 // this is the one place a tab is conversation-only.
                 <div className="workspace__projection" data-visible>
                   <ConversationView sessionId={tab.sessionId} live={false} />
+                </div>
+              ) : tab.mode === "chat" ? (
+                // A chat is its own screen: no terminal behind it (M29).
+                <div className="workspace__projection" data-visible>
+                  <ChatView
+                    sessionId={tab.sessionId}
+                    live
+                    projectName={project.name}
+                    projectPath={project.path}
+                    active={area === "sessions" && tab.sessionId === active}
+                    // Continuing forks Claude's conversation into a new chat
+                    // (D41); Codex appends in place, which is not wired up.
+                    onContinue={
+                      tab.kind === "claude-code"
+                        ? () =>
+                            void openTerminal(
+                              project.id,
+                              tab.kind,
+                              { cols: 120, rows: 30 },
+                              undefined,
+                              { sessionId: tab.sessionId, title: tab.title },
+                              "chat",
+                            )
+                        : undefined
+                    }
+                  />
                 </div>
               ) : (
                 <>
@@ -601,7 +724,7 @@ export function ProjectWorkspace({
             </div>
           ))
         )}
-        {prefs.performanceHudEnabled && activeTab_ && !activeTab_.historical && (
+        {prefs.performanceHudEnabled && activeTab_ && !activeTab_.historical && !activeIsChat && (
           <PerformanceHud
             sessionId={activeTab_.sessionId}
             kind={activeTab_.kind}

@@ -70,6 +70,11 @@ export function unregisterComposer(sessionId: string) {
   composers.delete(sessionId);
 }
 
+/** Whether a terminal or a chat box is there to take text for this session. */
+export function canReceiveText(sessionId: string): boolean {
+  return live.has(sessionId) || composers.has(sessionId);
+}
+
 /** Put text in a chat's box. False when that session has no chat on screen. */
 export function insertIntoComposer(sessionId: string, text: string): boolean {
   const insert = composers.get(sessionId);
@@ -175,6 +180,9 @@ export type PasteOutcome = "sent" | "noTerminal" | "wouldSubmit";
  * Single-line text is always safe: there is no newline to become a submit.
  */
 export function pasteIntoSession(sessionId: string, text: string): PasteOutcome {
+  // A chat's box takes the text as it is, line breaks and all: nothing there
+  // can submit it (M29).
+  if (insertIntoComposer(sessionId, text)) return "sent";
   const term = live.get(sessionId);
   if (!term) return "noTerminal";
 

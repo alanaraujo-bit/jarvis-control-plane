@@ -168,6 +168,15 @@
   color: var(--text-secondary);
 }
 
+/* A line under a label that needs one sentence of why (M29). */
+.settings__label-help {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-tertiary);
+}
+
 /* Below the label column plus the widest control the two stop fitting on one
    line. Stacking is the honest response to a narrow pane; squeezing the label
    is not — the same rule `.autonomy__field` follows. */

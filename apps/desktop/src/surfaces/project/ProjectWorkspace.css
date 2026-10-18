@@ -700,3 +700,103 @@
 .workspace__settings > * + * {
   margin-top: var(--space-10);
 }
+
+/* ---- Chat (M29) ------------------------------------------------------------ */
+
+/* A chat tab's mark: the same colour rule as the dot, an agent's tab in
+   amber, because the tab stands for an agent that works. */
+.workspace__tab-chat {
+  flex: 0 0 auto;
+  color: var(--state-working);
+}
+
+/* Chat and Terminal groups in the "+" menu; the preferred one first. */
+.workspace__new-menu {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace__new-menu:not([data-chat-first]) .workspace__new-group[data-group="chat"] {
+  order: 2;
+}
+
+.workspace__new-group + .workspace__new-group {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.workspace__new-menu:not([data-chat-first]) .workspace__new-group[data-group="chat"] {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.workspace__new-menu:not([data-chat-first]) .workspace__new-group[data-group="terminal"] {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.workspace__new-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.workspace__empty-actions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-7);
+}
+
+.workspace__empty-actions .workspace__empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: 0;
+}
+
+.workspace__empty-action[data-primary] {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-base);
+}
+
+.workspace__empty-action[data-primary]:hover {
+  background: var(--text-primary);
+  opacity: 0.88;
+}
+
+/* The chat could not start in a folder its agent never trusted. */
+.workspace__trust {
+  position: absolute;
+  top: var(--space-8);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: min(30rem, calc(100% - var(--space-9)));
+  padding: var(--space-6) var(--space-7);
+  background: var(--bg-overlay);
+  border: 1px solid var(--state-waiting);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+
+.workspace__trust-title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.workspace__trust-body {
+  margin-top: var(--space-3);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
+}
+
+.workspace__trust .workspace__empty-action {
+  margin-top: var(--space-6);
+}

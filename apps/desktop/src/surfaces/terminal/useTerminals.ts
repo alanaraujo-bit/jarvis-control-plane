@@ -5,11 +5,14 @@ import {
   startSession,
   type SessionInfo,
   type SessionKind,
+  type SessionMode,
 } from "../../app/sessions";
 
 export interface TerminalTab {
   sessionId: string;
   kind: SessionKind;
+  /** Terminal or chat (M29). A chat tab never joins a split. */
+  mode: SessionMode;
   title: string;
   /** Opened by Global Search (§51) against a session this window never
    * started: no PTY to attach, closing it drives no backend call, and the
@@ -58,6 +61,8 @@ interface TerminalsState {
     missionId?: string,
     /** A past session to continue (§88). The tab is titled after it. */
     resume?: { sessionId: string; title?: string },
+    /** Terminal unless asked otherwise (M29). */
+    mode?: SessionMode,
   ) => Promise<void>;
   closeTerminal: (projectId: string, sessionId: string) => Promise<void>;
   setActive: (projectId: string, sessionId: string) => void;
@@ -88,10 +93,16 @@ const TITLES: Record<SessionKind, string> = {
   local: "Local",
 };
 
+/** A chat is named for the agent, not the program (M29). */
+const CHAT_TITLES: Partial<Record<SessionKind, string>> = {
+  "claude-code": "Claude",
+  codex: "Codex",
+};
+
 /** Number tabs of the same kind so several shells stay distinguishable. */
-function nextTitle(existing: TerminalTab[], kind: SessionKind): string {
-  const base = TITLES[kind];
-  const used = existing.filter((tab) => tab.kind === kind).length;
+function nextTitle(existing: TerminalTab[], kind: SessionKind, mode: SessionMode = "terminal"): string {
+  const base = (mode === "chat" && CHAT_TITLES[kind]) || TITLES[kind];
+  const used = existing.filter((tab) => tab.kind === kind && tab.mode === mode).length;
   return used === 0 ? base : `${base} ${used + 1}`;
 }
 
@@ -103,7 +114,7 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
   starting: {},
   error: null,
 
-  openTerminal: async (projectId, kind, size, missionId, resume) => {
+  openTerminal: async (projectId, kind, size, missionId, resume, mode = "terminal") => {
     if (get().starting[projectId]) return;
     set((state) => ({ starting: { ...state.starting, [projectId]: true }, error: null }));
 
@@ -115,18 +126,20 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
         rows: size.rows,
         missionId,
         resumeFrom: resume?.sessionId,
+        mode,
       });
       set((state) => {
         const existing = state.tabs[projectId] ?? [];
         const tab: TerminalTab = {
           sessionId: info.id,
           kind,
+          mode,
           // A continuation is named after the conversation it continues, not
           // "Claude Code 3" (§88). Somebody who just chose a session out of
           // history and pressed Continue should see that session's name on the
           // tab they land on — a generic number would make them wonder whether
           // the right thing opened at all.
-          title: resume?.title?.trim() || nextTitle(existing, kind),
+          title: resume?.title?.trim() || nextTitle(existing, kind, mode),
         };
         // A new terminal opened *during* a split joins the layout, while
         // there is room for it.
@@ -147,7 +160,8 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
         // and still running.
         const current = state.slots[projectId] ?? [];
         let slots = state.slots;
-        if (current.length > 1) {
+        // A chat reads as one column and is never put in a split (M29).
+        if (current.length > 1 && mode !== "chat") {
           if (current.length < MAX_SLOTS) {
             slots = { ...state.slots, [projectId]: [...current, info.id] };
           } else {
@@ -205,13 +219,16 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
   setActive: (projectId, sessionId) =>
     set((state) => {
       const current = state.slots[projectId] ?? [];
+      // A chat is shown on its own and leaves the layout as it was, to come
+      // back the moment a terminal is chosen again (M29).
+      const chat = (state.tabs[projectId] ?? []).find((tab) => tab.sessionId === sessionId)?.mode === "chat";
       // The same trap as opening a terminal during a split, one gesture over:
       // clicking a tab that is not in the layout would focus a session nobody
       // can see, and every keystroke after it would land somewhere invisible.
       // Selecting a tab means "show me this one", so it takes the focused
       // pane's place — the layout keeps its shape and the click does what it
       // looks like it does.
-      if (current.length > 1 && !current.includes(sessionId)) {
+      if (current.length > 1 && !current.includes(sessionId) && !chat) {
         const active = state.activeTab[projectId];
         const at = active ? current.indexOf(active) : -1;
         const replaced = [...current];
@@ -230,11 +247,12 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
       if (state.tabs[projectId]?.length) return state;
       const discovered = sessions
         .filter((s) => s.live)
-        .map<TerminalTab>((s, index) => ({
-          sessionId: s.id,
-          kind: (s.provider as SessionKind) ?? "shell",
-          title: s.title ?? `${TITLES[(s.provider as SessionKind) ?? "shell"]}${index ? ` ${index + 1}` : ""}`,
-        }));
+        .map<TerminalTab>((s, index) => {
+          const kind = (s.provider as SessionKind) ?? "shell";
+          const mode = s.mode ?? "terminal";
+          const base = (mode === "chat" && CHAT_TITLES[kind]) || TITLES[kind];
+          return { sessionId: s.id, kind, mode, title: s.title ?? `${base}${index ? ` ${index + 1}` : ""}` };
+        });
       const saved = projectWorkspace(projectId);
       const byId = new Map(discovered.map((tab) => [tab.sessionId, tab]));
       const tabs = [
@@ -268,6 +286,8 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
       const tab: TerminalTab = {
         sessionId,
         kind,
+        // Read-only either way: a historical tab shows the conversation.
+        mode: "terminal",
         title: title ?? nextTitle(existing, kind),
         historical: true,
       };
@@ -281,6 +301,11 @@ export const useTerminals = create<TerminalsState>((set, get) => ({
     set((state) => {
       const current = state.slots[projectId] ?? [];
       const active = state.activeTab[projectId];
+      const tabs = state.tabs[projectId] ?? [];
+      // A chat never shares the screen (M29); choosing it just shows it.
+      if (tabs.find((tab) => tab.sessionId === sessionId)?.mode === "chat") {
+        return { activeTab: { ...state.activeTab, [projectId]: sessionId } };
+      }
       // The first split is "this one *and* that one": an empty layout means
       // the active terminal is on screen alone, so it has to be carried in
       // explicitly or adding a second pane would drop the first.

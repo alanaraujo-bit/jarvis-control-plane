@@ -3,7 +3,7 @@ import { Check, Copy, CornerDownLeft, FolderPlus, Files, Pin, PinOff, Plus, Sear
 import { useCommunity } from "../community/api";
 import type { MessageKey } from "@jarvis/i18n";
 import { useI18n, useT } from "../../app/i18n";
-import { hasLiveTerminal, pasteIntoSession } from "../terminal/live";
+import { canReceiveText, pasteIntoSession } from "../terminal/live";
 import { noteName, useNotebook, type NotebookNote } from "./useNotebook";
 import "./Notebook.css";
 
@@ -473,9 +473,9 @@ function Editor({
 
   const body = draftBody;
   // The Send button is offered only when it can actually do something, and
-  // `hasLiveTerminal` is asked at render rather than trusted from a prop: a
-  // terminal can be closed while this overlay is open.
-  const canSend = target !== null && hasLiveTerminal(target.sessionId) && body.trim().length > 0;
+  // `canReceiveText` is asked at render rather than trusted from a prop: a
+  // terminal or a chat can be closed while this overlay is open.
+  const canSend = target !== null && canReceiveText(target.sessionId) && body.trim().length > 0;
 
   const send = () => {
     if (!target) return;

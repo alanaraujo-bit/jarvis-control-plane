@@ -51,6 +51,8 @@ export interface HistoryEntry {
    * changes is whether anything can be *run* there.
    */
   projectExists: boolean;
+  /** Terminal or chat (M29). Continuing reopens it the same way. */
+  mode: "terminal" | "chat";
 }
 
 export interface HistoryQuery {

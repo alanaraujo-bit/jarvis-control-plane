@@ -140,7 +140,7 @@ function Section({ id }: { id: CategoryId }) {
   const t = useT();
   const { locale, setLocale } = useI18n();
   const { preference, setPreference } = useTheme();
-  const { prefs, set, setPerformanceHud } = usePreferences();
+  const { prefs, set, setPerformanceHud, setAgentsOpenAs } = usePreferences();
 
   switch (id) {
     case "account":
@@ -205,6 +205,34 @@ function Section({ id }: { id: CategoryId }) {
                   onClick={() => setLocale(value)}
                 >
                   {LOCALE_NAMES[value]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* How a new agent opens (M29). Here rather than under Terminal: a
+              person who would rather never see one looks here first. */}
+          <div className="settings__field">
+            <div className="settings__label">
+              <span className="settings__label-text">{t("settings.agentsOpenAs")}</span>
+              <span className="settings__label-help">{t("settings.agentsOpenAsHelp")}</span>
+            </div>
+            <div
+              className="settings__segmented"
+              role="radiogroup"
+              aria-label={t("settings.agentsOpenAs")}
+            >
+              {(["chat", "terminal"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={prefs.agentsOpenAs === value}
+                  data-active={prefs.agentsOpenAs === value || undefined}
+                  className="settings__segment"
+                  onClick={() => void setAgentsOpenAs(value)}
+                >
+                  {value === "chat" ? t("chat.mode") : t("view.terminal")}
                 </button>
               ))}
             </div>
