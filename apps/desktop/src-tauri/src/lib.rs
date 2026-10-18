@@ -292,6 +292,7 @@ pub fn run() {
             accounts::rotation::commands::rotation_answer,
             accounts::rotation::commands::rotation_accept_wait,
             accounts::rotation::commands::rotation_cancel_wait,
+            accounts::rotation::commands::rotation_pending,
             accounts::commands::account_create,
             accounts::commands::account_rename,
             accounts::commands::account_set_paused,

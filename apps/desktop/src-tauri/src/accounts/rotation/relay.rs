@@ -95,6 +95,15 @@ fn find_rollout(dir: &Path, provider_session_id: &str) -> Option<PathBuf> {
     None
 }
 
+/// Where a conversation's transcript lives under one account directory.
+fn find_conversation(provider: &str, dir: &Path, provider_session_id: &str) -> Option<PathBuf> {
+    match provider {
+        "claude-code" => crate::providers::claude::find_transcript_in(&dir.join("projects"), provider_session_id),
+        "codex" => find_rollout(&dir.join("sessions"), provider_session_id),
+        _ => None,
+    }
+}
+
 /// Copy a conversation's transcript from one account directory to another, at
 /// the same relative path, and return where it landed. The source stays.
 pub fn carry_conversation(
@@ -103,14 +112,11 @@ pub fn carry_conversation(
     to: &Path,
     provider_session_id: &str,
 ) -> Result<PathBuf, String> {
-    let source = match provider {
-        "claude-code" => {
-            crate::providers::claude::find_transcript_in(&from.join("projects"), provider_session_id)
-        }
-        "codex" => find_rollout(&from.join("sessions"), provider_session_id),
-        _ => return Err("accounts.unknownProvider".into()),
+    if !matches!(provider, "claude-code" | "codex") {
+        return Err("accounts.unknownProvider".into());
     }
-    .ok_or_else(|| "accounts.transcriptMissing".to_string())?;
+    let source = find_conversation(provider, from, provider_session_id)
+        .ok_or_else(|| "accounts.transcriptMissing".to_string())?;
     let relative = source.strip_prefix(from).map_err(|e| e.to_string())?;
     let target = to.join(relative);
     if let Some(parent) = target.parent() {
@@ -124,6 +130,36 @@ pub fn carry_conversation(
         copy_dir(&subagents, &target.with_extension("")).map_err(|e| e.to_string())?;
     }
     Ok(target)
+}
+
+/// Return what a refusing destination appended to the conversation. Its copy
+/// is the source plus new lines, so only the new bytes are appended: the
+/// source is never rewritten under the tailer that follows it.
+fn carry_back(provider: &str, carried: &Path, source: &Path) -> std::io::Result<()> {
+    use std::io::Write;
+    let have = std::fs::metadata(source)?.len() as usize;
+    let theirs = std::fs::read(carried)?;
+    if theirs.len() > have {
+        std::fs::OpenOptions::new().append(true).open(source)?.write_all(&theirs[have..])?;
+    }
+    let subagents = carried.with_extension("");
+    if provider == "claude-code" && subagents.is_dir() {
+        copy_dir(&subagents, &source.with_extension(""))?;
+    }
+    Ok(())
+}
+
+/// Put the conversation back on its original account after a refusal. If even
+/// that fails the session has no process left, and it ends as failed rather
+/// than reading as still running.
+fn resume_on_source(session: &LiveSession, options: PtyOptions, code: String) -> String {
+    match session.replace_process(options) {
+        Ok(()) => code,
+        Err(_) => {
+            session.end_without_process();
+            "accounts.sessionLost".into()
+        }
+    }
 }
 
 fn log_switch(session: &LiveSession, from: &Account, to: &Account, reason: &str) {
@@ -159,6 +195,9 @@ pub fn relay_with(
     reason: Reason,
     options_for: &dyn Fn(&Account) -> Result<PtyOptions, String>,
 ) -> Result<(), String> {
+    if from.id == to.id {
+        return Err("rotation.sameAccount".into());
+    }
     if from.provider == "codex" && !CODEX_RESUME_VERIFIED {
         return Err("accounts.codexResumeUnverified".into());
     }
@@ -166,6 +205,10 @@ pub fn relay_with(
     let from_options = options_for(from)?;
     let from_dir = PathBuf::from(&from.config_dir);
     let to_dir = PathBuf::from(&to.config_dir);
+    // Nothing is killed before there is a conversation to carry (spec §7.2):
+    // a session that has not written its transcript yet stays as it is.
+    let source = find_conversation(&from.provider, &from_dir, provider_session_id)
+        .ok_or_else(|| "accounts.transcriptMissing".to_string())?;
 
     log_switch(session, from, to, reason.id());
     let mut carried = None;
@@ -175,18 +218,18 @@ pub fn relay_with(
     });
     if let Err(code) = moved {
         log_switch(session, to, from, "refused");
-        let _ = session.replace_process(from_options);
-        return Err(code);
+        return Err(resume_on_source(session, from_options, code));
     }
 
     let deadline = Instant::now() + REFUSAL_WINDOW;
     while Instant::now() < deadline {
         if session.exited().is_some() {
             // Whatever the destination appended belongs to the conversation.
-            let _ = carry_conversation(&from.provider, &to_dir, &from_dir, provider_session_id);
+            if let Some(carried) = &carried {
+                let _ = carry_back(&from.provider, carried, &source);
+            }
             log_switch(session, to, from, "refused");
-            let _ = session.replace_process(from_options);
-            return Err("accounts.destinationRefused".into());
+            return Err(resume_on_source(session, from_options, "accounts.destinationRefused".into()));
         }
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -227,7 +270,28 @@ pub fn relay_session(
     let options_for = |account: &Account| {
         crate::session::commands::relaunch_options(state, session_id, account, &provider_session_id)
     };
-    relay_with(&state.db, &session, &from, to, &provider_session_id, reason, &options_for)?;
+    if let Err(code) = relay_with(&state.db, &session, &from, to, &provider_session_id, reason, &options_for) {
+        crate::activity::record(
+            &state.db,
+            "account.relayFailed",
+            crate::activity::Severity::Attention,
+            &to.provider,
+            Some(
+                serde_json::json!({
+                    "fromAccountId": from.id,
+                    "toAccountId": to.id,
+                    "reason": reason.id(),
+                    "sessionId": session_id,
+                    "code": code,
+                })
+                .to_string(),
+            ),
+            Some(&project_id),
+            Some(session_id),
+            None,
+        );
+        return Err(code);
+    }
 
     crate::activity::record(
         &state.db,
@@ -639,12 +703,117 @@ mod tests {
     }
 
     #[test]
+    fn relay_without_a_transcript_kills_nothing() {
+        let logs = tempfile::tempdir().unwrap();
+        let a_dir = tempfile::tempdir().unwrap();
+        let b_dir = tempfile::tempdir().unwrap();
+        let (a, b) = (account("a", "claude-code", a_dir.path()), account("b", "claude-code", b_dir.path()));
+        let id = new_session_id();
+        let db = db_with_session(&id, "a");
+        let manager = SessionManager::default();
+        let session = manager.start(id.clone(), logs.path().to_path_buf(), long_running("on-a")).unwrap();
+        assert!(wait_log(logs.path(), "on-a"));
+
+        let options = |acct: &Account| Ok(long_running(&format!("on-{}", acct.id)));
+        let outcome = relay_with(&db, &session, &a, &b, &id, Reason::Manual, &options);
+
+        assert_eq!(outcome, Err("accounts.transcriptMissing".to_string()));
+        assert!(session.exited().is_none(), "a brand-new session keeps running where it is");
+        assert_eq!(session_account(&db, &id).as_deref(), Some("a"));
+        let reader = crate::session::log::SessionLogReader::open(logs.path()).unwrap();
+        let touched = reader
+            .read_from(0)
+            .unwrap()
+            .iter()
+            .any(|e| String::from_utf8_lossy(&e.payload).contains("accountSwitch"));
+        assert!(!touched, "its process was never replaced");
+        let _ = session.kill();
+    }
+
+    #[test]
+    fn relay_to_the_same_account_is_refused() {
+        let logs = tempfile::tempdir().unwrap();
+        let a_dir = tempfile::tempdir().unwrap();
+        let a = account("a", "claude-code", a_dir.path());
+        let id = new_session_id();
+        write_transcript(a_dir.path(), &id, "{}\n");
+        let db = db_with_session(&id, "a");
+        let manager = SessionManager::default();
+        let session = manager.start(id.clone(), logs.path().to_path_buf(), long_running("on-a")).unwrap();
+        let options = |_: &Account| Ok(long_running("never"));
+        let outcome = relay_with(&db, &session, &a, &a, &id, Reason::Manual, &options);
+        assert_eq!(outcome, Err("rotation.sameAccount".to_string()));
+        assert!(session.exited().is_none());
+        let _ = session.kill();
+    }
+
+    #[test]
+    fn a_refusal_appends_what_the_destination_wrote() {
+        let logs = tempfile::tempdir().unwrap();
+        let a_dir = tempfile::tempdir().unwrap();
+        let b_dir = tempfile::tempdir().unwrap();
+        let (a, b) = (account("a", "claude-code", a_dir.path()), account("b", "claude-code", b_dir.path()));
+        let id = new_session_id();
+        let source = write_transcript(a_dir.path(), &id, "{\"a\":1}\n");
+        let carried = b_dir.path().join("projects").join("C--scratch-repo").join(format!("{id}.jsonl"));
+        let db = db_with_session(&id, "a");
+        let manager = SessionManager::default();
+        let session = manager.start(id.clone(), logs.path().to_path_buf(), long_running("on-a")).unwrap();
+        assert!(wait_log(logs.path(), "on-a"));
+
+        // The destination writes one line, then exits like a refusing CLI.
+        let append = if cfg!(windows) {
+            format!("echo next>> {} & exit 1", carried.display())
+        } else {
+            format!("echo next >> '{}'; exit 1", carried.display())
+        };
+        let options = |acct: &Account| Ok(if acct.id == "b" { shell(&append) } else { long_running("back-on-a") });
+        let outcome = relay_with(&db, &session, &a, &b, &id, Reason::Manual, &options);
+
+        assert_eq!(outcome, Err("accounts.destinationRefused".to_string()));
+        assert!(std::fs::read_to_string(&carried).unwrap().contains("next"), "the destination wrote");
+        let ours = std::fs::read(&source).unwrap();
+        assert!(ours.starts_with(b"{\"a\":1}\n"), "the original lines stay first");
+        assert_eq!(ours, std::fs::read(&carried).unwrap(), "and the destination's line follows them");
+        let _ = session.kill();
+    }
+
+    #[test]
+    fn a_failed_fallback_ends_the_session() {
+        let logs = tempfile::tempdir().unwrap();
+        let a_dir = tempfile::tempdir().unwrap();
+        let b_dir = tempfile::tempdir().unwrap();
+        let (a, b) = (account("a", "claude-code", a_dir.path()), account("b", "claude-code", b_dir.path()));
+        let id = new_session_id();
+        write_transcript(a_dir.path(), &id, "{}\n");
+        let db = db_with_session(&id, "a");
+        let manager = SessionManager::default();
+        let session = manager.start(id.clone(), logs.path().to_path_buf(), long_running("on-a")).unwrap();
+        assert!(wait_log(logs.path(), "on-a"));
+
+        let options = |acct: &Account| {
+            Ok(if acct.id == "b" {
+                shell("exit 1")
+            } else {
+                PtyOptions { program: "jarvis-no-such-program-m26".into(), ..shell("") }
+            })
+        };
+        let outcome = relay_with(&db, &session, &a, &b, &id, Reason::Manual, &options);
+
+        assert_eq!(outcome, Err("accounts.sessionLost".to_string()));
+        assert_eq!(session.state(), crate::session::event::SessionState::Failed);
+    }
+
+    #[test]
     fn codex_relay_refused_until_verified() {
         let logs = tempfile::tempdir().unwrap();
         let a_dir = tempfile::tempdir().unwrap();
         let b_dir = tempfile::tempdir().unwrap();
         let (a, b) = (account("a", "codex", a_dir.path()), account("b", "codex", b_dir.path()));
         let id = new_session_id();
+        let day = a_dir.path().join("sessions").join("2026").join("10").join("18");
+        std::fs::create_dir_all(&day).unwrap();
+        std::fs::write(day.join(format!("rollout-2026-10-18T10-00-00-{id}.jsonl")), "{}\n").unwrap();
         let db = db_with_session(&id, "a");
         let manager = SessionManager::default();
         let session = manager.start(id.clone(), logs.path().to_path_buf(), long_running("on-a")).unwrap();

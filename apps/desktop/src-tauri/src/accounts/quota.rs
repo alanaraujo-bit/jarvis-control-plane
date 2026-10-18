@@ -377,6 +377,13 @@ const ETA_SLOPE_MS: i64 = 30 * 60_000;
 ///
 /// `None` — "pace unknown", never a number — with fewer than two readings, a
 /// pace that is not rising, or an exhaustion that would land after the reset.
+/// One window instance, whatever sub-second part a probe stated its reset
+/// with: Claude reports the same reset as `…:59.557` and `…:00.495` on two
+/// reads, so raw milliseconds would make every probe a new window.
+pub fn reset_key(resets_at_ms: i64) -> i64 {
+    (resets_at_ms + 30_000).div_euclid(60_000) * 60_000
+}
+
 pub fn eta(db: &Database, account_id: &str, window: &str, now_ms: i64) -> Option<Eta> {
     let rows: Vec<(i64, f64, Option<i64>)> = db
         .with(|conn| {
@@ -399,7 +406,7 @@ pub fn eta(db: &Database, account_id: &str, window: &str, now_ms: i64) -> Option
     let resets_at = rows.last()?.2;
     let points: Vec<(f64, f64)> = rows
         .iter()
-        .filter(|r| r.2 == resets_at)
+        .filter(|r| r.2.map(reset_key) == resets_at.map(reset_key))
         .map(|r| (r.0 as f64, r.1))
         .collect();
     if points.len() < 2 {
@@ -905,6 +912,18 @@ mod tests {
         let eta = eta(&db, "acct", "five_hour", now).expect("a rising window has an ETA");
         assert_eq!(eta.confidence, Confidence::Estimated);
         assert!((eta.at_ms - (now + 40 * 60_000)).abs() < 60_000, "{}", eta.at_ms - now);
+    }
+
+    #[test]
+    fn eta_survives_a_reset_stated_with_jitter() {
+        let db = eta_db();
+        let now = 10 * 60 * 60_000;
+        let reset = now + 3 * 60 * 60_000;
+        // How Claude states one reset on successive probes.
+        limit_row(&db, now - 20 * 60_000, 40.0, reset - 443);
+        limit_row(&db, now - 10 * 60_000, 50.0, reset + 495);
+        limit_row(&db, now, 60.0, reset - 448);
+        assert!(eta(&db, "acct", "five_hour", now).is_some(), "one window, three readings");
     }
 
     #[test]

@@ -274,6 +274,10 @@ pub fn spawn(
                                         last_said = Some(text.clone());
                                     }
                                 }
+                                if !matches!(item, ConversationItem::TurnEnded { .. }) {
+                                    // Anything else means a turn is under way.
+                                    crate::accounts::rotation::engine::turn_started(&session_id);
+                                }
                                 if matches!(item, ConversationItem::TurnEnded { .. }) {
                                     // The safe point for a pending account move.
                                     crate::accounts::rotation::engine::turn_ended(&session_id);

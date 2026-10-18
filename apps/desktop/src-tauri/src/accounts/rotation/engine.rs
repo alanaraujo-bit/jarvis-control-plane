@@ -99,7 +99,7 @@ pub trait Host: Send + Sync {
 enum Stage {
     Asking,
     Approved,
-    AllExhausted { next_reset_ms: Option<i64> },
+    AllExhausted { next_account_id: Option<String>, next_reset_ms: Option<i64> },
     Waiting { until_ms: i64 },
 }
 
@@ -115,6 +115,8 @@ struct Decision {
     from: Account,
     to: Option<Account>,
     why: Option<Why>,
+    /// The rest of the ranked list, tried in order when `to` refuses.
+    fallbacks: Vec<super::rank::Ranked>,
     reason: Reason,
     percent: Option<f64>,
     confidence: Confidence,
@@ -137,6 +139,10 @@ pub struct Engine<H: Host> {
     db: Arc<Database>,
     host: H,
     inner: Mutex<Inner>,
+    /// One pass at a time. The clock, a finished turn, an answer and a manual
+    /// switch each run a pass from their own thread, and a relay takes
+    /// seconds: two passes would move the same session twice.
+    run: Mutex<()>,
 }
 
 /// A window of the session's account that tripped the trigger.
@@ -192,7 +198,7 @@ fn available_at(c: &Candidate, now_ms: i64) -> Option<i64> {
 
 impl<H: Host> Engine<H> {
     pub fn new(db: Arc<Database>, host: H) -> Self {
-        Engine { db, host, inner: Mutex::new(Inner::default()) }
+        Engine { db, host, inner: Mutex::new(Inner::default()), run: Mutex::new(()) }
     }
 
     fn accounts(&self) -> Vec<Account> {
@@ -201,6 +207,7 @@ impl<H: Host> Engine<H> {
 
     /// Probe on the clock, then decide and act.
     pub fn tick(&self, now_ms: i64) {
+        let _run = self.run.lock();
         let accounts = self.accounts();
         if accounts.is_empty() {
             return;
@@ -223,9 +230,17 @@ impl<H: Host> Engine<H> {
 
     /// A session's agent finished a turn: the safe point for a pending move.
     pub fn turn_ended_at(&self, session_id: &str, now_ms: i64) {
+        let _run = self.run.lock();
         self.inner.lock().turn_ended.insert(session_id.to_string());
         let live = self.host.live_sessions();
         self.advance(now_ms, &live);
+    }
+
+    /// The agent is working again, so the last finished turn is no longer a
+    /// safe point. `Idle` alone cannot say this: it means only a moment of
+    /// quiet, which happens between frames of a running turn.
+    pub fn turn_started(&self, session_id: &str) {
+        self.inner.lock().turn_ended.remove(session_id);
     }
 
     fn next_id(&self) -> String {
@@ -242,6 +257,22 @@ impl<H: Host> Engine<H> {
             .map(|a| candidate_for(&self.db, a, root, now_ms))
             .collect();
         rank(now_ms, from, trigger, candidates)
+    }
+
+    /// The ranked destinations every one of these folders can move to: a
+    /// destination that has not trusted one of them would park that session
+    /// on Claude Code's trust screen.
+    fn rank_for_all(&self, from: &Account, roots: &[Option<std::path::PathBuf>], trigger: &Trigger, now_ms: i64) -> Vec<super::rank::Ranked> {
+        let mut ranked = self.rank_for(from, roots.first().and_then(|r| r.as_deref()), trigger, now_ms);
+        for root in roots.iter().skip(1) {
+            let fits: HashSet<String> = self
+                .rank_for(from, root.as_deref(), trigger, now_ms)
+                .into_iter()
+                .map(|r| r.account.id)
+                .collect();
+            ranked.retain(|r| fits.contains(&r.account.id));
+        }
+        ranked
     }
 
     fn advance(&self, now_ms: i64, live: &[LiveRef]) {
@@ -267,15 +298,26 @@ impl<H: Host> Engine<H> {
             let Some(from) = crate::accounts::get(&self.db, account_id).ok().flatten() else {
                 continue;
             };
+            // Asking would only lead to "could not switch".
+            if from.provider == "codex" && !super::relay::CODEX_RESUME_VERIFIED {
+                continue;
+            }
             let root = sessions[0].project_root.as_deref();
             let Some(trip) = tripped(&candidate_for(&self.db, &from, root, now_ms), trigger) else {
                 continue;
             };
-            let key: Key = (from.id.clone(), trip.window.to_string(), trip.resets_at_ms, trip.reason.id());
+            let key: Key = (
+                from.id.clone(),
+                trip.window.to_string(),
+                trip.resets_at_ms.map(crate::accounts::quota::reset_key),
+                trip.reason.id(),
+            );
             if self.inner.lock().settled.contains(&key) {
                 continue;
             }
-            let ranked = self.rank_for(&from, root, trigger, now_ms);
+            let mut roots: Vec<Option<std::path::PathBuf>> = sessions.iter().map(|s| s.project_root.clone()).collect();
+            roots.dedup();
+            let mut ranked = self.rank_for_all(&from, &roots, trigger, now_ms).into_iter();
             let session_ids: Vec<String> = sessions.iter().map(|s| s.session_id.clone()).collect();
             let id = self.next_id();
             let mut decision = Decision {
@@ -284,6 +326,7 @@ impl<H: Host> Engine<H> {
                 from: from.clone(),
                 to: None,
                 why: None,
+                fallbacks: Vec::new(),
                 reason: trip.reason,
                 percent: trip.percent,
                 confidence: trip.confidence,
@@ -292,10 +335,11 @@ impl<H: Host> Engine<H> {
                 failed: None,
                 stage: Stage::Approved,
             };
-            match ranked.into_iter().next() {
+            match ranked.next() {
                 Some(best) => {
                     decision.to = Some(best.account.clone());
                     decision.why = Some(best.why.clone());
+                    decision.fallbacks = ranked.collect();
                     if mode == Mode::Ask {
                         decision.stage = Stage::Asking;
                         self.host.emit(RotationEvent::Ask {
@@ -316,7 +360,7 @@ impl<H: Host> Engine<H> {
                 None if trip.reason == Reason::NearLimit => continue,
                 None => {
                     let (next_account_id, next_reset_ms) = self.next_available(&from, root, now_ms);
-                    decision.stage = Stage::AllExhausted { next_reset_ms };
+                    decision.stage = Stage::AllExhausted { next_account_id: next_account_id.clone(), next_reset_ms };
                     self.host.emit(RotationEvent::AllExhausted {
                         decision_id: id,
                         session_ids,
@@ -358,7 +402,7 @@ impl<H: Host> Engine<H> {
             .cloned()
             .collect();
         for mut decision in approved {
-            let Some(to) = decision.to.clone() else { continue };
+            let Some(mut to) = decision.to.clone() else { continue };
             let pending: Vec<String> = decision
                 .sessions
                 .iter()
@@ -366,10 +410,15 @@ impl<H: Host> Engine<H> {
                 .cloned()
                 .collect();
             let mut remaining = Vec::new();
+            let mut stranded = Vec::new();
+            let mut last_error = None;
             for session_id in pending {
                 let Some(session) = live.iter().find(|s| s.session_id == session_id) else {
                     continue; // ended meanwhile
                 };
+                if session.account_id != decision.from.id {
+                    continue; // moved by other means meanwhile
+                }
                 let ready = decision.reason != Reason::NearLimit
                     || (session.idle && self.inner.lock().turn_ended.contains(&session_id));
                 if !ready {
@@ -377,10 +426,57 @@ impl<H: Host> Engine<H> {
                     continue;
                 }
                 self.inner.lock().turn_ended.remove(&session_id);
-                match self.host.relay(&session_id, &to, decision.reason) {
-                    Ok(()) => decision.moved.push(session_id),
-                    Err(code) => decision.failed = Some(code),
+                // A refusal moves on down the ranked list (spec §7.2).
+                loop {
+                    match self.host.relay(&session_id, &to, decision.reason) {
+                        Ok(()) => {
+                            decision.moved.push(session_id.clone());
+                            break;
+                        }
+                        Err(code) => {
+                            last_error = Some(code);
+                            if decision.fallbacks.is_empty() {
+                                stranded.push(session_id.clone());
+                                break;
+                            }
+                            let next = decision.fallbacks.remove(0);
+                            to = next.account;
+                            decision.to = Some(to.clone());
+                            decision.why = Some(next.why);
+                        }
+                    }
                 }
+            }
+            if !stranded.is_empty() {
+                decision.failed = last_error;
+            }
+            if !stranded.is_empty() && decision.reason == Reason::Exhausted {
+                // Every destination refused a session that cannot go on where
+                // it is: announce what moved, then wait for a reset.
+                self.announce(&decision, &to);
+                let root = live
+                    .iter()
+                    .find(|s| stranded.contains(&s.session_id))
+                    .and_then(|s| s.project_root.clone());
+                let (next_account_id, next_reset_ms) = self.next_available(&decision.from, root.as_deref(), now_ms);
+                let id = self.next_id();
+                {
+                    let mut inner = self.inner.lock();
+                    if let Some(slot) = inner.decisions.iter_mut().find(|d| d.id == decision.id) {
+                        slot.id = id.clone();
+                        slot.sessions = stranded.clone();
+                        slot.moved.clear();
+                        slot.failed = None;
+                        slot.stage = Stage::AllExhausted { next_account_id: next_account_id.clone(), next_reset_ms };
+                    }
+                }
+                self.host.emit(RotationEvent::AllExhausted {
+                    decision_id: id,
+                    session_ids: stranded,
+                    next_account_id,
+                    next_reset_ms,
+                });
+                continue;
             }
             decision.sessions = decision
                 .moved
@@ -405,6 +501,11 @@ impl<H: Host> Engine<H> {
             inner.decisions.retain(|d| d.id != decision.id);
             inner.settled.insert(decision.key.clone());
         }
+        self.announce(decision, to);
+    }
+
+    /// Tell the surface what moved and what could not.
+    fn announce(&self, decision: &Decision, to: &Account) {
         if !decision.moved.is_empty() {
             // New work should not start on the account that just ran low.
             if decision.from.active {
@@ -428,20 +529,27 @@ impl<H: Host> Engine<H> {
             });
         }
         if let Some(code) = &decision.failed {
+            // Its own card: a partial success must not be replaced by it.
             self.host.emit(RotationEvent::Failed {
-                decision_id: decision.id.clone(),
+                decision_id: format!("{}-failed", decision.id),
                 code: code.clone(),
             });
         }
     }
 
     fn wake_waiting(&self, now_ms: i64, live: &[LiveRef], trigger: &Trigger) {
+        // An unanswered "all out" question resolves itself once quota is back:
+        // an unattended autopilot must not stay held past the reset.
         let due: Vec<Decision> = self
             .inner
             .lock()
             .decisions
             .iter()
-            .filter(|d| matches!(d.stage, Stage::Waiting { until_ms } if now_ms >= until_ms))
+            .filter(|d| match d.stage {
+                Stage::Waiting { until_ms } => now_ms >= until_ms,
+                Stage::AllExhausted { next_reset_ms: Some(reset), .. } => now_ms >= reset + RESET_MARGIN_MS,
+                _ => false,
+            })
             .cloned()
             .collect();
         for decision in due {
@@ -459,49 +567,71 @@ impl<H: Host> Engine<H> {
                 .cloned()
                 .collect();
             let own = candidate_for(&self.db, &decision.from, root.as_deref(), now_ms);
+            let mut failed: Vec<String> = Vec::new();
+            let mut last_error = None;
             let resumed_on = if tripped(&own, &Trigger::Exhausted).is_none() {
                 for session in &sessions {
                     self.host.nudge(session);
                 }
                 Some(decision.from.id.clone())
-            } else if let Some(best) =
-                self.rank_for(&decision.from, root.as_deref(), &Trigger::Exhausted, now_ms).into_iter().next()
-            {
-                for session in &sessions {
-                    let _ = self.host.relay(session, &best.account, Reason::ResumeAfterWait);
-                }
-                if decision.from.active {
-                    let _ = crate::accounts::switch::set_active(&self.db, &best.account.id);
-                }
-                Some(best.account.id)
             } else {
-                None
+                let ranked = self.rank_for(&decision.from, root.as_deref(), &Trigger::Exhausted, now_ms);
+                let mut landed = None;
+                for session in &sessions {
+                    let mut moved = false;
+                    for candidate in &ranked {
+                        match self.host.relay(session, &candidate.account, Reason::ResumeAfterWait) {
+                            Ok(()) => {
+                                landed.get_or_insert_with(|| candidate.account.id.clone());
+                                moved = true;
+                                break;
+                            }
+                            Err(code) => last_error = Some(code),
+                        }
+                    }
+                    if !moved {
+                        failed.push(session.clone());
+                    }
+                }
+                if let Some(account_id) = &landed {
+                    if decision.from.active {
+                        let _ = crate::accounts::switch::set_active(&self.db, account_id);
+                    }
+                }
+                landed
             };
             let _ = trigger;
-            match resumed_on {
-                Some(account_id) => {
-                    {
-                        let mut inner = self.inner.lock();
-                        inner.decisions.retain(|d| d.id != decision.id);
-                        inner.settled.insert(decision.key.clone());
-                    }
-                    self.host.emit(RotationEvent::Resumed {
-                        decision_id: decision.id.clone(),
-                        account_id,
-                    });
-                }
-                None => {
-                    // Still nothing: wait for the next stated reset.
-                    let (_, next) = self.next_available(&decision.from, root.as_deref(), now_ms);
-                    let until_ms = next.unwrap_or(now_ms + IDLE_PROBE_MS).max(now_ms) + RESET_MARGIN_MS;
-                    let mut inner = self.inner.lock();
-                    if let Some(slot) = inner.decisions.iter_mut().find(|d| d.id == decision.id) {
-                        slot.stage = Stage::Waiting { until_ms };
-                    }
-                    drop(inner);
-                    self.host.emit(RotationEvent::Waiting { decision_id: decision.id.clone(), until_ms });
-                }
+            if let Some(code) = last_error.filter(|_| !failed.is_empty()) {
+                self.host.emit(RotationEvent::Failed {
+                    decision_id: format!("{}-failed", decision.id),
+                    code,
+                });
             }
+            if let Some(account_id) = resumed_on.filter(|_| failed.is_empty()) {
+                {
+                    let mut inner = self.inner.lock();
+                    inner.decisions.retain(|d| d.id != decision.id);
+                    inner.settled.insert(decision.key.clone());
+                }
+                self.host.emit(RotationEvent::Resumed {
+                    decision_id: decision.id.clone(),
+                    account_id,
+                });
+                continue;
+            }
+            // Still nowhere to go (or it refused): wait for the next stated
+            // reset, keeping only the sessions that did not move.
+            let (_, next) = self.next_available(&decision.from, root.as_deref(), now_ms);
+            let until_ms = next.filter(|t| *t > now_ms).unwrap_or(now_ms + IDLE_PROBE_MS) + RESET_MARGIN_MS;
+            let mut inner = self.inner.lock();
+            if let Some(slot) = inner.decisions.iter_mut().find(|d| d.id == decision.id) {
+                if !failed.is_empty() {
+                    slot.sessions = failed;
+                }
+                slot.stage = Stage::Waiting { until_ms };
+            }
+            drop(inner);
+            self.host.emit(RotationEvent::Waiting { decision_id: decision.id.clone(), until_ms });
         }
     }
 
@@ -546,7 +676,7 @@ impl<H: Host> Engine<H> {
             inner.settled.insert(decision.key);
             return Ok(());
         }
-        let Stage::AllExhausted { next_reset_ms } = inner.decisions[index].stage else {
+        let Stage::AllExhausted { next_reset_ms, .. } = inner.decisions[index].stage else {
             unreachable!()
         };
         let until_ms = next_reset_ms.unwrap_or(0) + RESET_MARGIN_MS;
@@ -571,6 +701,7 @@ impl<H: Host> Engine<H> {
 
     /// Move one session now, at the person's request. `active` is untouched.
     pub fn switch_now(&self, session_id: &str, to: &Account) -> Result<(), String> {
+        let _run = self.run.lock();
         let from = self
             .host
             .live_sessions()
@@ -578,8 +709,22 @@ impl<H: Host> Engine<H> {
             .find(|s| s.session_id == session_id)
             .and_then(|s| crate::accounts::get(&self.db, &s.account_id).ok().flatten())
             .ok_or_else(|| "rotation.sessionNotLive".to_string())?;
-        self.host.relay(session_id, to, Reason::Manual)?;
+        if from.id == to.id {
+            return Err("rotation.sameAccount".into());
+        }
         let id = self.next_id();
+        if let Err(code) = self.host.relay(session_id, to, Reason::Manual) {
+            self.host.emit(RotationEvent::Failed { decision_id: id, code: code.clone() });
+            return Err(code);
+        }
+        // The session is no longer where any pending decision found it.
+        {
+            let mut inner = self.inner.lock();
+            for decision in inner.decisions.iter_mut() {
+                decision.sessions.retain(|s| s != session_id);
+            }
+            inner.decisions.retain(|d| !d.sessions.is_empty());
+        }
         self.host.emit(RotationEvent::Switched {
             decision_id: id,
             from_account_id: from.id,
@@ -601,8 +746,44 @@ impl<H: Host> Engine<H> {
         let Some(from) = crate::accounts::get(&self.db, &session.account_id).ok().flatten() else {
             return Vec::new();
         };
+        if from.provider == "codex" && !super::relay::CODEX_RESUME_VERIFIED {
+            return Vec::new();
+        }
         let trigger = policy(&self.db).trigger;
         self.rank_for(&from, session.project_root.as_deref(), &trigger, now_ms)
+    }
+
+    /// The questions and waits still open, as the events that opened them —
+    /// for a screen that loads after they were emitted.
+    pub fn pending(&self) -> Vec<RotationEvent> {
+        self.inner
+            .lock()
+            .decisions
+            .iter()
+            .filter_map(|d| match &d.stage {
+                Stage::Asking => Some(RotationEvent::Ask {
+                    decision_id: d.id.clone(),
+                    from_account_id: d.from.id.clone(),
+                    to_account_id: d.to.as_ref()?.id.clone(),
+                    session_ids: d.sessions.clone(),
+                    reason: d.reason.id().into(),
+                    percent: d.percent,
+                    confidence: d.confidence,
+                    resets_at_ms: d.why.as_ref().and_then(reset_of),
+                }),
+                Stage::AllExhausted { next_account_id, next_reset_ms } => Some(RotationEvent::AllExhausted {
+                    decision_id: d.id.clone(),
+                    session_ids: d.sessions.clone(),
+                    next_account_id: next_account_id.clone(),
+                    next_reset_ms: *next_reset_ms,
+                }),
+                Stage::Waiting { until_ms } => Some(RotationEvent::Waiting {
+                    decision_id: d.id.clone(),
+                    until_ms: *until_ms,
+                }),
+                Stage::Approved => None,
+            })
+            .collect()
     }
 }
 
@@ -721,6 +902,17 @@ pub fn turn_ended(session_id: &str) {
         let session_id = session_id.to_string();
         std::thread::spawn(move || engine.turn_ended_at(&session_id, now_ms()));
     }
+}
+
+/// Called by the transcript tailer for anything but a finished turn.
+pub fn turn_started(session_id: &str) {
+    if let Some(engine) = engine() {
+        engine.turn_started(session_id);
+    }
+}
+
+pub fn pending() -> Vec<RotationEvent> {
+    engine().map(|engine| engine.pending()).unwrap_or_default()
 }
 
 pub fn holds(session_id: &str) -> bool {

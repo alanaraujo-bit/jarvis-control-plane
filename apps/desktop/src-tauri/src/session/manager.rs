@@ -250,6 +250,17 @@ impl LiveSession {
     /// exit, but does not stop the log writer, tell the notification watcher
     /// the session ended, or mark it finished. Then the new process starts at
     /// the same terminal size on a new pump feeding the same log.
+    /// End the session when a replacement left it with no process (M26): the
+    /// end its pump would have recorded, so nothing reads it as still running.
+    pub fn end_without_process(&self) {
+        self.stopped.store(true, Ordering::SeqCst);
+        *self.state.lock() = SessionState::Failed;
+        if let Some(watch) = self.watch.lock().as_ref() {
+            let _ = watch.send(crate::notify::watch::Beat::Exited(Some(1)));
+        }
+        let _ = self.log_tx.send(LogCommand::Stop);
+    }
+
     pub fn replace_process(&self, options: PtyOptions) -> Result<()> {
         self.replace_process_with(options, || Ok(())).map_err(SessionError::Refused)
     }
@@ -277,6 +288,10 @@ impl LiveSession {
             std::thread::sleep(Duration::from_millis(50));
         }
         prepare()?;
+        // Closed while the old process was going down: start nothing for it.
+        if self.stopped.load(Ordering::SeqCst) {
+            return Err("session.stopped".into());
+        }
 
         let (cols, rows) = *self.size.lock();
         let relaunched = Lifecycle::Relaunched {

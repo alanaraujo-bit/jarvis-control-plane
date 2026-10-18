@@ -173,6 +173,12 @@ pub fn rotation_cancel_wait(decision_id: String) -> Result<(), String> {
     super::engine::cancel_wait(&decision_id)
 }
 
+/// Open questions and waits, for a screen that loads after they were asked.
+#[tauri::command]
+pub fn rotation_pending() -> Vec<super::engine::RotationEvent> {
+    super::engine::pending()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
