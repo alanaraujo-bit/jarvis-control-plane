@@ -1210,6 +1210,8 @@ export const ptBR: Record<MessageKey, string> = {
   "rotation.switched.sessions": "{count} sessões",
   "rotation.resumed": "A cota voltou — continuando em {account}",
   "rotation.failed": "Não foi possível trocar de conta. A sessão ficou onde estava.",
+  "rotation.failed.lost": "Não foi possível trocar de conta, nem retomar a sessão. Ela foi encerrada.",
+  "rotation.failed.notYet": "Ainda não há o que mover: esta sessão não começou a conversa.",
   "rotation.dismiss": "Fechar",
   "session.quota.label": "Cota desta sessão",
   "session.quota.session": "5h",
@@ -1235,4 +1237,5 @@ export const ptBR: Record<MessageKey, string> = {
   "session.quota.switching": "Trocando…",
   "session.quota.noAccount": "Nenhuma conta registrada",
   "activity.kind.account.relayed": "Moveu uma sessão para outra conta",
+  "activity.kind.account.relayFailed": "Não conseguiu mover uma sessão para outra conta",
 };

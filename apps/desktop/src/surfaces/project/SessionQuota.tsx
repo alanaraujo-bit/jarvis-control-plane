@@ -117,6 +117,8 @@ export function SessionQuota({ sessionId }: { sessionId: string }) {
     setSwitching(accountId);
     try {
       await invoke("session_switch_account", { sessionId, accountId });
+    } catch {
+      // The rotation card says what went wrong (the core emits `failed`).
     } finally {
       setSwitching(null);
       setOpen(false);

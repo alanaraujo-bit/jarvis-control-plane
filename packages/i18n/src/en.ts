@@ -1291,6 +1291,8 @@ export const en = {
   "rotation.switched.sessions": "{count} sessions",
   "rotation.resumed": "Quota is back — continuing on {account}",
   "rotation.failed": "Could not switch accounts. The session stayed where it was.",
+  "rotation.failed.lost": "Could not switch accounts, and the session could not be resumed either. It has ended.",
+  "rotation.failed.notYet": "Nothing to move yet: this session has not started its conversation.",
   "rotation.dismiss": "Dismiss",
   "session.quota.label": "Quota for this session",
   "session.quota.session": "5h",
@@ -1316,6 +1318,7 @@ export const en = {
   "session.quota.switching": "Switching…",
   "session.quota.noAccount": "No account registered",
   "activity.kind.account.relayed": "Moved a session to another account",
+  "activity.kind.account.relayFailed": "Could not move a session to another account",
 } as const;
 
 export type MessageKey = keyof typeof en;

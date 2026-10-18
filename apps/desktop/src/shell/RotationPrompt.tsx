@@ -64,6 +64,10 @@ export function RotationPrompt() {
         void load("cached");
       }).then((stop) => (unlisten = stop)),
     );
+    // Questions asked before this screen loaded still need an answer.
+    void invoke<RotationEvent[]>("rotation_pending")
+      .then((pending) => setItems((current) => pending.reduce(fold, current)))
+      .catch(() => undefined);
     return () => unlisten?.();
   }, [load]);
 
@@ -208,7 +212,15 @@ export function RotationPrompt() {
               <div key={item.decisionId} className="rotation-card" data-kind="failed" role="status">
                 <ArrowLeftRight size={15} aria-hidden="true" className="rotation-card__icon" />
                 <div className="rotation-card__text">
-                  <strong>{t("rotation.failed")}</strong>
+                  <strong>
+                    {t(
+                      item.code === "accounts.sessionLost"
+                        ? "rotation.failed.lost"
+                        : item.code === "accounts.transcriptMissing"
+                          ? "rotation.failed.notYet"
+                          : "rotation.failed",
+                    )}
+                  </strong>
                 </div>
                 <Dismiss onClick={() => drop(item.decisionId)} label={t("rotation.dismiss")} />
               </div>
