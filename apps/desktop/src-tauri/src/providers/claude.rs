@@ -103,15 +103,27 @@ fn home() -> Option<PathBuf> {
 /// **Nothing here ever writes trust.** Marking a folder trusted is a security
 /// decision that belongs to the person, in the other product's own interface.
 pub fn folder_is_trusted(cwd: &Path) -> Option<bool> {
-    let root = home()?.join(".claude");
-    folder_is_trusted_in(&root, true, cwd)
+    // With no `CLAUDE_CONFIG_DIR`, Claude Code keeps its config in the home
+    // directory itself, not under `.claude/`. Measured (M29): `~/.claude.json`
+    // held 16 projects; `~/.claude/.claude.json` held none, and reading it
+    // reported every folder as unknown.
+    trusted_file(&home()?.join(".claude.json"), cwd)
 }
 
 /// Account-scoped trust lookup. Every registered account uses an explicit
 /// `CLAUDE_CONFIG_DIR`; `adopted` describes its origin, not its runtime path.
 pub fn folder_is_trusted_in(config_dir: &Path, _adopted: bool, cwd: &Path) -> Option<bool> {
-    let config = config_dir.join(".claude.json");
-    trusted_in(&std::fs::read_to_string(config).ok()?, cwd)
+    trusted_file(&config_dir.join(".claude.json"), cwd)
+}
+
+/// A config that does not exist has never had a folder trusted in it: Claude
+/// Code will ask. Any other failure to read it is unknown.
+fn trusted_file(config: &Path, cwd: &Path) -> Option<bool> {
+    match std::fs::read_to_string(config) {
+        Ok(text) => trusted_in(&text, cwd),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(false),
+        Err(_) => None,
+    }
 }
 
 /// The lookup itself, separated so it can be tested against captured config.
@@ -122,7 +134,13 @@ pub fn folder_is_trusted_in(config_dir: &Path, _adopted: bool, cwd: &Path) -> Op
 /// mismatch here silently reports every folder as untrusted.
 pub fn trusted_in(config_json: &str, cwd: &Path) -> Option<bool> {
     let value: Value = serde_json::from_str(config_json).ok()?;
-    let projects = value.get("projects")?.as_object()?;
+    let config = value.as_object()?;
+    // A real config with no `projects` is one that never opened a folder — it
+    // will ask about this one (measured, M29). Only a malformed file is unknown.
+    let Some(projects) = config.get("projects") else {
+        return Some(false);
+    };
+    let projects = projects.as_object()?;
 
     let normalise = |text: &str| {
         let flattened = text.replace('\\', "/");
@@ -353,6 +371,33 @@ pub fn parse_line(line: &str) -> Vec<ConversationItem> {
             text: truncate(text, MAX_TITLE_CHARS),
             ts_ms: crate::session::log::now_ms(),
         }];
+    }
+
+    // A message the person sent while the agent was working is folded into
+    // the running turn and recorded **only** as this attachment — never as a
+    // `user` line. Measured (M29): 42 such messages across this machine's
+    // transcripts, none duplicated as a `user` line, all of them missing from
+    // Conversation View and search until now. `task-notification` entries in
+    // the same shape are background-task chatter, not a person speaking.
+    if let Some(attachment) = value.get("attachment").filter(|_| value.get("type").and_then(Value::as_str) == Some("attachment")) {
+        let queued = attachment.get("type").and_then(Value::as_str) == Some("queued_command")
+            && attachment.get("commandMode").and_then(Value::as_str) == Some("prompt");
+        if queued {
+            let text = match attachment.get("prompt") {
+                Some(prompt @ Value::Array(_)) => content_text(prompt),
+                Some(Value::String(text)) => text.clone(),
+                _ => String::new(),
+            };
+            let ts_ms = value
+                .get("timestamp")
+                .or_else(|| attachment.get("timestamp"))
+                .and_then(Value::as_str)
+                .and_then(parse_timestamp)
+                .unwrap_or(0);
+            if !text.trim().is_empty() {
+                return vec![ConversationItem::Message { role: Role::User, text, ts_ms, usage: None }];
+            }
+        }
     }
 
     if is_internal_noise(&value) {
@@ -704,6 +749,22 @@ mod tests {
             parse_line(typed).as_slice(),
             [ConversationItem::Message { role: Role::User, .. }]
         ));
+    }
+
+    /// Trimmed from a real 2.1.302 transcript (M29): the second of two
+    /// messages sent back to back, absorbed into the running turn.
+    #[test]
+    fn a_message_sent_mid_turn_is_the_person_speaking() {
+        let queued = r#"{"parentUuid":"a8537bae","isSidechain":false,"attachment":{"type":"queued_command","prompt":"Then reply with the single word: done","source_uuid":"f2c54062","commandMode":"prompt","timestamp":"2026-10-18T22:16:52.281Z"},"type":"attachment","uuid":"973a961a","timestamp":"2026-10-18T22:16:58.000Z"}"#;
+        match parse_line(queued).as_slice() {
+            [ConversationItem::Message { role: Role::User, text, ts_ms, .. }] => {
+                assert_eq!(text, "Then reply with the single word: done");
+                assert_eq!(*ts_ms, parse_timestamp("2026-10-18T22:16:58.000Z").unwrap());
+            }
+            other => panic!("expected the person's message, got {other:?}"),
+        }
+        let task = r#"{"attachment":{"type":"queued_command","prompt":"<task-notification>done</task-notification>","commandMode":"task-notification"},"type":"attachment","timestamp":"2026-10-18T22:16:58.000Z"}"#;
+        assert!(parse_line(task).is_empty(), "a background task's notice is not a person speaking");
     }
 
     #[test]
@@ -1356,7 +1417,22 @@ mod folder_trust {
     #[test]
     fn an_unreadable_config_is_unknown_rather_than_untrusted() {
         assert_eq!(trusted_in("not json at all", Path::new("C:/x")), None);
-        // No `projects` object at all: this is not a config we understand.
-        assert_eq!(trusted_in("{}", Path::new("C:/x")), None);
+        assert_eq!(trusted_in("[]", Path::new("C:/x")), None, "not a config object");
+        assert_eq!(trusted_in(r#"{"projects":[]}"#, Path::new("C:/x")), None, "not the shape we know");
+    }
+
+    /// Measured on this machine (M29): a real config that never opened a
+    /// folder has no `projects` at all, and Claude Code asks about every
+    /// folder. Reading that as unknown let a chat start, unasked, anywhere.
+    #[test]
+    fn a_config_that_never_opened_a_folder_trusts_none() {
+        let fresh = r#"{"firstStartTime":"2026-08-21T10:00:00.000Z","userID":"x","migrationVersion":12}"#;
+        assert_eq!(trusted_in(fresh, Path::new("C:/x")), Some(false));
+    }
+
+    #[test]
+    fn a_config_directory_with_no_config_has_trusted_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(folder_is_trusted_in(dir.path(), false, Path::new("C:/x")), Some(false));
     }
 }
