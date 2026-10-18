@@ -222,6 +222,20 @@ pub fn account_set_active(state: State<'_, AppState>, account_id: String) -> Res
 }
 
 #[tauri::command]
+pub fn account_rotation_policy(state: State<'_, AppState>) -> super::rotation::policy::Policy {
+    super::rotation::policy::policy(&state.db)
+}
+
+#[tauri::command]
+pub fn account_set_rotation_policy(
+    state: State<'_, AppState>,
+    policy: super::rotation::policy::Policy,
+) -> Result<super::rotation::policy::Policy> {
+    super::rotation::policy::set_policy(&state.db, policy)?;
+    Ok(super::rotation::policy::policy(&state.db))
+}
+
+#[tauri::command]
 pub fn account_set_auto_switch(state: State<'_, AppState>, policy: AutoSwitchPolicy) -> Result<()> {
     super::switch::set_policy(&state.db, policy)
 }

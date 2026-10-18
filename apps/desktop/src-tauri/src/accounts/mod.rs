@@ -37,6 +37,7 @@
 pub mod commands;
 pub mod live;
 pub mod quota;
+pub mod rotation;
 pub mod switch;
 
 #[cfg(test)]
