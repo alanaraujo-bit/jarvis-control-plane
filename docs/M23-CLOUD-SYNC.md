@@ -1,5 +1,10 @@
 # M23 — Sync que sobrevive a uma reinstalação
 
+> **2026-10-18:** ampliado e corrigido pelo M27 ([M27-ACCOUNT-SYNC.md](M27-ACCOUNT-SYNC.md)).
+> O servidor e o banco `jarvis-social` foram apagados; o serviço vive agora no
+> projeto Railway `jarvis-account-sync`. E as notas nunca voltavam num pull:
+> o servidor gravava `deletedAt: null` como `0`.
+
 ## O problema, medido
 
 Auditoria em 2026-08-27 contra o Postgres de produção (`jarvis-social`):

@@ -2264,3 +2264,39 @@ destination refuses, the copy goes back and the original account resumes.
 - An exit within 5 s is the only refusal signal. A destination that parks on a
   login screen without exiting reads as a success. Trust and first run are
   checked beforehand for exactly that reason.
+
+
+## D52 — Everything a person sets up follows the account, as documents
+**Date:** 2026-10-18 (M27, widens M23)
+
+Alan reinstalled, signed in, and nothing came back. Two causes: the account
+server had been deleted along with its database, and most of what a person sets
+up was never carried in the first place.
+
+1. **One generic last-write-wins document sync** (`identity_documents` on the
+   server, `identity/documents.rs` on the desktop) carries everything new: extra
+   settings, projects, project notes and knowledge, guardrail policies and the
+   provider-account registry. The kinds and setting keys are closed lists on
+   both sides. One endpoint per table was the alternative, and each one would
+   have needed its own clock, tombstones and conflict rule.
+2. **A local ledger supplies the clock.** None of those tables can say when a row
+   last changed in a way two machines can compare. `sync_documents` hashes what
+   is there on each push, so the tables stay untouched. Remote documents apply
+   only when newer. A document this machine cannot represent yet (a project
+   whose folder is missing) is held and retried, and is never tombstoned.
+3. **Logins still never leave the machine** (AGENTS.md non-negotiable). The
+   provider-account registry travels, so the accounts reappear signed out with
+   an empty directory. The server refuses any provider-account field beyond the
+   registry, so not even a bug can upload a credential. A copied or
+   machine-adopted account is not carried.
+4. **Deletions that would destroy something are not applied from the account.**
+   An account tombstone never deletes a local account. A project tombstone
+   archives the project and never unregisters it.
+5. **The same person under a new server id is the same person.** Recreating a
+   lost account gives it a new id. Owner markers move when the e-mail matches,
+   so the notebook is not wiped as if a stranger had signed in.
+6. **Sync reports itself.** Every call records its outcome, and Settings ->
+   Account shows it. Failing silently is what let a deleted server go unnoticed.
+
+**Not carried, deliberately:** sessions, transcripts, usage and analytics,
+missions, onboarding, relay pairing.

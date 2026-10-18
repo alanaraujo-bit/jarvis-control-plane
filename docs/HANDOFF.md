@@ -432,6 +432,14 @@ a question that never came once another account freed up, an approved move that
 never happened because Claude writes the title *after* the turn ends, and no
 Codex session starting at all on this machine (items 69 and 71).
 
+*Everything follows the account (M27), in the dev build on a fresh
+identifier.* Set up a prompt, a project with a note and knowledge, rotation,
+autonomy and a Claude account; deleted the whole data directory and the
+webview's storage; signed in again: all of it came back, the Claude account
+signed out with "Sign in". The account server had been deleted along with its
+database, and the cloud sync had been failing silently since — Settings ->
+Account now says whether this machine is saving.
+
 ### Not built — deliberately absent, not stubbed
 
 Push notification (needs a developer account), and starting a mission from
@@ -1134,6 +1142,23 @@ Every one of these is real and already cost time.
     that has never run a session may not receive it. Open one session on a new
     Codex account first, the same advice as Claude's first run.
 
+73. **`Number(null)` is 0, and 0 is a timestamp.** The notebook sync stored
+    `deletedAt: null` through `Number()`, so every note was "deleted at the
+    epoch" and no prompt ever came back on a pull — for weeks, unnoticed,
+    because a pull that restores nothing looks like a pull with nothing to
+    restore. Parse nullable clocks with a type check (`deletedAtOf`), never with
+    `Number()`.
+
+74. **A sync that fails silently hides a dead server.** The account server and
+    its database were deleted from Railway and nothing on screen changed. Every
+    call to the server now records its outcome (`sync.status`) and Settings ->
+    Account shows it. When a cloud feature "does nothing", read that line before
+    the code.
+
+75. **`<html lang>` is read as the interface language.** `index.html` ships
+    `lang="en"`; until the i18n provider set it on mount, sign-up adopted
+    English for every account whatever the screen showed.
+
 ---
 
 ## 6. Commands
@@ -1207,9 +1232,12 @@ close the app and delete the whole db file, there is no in-app reset and no
 Remove-Item "$env:APPDATA\dev.jarvis.desktop\jarvis.db*" -Force
 ```
 
-(The installed app's data directory is `%LOCALAPPDATA%\J.A.R.V.I.S`, not
-`%APPDATA%\dev.jarvis.desktop` — that path is the dev build's own app-data dir,
-named after the Tauri identifier. Confirm which binary you're resetting for.)
+(Corrected in M27: the installed app and the dev build share the identifier
+`dev.jarvis.desktop`, so **both** keep their data in `%APPDATA%\dev.jarvis.desktop`
+— `jarvis.db`, `accounts\`, `whisper\` — and the webview's localStorage in
+`%LOCALAPPDATA%\dev.jarvis.desktop`. `%LOCALAPPDATA%\J.A.R.V.I.S` is only the
+install directory. For QA, pass another identifier with `--config` instead of
+touching that directory.)
 
 Voice dictation (§54) needs `resources/whisper/whisper-cli.exe` and its DLLs
 on disk — `pnpm tauri build --no-bundle` copies them into

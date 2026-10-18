@@ -1,6 +1,8 @@
 # M27 — Everything a person sets up follows their account
 
-**State: in progress (2026-10-18).**
+**State: built and verified (2026-10-18).** Server redeployed and live; the
+desktop changes are local commits until Alan approves a push, and reach his
+installed app only with the next release.
 
 ## Why
 
@@ -80,6 +82,65 @@ accounts.
   the account, the desktop signs up with the same credentials and pushes
   everything it has. That is the path that brings Alan's existing local
   account back onto the new server.
+
+## Found by reinstalling for real
+
+The plan's acceptance 4 (set things up, wipe the data directory, sign in) was
+run three times on a QA identifier against the deployed server. It found five
+bugs that no suite had:
+
+1. **No prompt ever came back, even when the old server was alive.** The
+   notebook route stored `deletedAt: null` as `0` (`Number(null)` is 0), so
+   every note pushed was deleted at the epoch, and a pull restored nothing.
+   `deletedAtOf` keeps null as null, and a boot-time repair turns stored zeros
+   back into "never deleted".
+2. **Every new account was recorded as English.** Sign-up adopts the machine's
+   language from `<html lang>`, which stayed `en` from `index.html` whatever
+   the interface showed. The provider now sets it from the first paint.
+3. **`autonomy.global` is stored as bare text, not JSON.** Settings now travel
+   as the stored text, verbatim.
+4. **A tombstone has no body**, and the server refused one for a provider
+   account, so every later push failed. The status line said so
+   ("serverRefused") on the first try, which is the point of having it.
+5. **Accounts adopted from the machine** were carried and would have been
+   duplicated on each restore, since every installation adopts its own.
+
+## Verified
+
+- Server: `node --test` 6 pass (document validation, tombstones, null
+  deletions); `scripts/e2e-documents.mjs` passed against
+  `https://social-api-production-94d5.up.railway.app` (every kind round-trips,
+  a stale write loses, a tombstone wins, a credential-shaped field is refused).
+- Desktop: `cargo test --lib` 728 pass, including the ledger, restore and
+  same-person tests, each proven by mutation.
+- **The reinstall, end to end** (`dev.jarvis.desktop.m27qa`, screenshots in
+  `.tmp/m27-qa/`): signed up through the auth screen, set a prompt, a project
+  with a note and a knowledge entry, rotation Ask + 77%, autonomy unattended
+  and a Claude account; deleted `%APPDATA%\dev.jarvis.desktop.m27qa` and
+  `%LOCALAPPDATA%\dev.jarvis.desktop.m27qa`; relaunched and signed in through
+  the auth screen. Everything came back in one pass: language pt-BR, theme,
+  the prompt, the project with its note and knowledge, rotation, autonomy, and
+  the Claude account **signed out with "Sign in"**.
+- Settings -> Account shows "Saved to your account · 17:07" with Sync now, in
+  both themes and languages (status icon sampled `#79BF8C` dark, `#387A49`
+  light).
+- `pnpm verify` green; lint at the 51-warning baseline.
+
+## What Alan has to do
+
+1. **Push and release.** His installed app (0.10.0) still points at the
+   deleted server. Nothing changes for him until these commits ship in a new
+   build.
+2. **Sign in again** in the new build. His password account was only on this
+   machine once the old server died; the first sign-in recreates it on the new
+   server (same e-mail and password) and uploads everything.
+3. **Google sign-in** needs the OAuth client id and secret (they lived only in
+   the deleted Railway project) set on the `social-api` service, and the
+   callback `https://social-api-production-94d5.up.railway.app/v1/auth/google/callback`
+   added to the Google Cloud client. Until then the button says it is
+   unavailable.
+4. **Friends** (`social.rs`) used the same deleted database; a friend profile
+   has to be created again.
 
 ## Not in scope
 
