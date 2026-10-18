@@ -4,3 +4,4 @@
 //! relay and engine move it. See `docs/M26-ACCOUNT-ROTATION.md`.
 
 pub mod policy;
+pub mod rank;
