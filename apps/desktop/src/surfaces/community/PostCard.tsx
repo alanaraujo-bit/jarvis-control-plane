@@ -111,10 +111,10 @@ export function PostCard({ post, onChange, onRemove, linked = true }: { post: Po
               </button>
             )}
             <div className="cm-prompt__actions">
-              <button type="button" className="cm-button" disabled={post.savedByMe} onClick={() => void save()}>
+              {!mine && <button type="button" className="cm-button" disabled={post.savedByMe} onClick={() => void save()}>
                 {post.savedByMe ? <BookmarkCheck size={13} aria-hidden="true" /> : <Bookmark size={13} aria-hidden="true" />}
                 {post.savedByMe ? t("community.post.savedToNotebook") : t("community.post.saveToNotebook")}
-              </button>
+              </button>}
               <button type="button" className="cm-button cm-button--ghost" onClick={() => copyText(post.prompt, t("community.post.copied"))}>
                 <Copy size={13} aria-hidden="true" />
                 {t("community.post.copy")}

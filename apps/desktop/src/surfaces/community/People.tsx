@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
-import { useI18n, useT } from "../../app/i18n";
+import { useT } from "../../app/i18n";
 import { social, useCommunity, type Person, type Post } from "./api";
-import { Avatar, Empty, formatCount } from "./parts";
+import { Avatar, Empty } from "./parts";
 import { PostCard } from "./PostCard";
 
 export function PersonRow({ person, compact = false }: { person: Person; compact?: boolean }) {
   const t = useT();
-  const { locale } = useI18n();
   const go = useCommunity((s) => s.go);
   return (
     <button type="button" className="cm-person" data-compact={compact || undefined} onClick={() => go({ kind: "profile", handle: person.handle })}>
@@ -16,7 +15,7 @@ export function PersonRow({ person, compact = false }: { person: Person; compact
         <b>{person.displayName}</b>
         <span className="cm-muted">
           @{person.handle}
-          {person.followers !== undefined && !compact ? ` · ${t("community.people.followers", { count: formatCount(person.followers, locale) })}` : ""}
+          {person.followers !== undefined && !compact ? ` · ${t("community.people.followers", { count: person.followers })}` : ""}
         </span>
         {person.building && !compact && <span className="cm-person__building">{person.building}</span>}
       </span>

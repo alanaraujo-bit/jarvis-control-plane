@@ -21,6 +21,7 @@ import { invoke } from "./app/platform";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
 import { Community } from "./surfaces/community/Community";
+import { useCommunity } from "./surfaces/community/api";
 import { History } from "./surfaces/history/History";
 import { kindOf } from "./surfaces/history/format";
 import { Analytics } from "./surfaces/analytics/Analytics";
@@ -289,6 +290,14 @@ export function App() {
     },
     [openProject, showGlobal],
   );
+
+  // Community notifications reach the rail even when the surface is closed.
+  const communityUnread = useCommunity((s) => s.me?.unread ?? 0);
+  useEffect(() => {
+    void useCommunity.getState().load();
+    const timer = window.setInterval(() => void useCommunity.getState().load(), 120_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // A surface asking to show another one — the notebook handing a prompt to
   // the community composer (M28).
@@ -682,7 +691,7 @@ export function App() {
         <Onboarding onOpenProject={(project) => openProjectDirect(project)} />
       ) : (
         <div className="app__body">
-          <Rail active={surface} available={IMPLEMENTED} onNavigate={goTo} />
+          <Rail active={surface} available={IMPLEMENTED} onNavigate={goTo} unread={{ community: communityUnread }} />
           <div className="app__workbench">
             <ProjectDock
               projects={dockedProjects}

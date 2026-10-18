@@ -1,6 +1,8 @@
 # M28 — The J.A.R.V.I.S. community
 
-**State: in progress (2026-10-18).**
+**State: built and verified (2026-10-18).** The server is deployed; the
+desktop changes are local commits and reach the installed app with the next
+release.
 
 ## Why
 
@@ -102,10 +104,14 @@ building with AI agents, and it uses data only this product has:
   Posts / Prompts / Replies tabs.
 - **Thread:** a post, its replies and a reply box.
 - **People:** search and suggestions.
-- **Activity:** notifications.
+- **Notifications:** follow, like, reply, save. Named "Notifications", not
+  "Activity", because the rail already has an Activity surface. An unread dot
+  sits on the Community rail icon even when the surface is closed.
 - **Create profile:** handle (live availability), name, bio, building, stack,
   and the two visibility choices.
-- **Settings → Community:** visibilities, edit profile, delete profile.
+- **Edit profile** (Community → Profile → Edit): every field, both
+  visibilities, and deleting the community profile. (Settings has no separate
+  Community page: one place to change it is enough.)
 - **Notebook:** "Publish to community" on a note.
 
 ## Acceptance
@@ -122,3 +128,52 @@ building with AI agents, and it uses data only this product has:
    notification, the profile with stats and heatmap, and the public web page.
    Both themes, both languages, pixels sampled.
 4. `pnpm verify` green.
+
+## Verified
+
+- Server: `node --test` 12 pass (profile, post and stats validation,
+  visibility, page escaping); `scripts/e2e-community.mjs` drives two accounts
+  through profiles, a taken handle, visibility of stats and presence, follow,
+  feed, tags, posts, prompts, likes, replies, saves, notifications and read
+  state, search, the public pages (escaped, no followers-only stats), blocks
+  (a blocked person gets 404) and deletion. It passes against
+  `https://social-api-production-94d5.up.railway.app`.
+- Desktop: `cargo test --lib` 730 pass, including the `social_request` path
+  guard and "the snapshot never carries a project name or path".
+- **The app** (`dev.jarvis.desktop.m28qa`; screenshots in `.tmp/m28-qa/`), with
+  a second person driven through the real server:
+  - created a profile through the form (live "Available"), both visibilities
+    on screen;
+  - Discover showed the other person's post and prompt; liked it, saved the
+    prompt (it landed in the notebook with credit and a link), followed them;
+  - their profile showed "Working now · 3 sessions" in amber (sampled
+    `#CE7821`) with an amber ring, "How they build", models and the heatmap
+    with month labels and a legend;
+  - a notebook note went to the composer through "Publish to community" and
+    was published as a prompt; a text post too;
+  - when the other person followed, liked, saved and replied, the rail dot
+    and a "4" appeared, and Notifications listed all four; the reply opened
+    with the original post above it;
+  - dark and light, pt-BR and en; the public page rendered in both schemes
+    (page `#F7F7F5`, card `#FFFFFF` light).
+  - The QA profiles were deleted afterwards. They briefly published this
+    machine's real aggregate stats, read by the analytics backfill.
+- `pnpm verify` green; lint at the 51-warning baseline.
+
+## Found by running it
+
+- Leftover profiles from interrupted e2e runs showed up as suggestions; the
+  script deletes its profiles at the end, and the leftovers were removed.
+- Stats were "waiting" right after creating a profile: the profile opened
+  before the first snapshot landed. Creation now awaits it.
+- A reply notification opened the reply alone; the thread now shows what it
+  answers.
+- "1 followers", "1 likes": singular forms (`_one`) in the app and on the
+  public page.
+- Saving your own prompt into your own notebook was offered; it no longer is.
+
+## Not in scope, still
+
+- A moderation queue for reports (they are stored, `community_reports`).
+- Images and avatars uploads; monograms by design.
+- Postgres integration tests in CI; the e2e script runs against a deployment.

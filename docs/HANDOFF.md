@@ -440,6 +440,13 @@ signed out with "Sign in". The account server had been deleted along with its
 database, and the cloud sync had been failing silently since — Settings ->
 Account now says whether this machine is saving.
 
+*The community (M28), in the dev build on a fresh identifier, with a second
+person driven through the deployed server.* Created a profile, saved someone
+else's prompt into the notebook, followed them, saw their "working now" in
+amber and their build stats, published a notebook prompt, and received a
+follow, a like, a save and a reply as notifications with an unread dot on the
+rail. The public page `/u/<handle>` renders the same profile outside the app.
+
 ### Not built — deliberately absent, not stubbed
 
 Push notification (needs a developer account), and starting a mission from

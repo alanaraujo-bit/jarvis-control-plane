@@ -1016,6 +1016,16 @@ which is correct in isolation either way. See D48 and
 - [x] Verified against the real Claude Code and Codex CLIs and in the app —
       see `docs/M26-ACCOUNT-ROTATION.md`, D51
 
+## M28 — The J.A.R.V.I.S. community (§66 social)  ✅
+- [x] Public profiles tied to the J.A.R.V.I.S. account, with "building now",
+      links, stack and "How they build" (streak, active days, tokens, agent
+      time, models, 26-week heatmap), each with a visibility
+- [x] Follow, feed (Following / Discover, tags), posts and prompts, replies,
+      likes, saves into the notebook, notifications, search, blocks, reports
+- [x] Public web pages `/u/<handle>` and `/p/<id>`
+- [x] Verified end to end against the deployed server and in the app — see
+      `docs/M28-COMMUNITY.md`, D53
+
 ## Next steps
 
 1. Re-verify voice dictation end to end by ear on a real microphone — the

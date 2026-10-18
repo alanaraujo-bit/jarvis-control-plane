@@ -155,8 +155,8 @@ export function ProfileView({ handle }: { handle: string }) {
           <div className="cm-tags">{profile.stack.map((item) => <span key={item} className="cm-chip">{item}</span>)}</div>
         )}
         <div className="cm-profile__counts">
-          <span><b>{formatCount(counts.posts, locale)}</b> {t("community.profile.posts")}</span>
-          <button type="button" className="cm-link" onClick={() => setTab("followers")}><b>{formatCount(counts.followers, locale)}</b> {t("community.profile.followers")}</button>
+          <span><b>{formatCount(counts.posts, locale)}</b> {t("community.profile.posts", { count: counts.posts })}</span>
+          <button type="button" className="cm-link" onClick={() => setTab("followers")}><b>{formatCount(counts.followers, locale)}</b> {t("community.profile.followers", { count: counts.followers })}</button>
           <button type="button" className="cm-link" onClick={() => setTab("following")}><b>{formatCount(counts.following, locale)}</b> {t("community.profile.followingCount")}</button>
           {said && <span className="cm-said" role="status">{said}</span>}
         </div>

@@ -13,6 +13,8 @@ export function Thread({ id }: { id: string }) {
   const [post, setPost] = useState<Post | null>(null);
   const [replies, setReplies] = useState<Post[]>([]);
   const [gone, setGone] = useState(false);
+  // A reply opens with what it answers, so a notification lands in context.
+  const [parent, setParent] = useState<Post | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -21,6 +23,11 @@ export function Thread({ id }: { id: string }) {
         if (!alive) return;
         setPost(answer.post);
         setReplies(answer.replies);
+        if (answer.post.replyTo) {
+          void social<{ post: Post }>("GET", `posts/${answer.post.replyTo}`)
+            .then((up) => alive && setParent(up.post))
+            .catch(() => undefined);
+        }
       })
       .catch(() => alive && setGone(true));
     return () => {
@@ -39,6 +46,11 @@ export function Thread({ id }: { id: string }) {
         <div className="cm-skeleton" aria-busy="true" />
       ) : (
         <>
+          {parent && (
+            <div className="cm-thread__parent">
+              <PostCard post={parent} onChange={setParent} onRemove={() => setParent(null)} />
+            </div>
+          )}
           <div className="cm-card cm-thread__root">
             <PostCard post={post} linked={false} onChange={setPost} onRemove={() => go({ kind: "feed" })} />
           </div>

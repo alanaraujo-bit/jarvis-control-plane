@@ -60,8 +60,9 @@ export function ProfileForm({ existing }: { existing: Profile | null }) {
         presenceVisibility: presence,
       });
       setMe(next);
-      // Shown at once rather than at the next 30-minute tick.
-      if (stats !== "private") void invoke("social_publish_stats").catch(() => undefined);
+      // Shown at once rather than at the next 30-minute tick, and before the
+      // profile opens, or it opens without them.
+      if (stats !== "private") await invoke("social_publish_stats").catch(() => undefined);
       if (existing) {
         setSaved(true);
         window.setTimeout(() => setSaved(false), 2200);

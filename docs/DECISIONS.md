@@ -2300,3 +2300,39 @@ up was never carried in the first place.
 
 **Not carried, deliberately:** sessions, transcripts, usage and analytics,
 missions, onboarding, relay pairing.
+
+
+## D53 — A community about building with agents, not a feed bolted on
+**Date:** 2026-10-18 (M28, replaces the token-based Friends MVP)
+
+1. **One identity.** A community profile belongs to the J.A.R.V.I.S. account
+   and every call uses its session. The separate social account and token
+   are retired.
+2. **What makes it ours:**
+   - a profile shows how someone builds (streak, active days, tokens, agent
+     vs hands-on time, models, a heatmap), published by the core from the
+     local analytics;
+   - prompts are a first-class post that anyone can save into their notebook;
+   - "working now" uses the amber that already means agent work.
+3. **Nothing leaves without a decision.** Stats are aggregate numbers only:
+   the server keeps a closed list of fields and drops anything else, and a
+   test pins that no project name or path is in the snapshot. A prompt leaves
+   only when Publish is pressed. Stats and presence each have a visibility,
+   chosen on screen when the profile is created.
+4. **Follow, not friend requests.** Asymmetric following; "follows you" shows
+   when it is mutual. Followers see what is set to Followers.
+5. **Safety from the first version:**
+   - a block hides both people from each other, and a blocked person gets a
+     404, as if the profile did not exist;
+   - posts can be reported;
+   - posting and following are rate-limited;
+   - the public pages escape everything and send a CSP that allows no script.
+6. **One command, not twenty.** The webview calls `social_request`, which only
+   reaches `/v1/social/*` with the account session; the server is the trust
+   boundary.
+7. **Near-monochrome, on purpose.** Avatars are neutral monograms, a like is a
+   filled glyph, primary buttons are the strongest neutral. The only colour a
+   person gets is amber, for "working now".
+
+**Not done, deliberately:** leaderboards, badges and streak nags (D50: metrics
+are information), image uploads, a moderation queue.

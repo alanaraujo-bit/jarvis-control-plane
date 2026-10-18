@@ -56,6 +56,7 @@ function frame(title: string, description: string, body: string): string {
 <style>${STYLE}</style><main>${body}<p class="foot">J.A.R.V.I.S. community</p></main></html>`;
 }
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
 const thousands = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n));
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => [...w][0]?.toUpperCase() ?? "").join("") || "?";
@@ -82,7 +83,7 @@ function postHtml(post: PagePost, linkSelf: boolean): string {
   const tags = post.tags.length ? `<div class="chips">${post.tags.map((t) => `<span class="chip">#${e(t)}</span>`).join("")}</div>` : "";
   const when = linkSelf ? `<a class="when" href="/p/${e(post.id)}">${e(day(post.createdAt))}</a>` : `<span class="when">${e(day(post.createdAt))}</span>`;
   return `<article class="post"><div><b>${e(post.author.displayName)}</b> <span class="handle">@${e(post.author.handle)}</span> · ${when}</div>
-${post.body ? `<p>${e(post.body)}</p>` : ""}${prompt}${tags}<div class="counts">${post.likeCount} likes · ${post.replyCount} replies${post.kind === "prompt" ? ` · saved ${post.saveCount}×` : ""}</div></article>`;
+${post.body ? `<p>${e(post.body)}</p>` : ""}${prompt}${tags}<div class="counts">${plural(post.likeCount, "like", "likes")} · ${plural(post.replyCount, "reply", "replies")}${post.kind === "prompt" ? ` · saved ${post.saveCount}×` : ""}</div></article>`;
 }
 
 export function renderProfilePage(input: {
@@ -105,14 +106,14 @@ export function renderProfilePage(input: {
 <div class="stat"><b>${stats.activeDays30}/30</b><span>active days</span></div>
 <div class="stat"><b>${thousands(stats.tokens30)}</b><span>tokens, 30 days</span></div>
 <div class="stat"><b>${Math.round(stats.agentMinutes30 / 60)}h</b><span>agent time · ${Math.round(stats.humanMinutes30 / 60)}h hands-on</span></div>
-</div>${stats.topModels.length ? `<div class="chips">${stats.topModels.map((m) => `<span class="chip">${e(m.label)} ${Math.round(m.share * 100)}%</span>`).join("")}</div>` : ""}
+</div>${stats.topModels.length ? `<div class="chips">${stats.topModels.map((m) => `<span class="chip">${e(m.label)} ${m.share > 0 && m.share < 0.01 ? "<1" : Math.round(m.share * 100)}%</span>`).join("")}</div>` : ""}
 <div style="margin-top:16px">${heatmapSvg(stats.heatmap)}</div></section>`
     : "";
   const body = `<section class="card"><div class="head"><div class="mono" aria-hidden="true">${e(initials(profile.displayName))}</div><div>
 <h1>${e(profile.displayName)}</h1><div class="handle">@${e(profile.handle)}${working ? ` · <span class="working">● working now</span>` : ""}</div></div></div>
 ${profile.building ? `<p class="building">${e(profile.building)}</p>` : ""}${profile.bio ? `<p class="bio">${e(profile.bio)}</p>` : ""}
 <div class="meta">${links}</div>${profile.stack.length ? `<div class="chips">${profile.stack.map((s) => `<span class="chip">${e(s)}</span>`).join("")}</div>` : ""}
-<div class="meta"><span><b>${counts.posts}</b> posts</span><span><b>${counts.followers}</b> followers</span><span><b>${counts.following}</b> following</span></div></section>
+<div class="meta"><span><b>${counts.posts}</b> ${counts.posts === 1 ? "post" : "posts"}</span><span><b>${counts.followers}</b> ${counts.followers === 1 ? "follower" : "followers"}</span><span><b>${counts.following}</b> following</span></div></section>
 ${statsHtml}<section class="card"><h2>Posts</h2>${posts.length ? posts.map((p) => postHtml(p, true)).join("") : `<p class="handle">Nothing posted yet.</p>`}</section>`;
   return frame(`${profile.displayName} (@${profile.handle})`, profile.building || profile.bio || "On the J.A.R.V.I.S. community", body);
 }

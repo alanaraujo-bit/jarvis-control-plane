@@ -85,3 +85,16 @@
   visibility: visible;
   transition-delay: 420ms;
 }
+
+/* Something unread there (M28). Neutral, not amber: amber means agent work. */
+.rail__item { position: relative; }
+.rail__dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--bg-base);
+}

@@ -34,7 +34,7 @@ function Side() {
           <span className="cm-muted">@{profile.handle}</span>
         </span>
         <span className="cm-me__counts">
-          <span><b>{formatCount(me.counts.followers, locale)}</b> {t("community.profile.followers")}</span>
+          <span><b>{formatCount(me.counts.followers, locale)}</b> {t("community.profile.followers", { count: me.counts.followers })}</span>
           <span><b>{formatCount(me.counts.following, locale)}</b> {t("community.profile.followingCount")}</span>
         </span>
       </button>

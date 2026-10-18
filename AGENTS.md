@@ -108,7 +108,7 @@ known issues: [docs/onboarding.md](docs/onboarding.md).
 | Scope, users, acceptance | `PRODUCT.md` |
 | Architecture, stack | `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` |
 | Current state, traps, how work is done | `docs/HANDOFF.md` |
-| Milestone specs | `docs/M13-*.md` … `docs/M27-*.md` |
+| Milestone specs | `docs/M13-*.md` … `docs/M28-*.md` |
 | UI tokens and interaction | `docs/design.md`, `apps/desktop/src/design/tokens.css` |
 | Checks and review | `docs/quality.md` |
 | Local setup | `docs/onboarding.md` |

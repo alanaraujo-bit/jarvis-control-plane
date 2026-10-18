@@ -42,9 +42,10 @@ terminals, Claude Code and Codex adapters, Conversation View, missions with
 evidence and verification, Mission Control, activity, analytics, guardrails,
 notifications, unattended runs, files/editor/diff/Git/worktrees, Project
 Brain, global search, session history, provider accounts and quota (M13/M16),
-personal identity with Google sign-in and cloud sync (M20/M23), a friends
-network backed by `apps/social-api` (see [PROGRESS.md](PROGRESS.md)), a local
-model provider and GPU telemetry (v0.10.0).
+personal identity with Google sign-in and cloud sync (M20/M23, widened by
+M27), a community with public profiles, a feed, shared prompts and published
+build stats backed by `apps/social-api` (M28), a local model provider and GPU
+telemetry (v0.10.0).
 
 ## Out of scope / not built
 
@@ -68,10 +69,10 @@ in the real app in both themes and both languages.
 
 ## Next delivery
 
-Taken from [docs/ROADMAP.md](docs/ROADMAP.md) and [PROGRESS.md](PROGRESS.md)
-("Next work"): automatic desktop heartbeat and metric publication for the
-friends network, then profile detail and activity timeline, then integration
-tests against a disposable Postgres.
+Taken from [docs/ROADMAP.md](docs/ROADMAP.md): ship M26–M28 in a signed
+release (the installed 0.10.0 still points at a deleted account server), then
+Postgres integration tests for `apps/social-api` against a disposable database,
+and moderation tooling for community reports.
 
 ## Maintenance
 

@@ -141,3 +141,5 @@
 .cm-activity__icon { color: var(--text-tertiary); display: inline-grid; place-items: center; }
 .cm-activity__text { display: flex; flex-direction: column; min-width: 0; }
 .cm-activity__snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); }
+.cm-thread__parent { opacity: 0.85; border-left: 2px solid var(--border-default); padding-left: var(--space-5); }
+.cm-thread__parent .cm-post { border-bottom: 0; }

@@ -62,9 +62,11 @@ interface RailProps {
   /** Only these destinations are rendered — see `IMPLEMENTED` in App. */
   available: SurfaceId[];
   onNavigate: (id: SurfaceId) => void;
+  /** Destinations with something unread (M28: community notifications). */
+  unread?: Partial<Record<SurfaceId, number>>;
 }
 
-export function Rail({ active, available, onNavigate }: RailProps) {
+export function Rail({ active, available, onNavigate, unread }: RailProps) {
   const t = useT();
   const items = RAIL_ITEMS.filter((item) => available.includes(item.id));
 
@@ -80,6 +82,7 @@ export function Rail({ active, available, onNavigate }: RailProps) {
         aria-current={isActive ? "page" : undefined}
       >
         <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
+        {(unread?.[id] ?? 0) > 0 && <span className="rail__dot" aria-hidden="true" />}
         <span className="sr-only">{t(label)}</span>
         <span className="rail__tip" role="tooltip">
           {t(label)}
