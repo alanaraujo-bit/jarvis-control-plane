@@ -159,6 +159,11 @@ fn session(db: &Database) -> Option<String> {
     crate::settings::get::<String>(db, SESSION_KEY)
 }
 
+/// The session to send as a bearer token, for the community (M28).
+pub fn bearer(db: &Database) -> Option<String> {
+    session(db)
+}
+
 /// Whether this machine holds a session the server issued.
 pub fn has_session(db: &Database) -> bool {
     session(db).is_some()

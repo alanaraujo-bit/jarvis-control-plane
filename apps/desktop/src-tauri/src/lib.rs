@@ -250,6 +250,8 @@ pub fn run() {
             identity::cloud::spawn_pull(app.handle().clone(), Arc::clone(&db));
             // M27: and push whatever changes while the app runs.
             identity::cloud::spawn_pusher(Arc::clone(&db));
+            // M28: the community's stats and presence, published by the core.
+            social::spawn_publisher(Arc::clone(&db));
 
             let attention = Arc::new(notify::Attention::default());
             attention.set_enabled(notify::enabled(&db));
@@ -404,11 +406,8 @@ pub fn run() {
             relay::relay_status,
             relay::relay_pair,
             relay::relay_unpair,
-            social::social_report,
-            social::social_heartbeat,
-            social::social_create_profile,
-            social::social_request_friend,
-            social::social_accept_friend,
+            social::social_request,
+            social::social_publish_stats,
             notify::commands::notifications_centre,
             notify::commands::notifications_attention,
             notify::commands::notifications_mark_seen,

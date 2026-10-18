@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  Copy,
-  CornerDownLeft,
-  FolderPlus,
-  Files,
-  Pin,
-  PinOff,
-  Plus,
-  Search,
-  SquarePen,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Check, Copy, CornerDownLeft, FolderPlus, Files, Pin, PinOff, Plus, Search, SquarePen, Trash2, X, Share2 } from "lucide-react";
+import { useCommunity } from "../community/api";
 import type { MessageKey } from "@jarvis/i18n";
 import { useI18n, useT } from "../../app/i18n";
 import { hasLiveTerminal, pasteIntoSession } from "../terminal/live";
@@ -539,6 +527,22 @@ function Editor({
             title={t("notebook.copy")}
           >
             <Copy size={13} strokeWidth={1.9} aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className="nb__icon-button"
+            onClick={() => {
+              // Nothing leaves the machine here: the prompt waits in the
+              // community composer until Publish is pressed (M28).
+              useCommunity.getState().setDraft({ kind: "prompt", title: draftTitle, prompt: body, body: "" });
+              useCommunity.getState().go({ kind: "feed" });
+              window.dispatchEvent(new CustomEvent("jarvis:go", { detail: "community" }));
+            }}
+            aria-label={t("community.notebookShare")}
+            title={t("community.notebookShare")}
+          >
+            <Share2 size={13} strokeWidth={1.9} aria-hidden="true" />
           </button>
 
           <button

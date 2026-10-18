@@ -20,7 +20,7 @@ import { usePreferences } from "./surfaces/settings/usePreferences";
 import { invoke } from "./app/platform";
 import type { SearchResult } from "./app/search";
 import { Activity } from "./surfaces/activity/Activity";
-import { Friends } from "./surfaces/social/Friends";
+import { Community } from "./surfaces/community/Community";
 import { History } from "./surfaces/history/History";
 import { kindOf } from "./surfaces/history/format";
 import { Analytics } from "./surfaces/analytics/Analytics";
@@ -61,7 +61,7 @@ const IMPLEMENTED: SurfaceId[] = [
   "projects",
   "missions",
   "activity",
-  "friends",
+  "community",
   "history",
   "analytics",
   "accounts",
@@ -289,6 +289,20 @@ export function App() {
     },
     [openProject, showGlobal],
   );
+
+  // A surface asking to show another one — the notebook handing a prompt to
+  // the community composer (M28).
+  useEffect(() => {
+    const onGo = (event: Event) => {
+      const id = (event as CustomEvent<SurfaceId>).detail;
+      if (RAIL_ITEMS.some((item) => item.id === id)) {
+        setNotebookOpen(false);
+        goTo(id);
+      }
+    };
+    window.addEventListener("jarvis:go", onGo);
+    return () => window.removeEventListener("jarvis:go", onGo);
+  }, [goTo]);
 
   // Who is signed in, and whether an account has ever been offered (M20).
   // Fetched up front for the same reason onboarding is: the reveal below waits
@@ -700,8 +714,8 @@ export function App() {
               <Projects onOpen={(project) => openProjectDirect(project)} />
             ) : surface === "activity" ? (
               <Activity />
-            ) : surface === "friends" ? (
-              <Friends />
+            ) : surface === "community" ? (
+              <Community />
             ) : surface === "history" ? (
               <History
                 // Routed through the *same* path Global Search uses to reopen a

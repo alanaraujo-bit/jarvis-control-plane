@@ -43,11 +43,14 @@ export function parseProfile(input: unknown, creating: boolean): Result<"profile
   if ([...building].length > 140) return { error: "social.buildingTooLong" };
   const website = text(raw.website);
   if (website) {
-    let ok = false;
-    try {
-      const url = new URL(website);
-      ok = (url.protocol === "https:" || url.protocol === "http:") && website.length <= 200;
-    } catch { ok = false; }
+    const ok = (() => {
+      try {
+        const url = new URL(website);
+        return (url.protocol === "https:" || url.protocol === "http:") && website.length <= 200;
+      } catch {
+        return false;
+      }
+    })();
     if (!ok) return { error: "social.websiteInvalid" };
   }
   const github = text(raw.github).replace(/^@/, "");

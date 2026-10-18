@@ -5,8 +5,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { canSee, HANDLE, parsePost, parseProfile, parseStats, type Relation, type Visibility } from "./community-rules.ts";
+import { HANDLE, parsePost, parseProfile, parseStats } from "./community-rules.ts";
+import { blockedBetween, counts, cursor, mini, notify, NOBODY, POSTS_SELECT, postJson, profileJson, profileView } from "./community-queries.ts";
 import { PAGE_CSP, renderNotFound, renderPostPage, renderProfilePage, type PagePost } from "./community-pages.ts";
+export { migrateCommunity } from "./community-schema.ts";
 
 export interface Ctx {
   pool: Pool;
@@ -16,177 +18,8 @@ export interface Ctx {
 }
 
 const PAGE = 30;
-const WORKING_MS = 120_000;
 const POSTS_PER_HOUR = 20;
 const FOLLOWS_PER_DAY = 200;
-
-export async function migrateCommunity(pool: Pool) {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS community_profiles (
-      user_id UUID PRIMARY KEY REFERENCES identity_users(id) ON DELETE CASCADE,
-      handle TEXT UNIQUE NOT NULL CHECK (handle ~ '^[a-z0-9_]{3,24}$'),
-      display_name TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', location TEXT NOT NULL DEFAULT '',
-      website TEXT NOT NULL DEFAULT '', github TEXT NOT NULL DEFAULT '', stack TEXT[] NOT NULL DEFAULT '{}',
-      building TEXT NOT NULL DEFAULT '',
-      stats_visibility TEXT NOT NULL DEFAULT 'private' CHECK (stats_visibility IN ('public','followers','private')),
-      presence_visibility TEXT NOT NULL DEFAULT 'private' CHECK (presence_visibility IN ('public','followers','private')),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
-    CREATE TABLE IF NOT EXISTS community_follows (
-      follower_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      followee_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (follower_id, followee_id),
-      CHECK (follower_id <> followee_id));
-    CREATE INDEX IF NOT EXISTS community_follows_followee ON community_follows(followee_id);
-    CREATE TABLE IF NOT EXISTS community_blocks (
-      blocker_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      blocked_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (blocker_id, blocked_id));
-    CREATE TABLE IF NOT EXISTS community_posts (
-      id UUID PRIMARY KEY, author_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      kind TEXT NOT NULL CHECK (kind IN ('post','prompt')), body TEXT NOT NULL DEFAULT '',
-      title TEXT NOT NULL DEFAULT '', prompt TEXT NOT NULL DEFAULT '', tags TEXT[] NOT NULL DEFAULT '{}',
-      reply_to UUID REFERENCES community_posts(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), deleted_at TIMESTAMPTZ);
-    CREATE INDEX IF NOT EXISTS community_posts_recent ON community_posts(created_at DESC) WHERE deleted_at IS NULL;
-    CREATE INDEX IF NOT EXISTS community_posts_author ON community_posts(author_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS community_posts_reply ON community_posts(reply_to);
-    CREATE INDEX IF NOT EXISTS community_posts_tags ON community_posts USING GIN (tags);
-    CREATE TABLE IF NOT EXISTS community_likes (
-      post_id UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
-      user_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (post_id, user_id));
-    CREATE TABLE IF NOT EXISTS community_saves (
-      post_id UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
-      user_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (post_id, user_id));
-    CREATE TABLE IF NOT EXISTS community_notifications (
-      id BIGSERIAL PRIMARY KEY, user_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      kind TEXT NOT NULL CHECK (kind IN ('follow','like','reply','save')),
-      actor_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      post_id UUID REFERENCES community_posts(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), read_at TIMESTAMPTZ);
-    CREATE INDEX IF NOT EXISTS community_notifications_user ON community_notifications(user_id, created_at DESC);
-    CREATE TABLE IF NOT EXISTS community_stats (
-      user_id UUID PRIMARY KEY REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      snapshot JSONB NOT NULL, observed_at TIMESTAMPTZ NOT NULL DEFAULT now());
-    CREATE TABLE IF NOT EXISTS community_presence (
-      user_id UUID PRIMARY KEY REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      active_sessions INTEGER NOT NULL CHECK (active_sessions BETWEEN 0 AND 100), last_seen_at TIMESTAMPTZ NOT NULL);
-    CREATE TABLE IF NOT EXISTS community_reports (
-      id BIGSERIAL PRIMARY KEY, reporter_id UUID NOT NULL REFERENCES community_profiles(user_id) ON DELETE CASCADE,
-      post_id UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
-      reason TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT now());`);
-}
-
-type Row = Record<string, any>;
-
-const mini = (row: Row, prefix = "") => ({
-  handle: row[`${prefix}handle`],
-  displayName: row[`${prefix}display_name`],
-  building: row[`${prefix}building`] ?? "",
-});
-
-function profileJson(row: Row) {
-  return {
-    handle: row.handle, displayName: row.display_name, bio: row.bio, location: row.location,
-    website: row.website, github: row.github, stack: row.stack ?? [], building: row.building,
-    statsVisibility: row.stats_visibility, presenceVisibility: row.presence_visibility,
-    createdAt: new Date(row.created_at).toISOString(),
-  };
-}
-
-function postJson(row: Row) {
-  return {
-    id: row.id, kind: row.kind, body: row.body, title: row.title, prompt: row.prompt, tags: row.tags ?? [],
-    replyTo: row.reply_to, createdAt: new Date(row.created_at).toISOString(),
-    likeCount: Number(row.like_count ?? 0), replyCount: Number(row.reply_count ?? 0), saveCount: Number(row.save_count ?? 0),
-    likedByMe: row.liked === true, savedByMe: row.saved === true,
-    author: mini(row, "a_"),
-    parent: row.p_handle ? { handle: row.p_handle } : null,
-  };
-}
-
-/** Posts with their author and counts, hiding anything across a block. `$1`
- *  is always the viewer's id (or a nil uuid for nobody). */
-const POSTS_SELECT = `
-  SELECT p.*, a.handle AS a_handle, a.display_name AS a_display_name, a.building AS a_building, pa.handle AS p_handle,
-    (SELECT count(*) FROM community_likes l WHERE l.post_id = p.id) AS like_count,
-    (SELECT count(*) FROM community_posts r WHERE r.reply_to = p.id AND r.deleted_at IS NULL) AS reply_count,
-    (SELECT count(*) FROM community_saves s WHERE s.post_id = p.id) AS save_count,
-    EXISTS (SELECT 1 FROM community_likes l WHERE l.post_id = p.id AND l.user_id = $1) AS liked,
-    EXISTS (SELECT 1 FROM community_saves s WHERE s.post_id = p.id AND s.user_id = $1) AS saved
-  FROM community_posts p
-  JOIN community_profiles a ON a.user_id = p.author_id
-  LEFT JOIN community_posts pp ON pp.id = p.reply_to
-  LEFT JOIN community_profiles pa ON pa.user_id = pp.author_id
-  WHERE p.deleted_at IS NULL
-    AND NOT EXISTS (SELECT 1 FROM community_blocks b
-      WHERE (b.blocker_id = $1 AND b.blocked_id = p.author_id) OR (b.blocker_id = p.author_id AND b.blocked_id = $1))`;
-
-const NOBODY = "00000000-0000-0000-0000-000000000000";
-
-function cursor(url: URL): string | null {
-  const before = url.searchParams.get("before");
-  return before && !Number.isNaN(Date.parse(before)) ? new Date(before).toISOString() : null;
-}
-
-async function counts(pool: Pool, userId: string) {
-  const row = (await pool.query(
-    `SELECT (SELECT count(*) FROM community_follows WHERE followee_id = $1) AS followers,
-            (SELECT count(*) FROM community_follows WHERE follower_id = $1) AS following,
-            (SELECT count(*) FROM community_posts WHERE author_id = $1 AND deleted_at IS NULL AND reply_to IS NULL) AS posts`,
-    [userId])).rows[0];
-  return { followers: Number(row.followers), following: Number(row.following), posts: Number(row.posts) };
-}
-
-async function relation(pool: Pool, viewer: string | null, target: string) {
-  if (!viewer) return { self: false, following: false, followsYou: false, blocked: false };
-  if (viewer === target) return { self: true, following: false, followsYou: false, blocked: false };
-  const row = (await pool.query(
-    `SELECT EXISTS (SELECT 1 FROM community_follows WHERE follower_id = $1 AND followee_id = $2) AS following,
-            EXISTS (SELECT 1 FROM community_follows WHERE follower_id = $2 AND followee_id = $1) AS follows_you,
-            EXISTS (SELECT 1 FROM community_blocks WHERE blocker_id = $1 AND blocked_id = $2) AS blocked_by_me,
-            EXISTS (SELECT 1 FROM community_blocks WHERE blocker_id = $2 AND blocked_id = $1) AS blocked_me`,
-    [viewer, target])).rows[0];
-  return { self: false, following: row.following, followsYou: row.follows_you, blocked: row.blocked_by_me, blockedMe: row.blocked_me };
-}
-
-/** Everything a viewer may see of one profile. `null` when it does not exist
- *  or a block stands between them. */
-async function profileView(pool: Pool, viewer: string | null, handle: string) {
-  const row = (await pool.query("SELECT * FROM community_profiles WHERE handle = $1", [handle.toLowerCase()])).rows[0];
-  if (!row) return null;
-  const rel = await relation(pool, viewer, row.user_id);
-  if ((rel as { blockedMe?: boolean }).blockedMe) return null;
-  const sees: Relation = { self: rel.self, following: rel.following };
-  const statsRow = canSee(row.stats_visibility as Visibility, sees)
-    ? (await pool.query("SELECT snapshot, observed_at FROM community_stats WHERE user_id = $1", [row.user_id])).rows[0]
-    : undefined;
-  const presenceRow = canSee(row.presence_visibility as Visibility, sees)
-    ? (await pool.query("SELECT active_sessions, last_seen_at FROM community_presence WHERE user_id = $1", [row.user_id])).rows[0]
-    : undefined;
-  const fresh = presenceRow && Date.now() - new Date(presenceRow.last_seen_at).getTime() < WORKING_MS;
-  return {
-    userId: row.user_id as string,
-    profile: profileJson(row),
-    counts: await counts(pool, row.user_id),
-    relation: { self: rel.self, following: rel.following, followsYou: rel.followsYou, blocked: rel.blocked },
-    stats: statsRow ? { ...statsRow.snapshot, observedAt: new Date(statsRow.observed_at).toISOString() } : null,
-    presence: presenceRow
-      ? { working: Boolean(fresh && presenceRow.active_sessions > 0), activeSessions: fresh ? presenceRow.active_sessions : 0, lastSeenAt: new Date(presenceRow.last_seen_at).toISOString() }
-      : null,
-  };
-}
-
-async function notify(pool: Pool, userId: string, kind: string, actorId: string, postId: string | null) {
-  if (userId === actorId) return;
-  await pool.query("INSERT INTO community_notifications(user_id, kind, actor_id, post_id) VALUES ($1,$2,$3,$4)", [userId, kind, actorId, postId]);
-}
-
-async function blockedBetween(pool: Pool, a: string, b: string) {
-  return (await pool.query(
-    "SELECT 1 FROM community_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)", [a, b])).rowCount! > 0;
-}
 
 /** Handle a community route. Returns false when the path is not one. */
 export async function handleCommunity(req: IncomingMessage, res: ServerResponse, url: URL, ctx: Ctx): Promise<boolean> {

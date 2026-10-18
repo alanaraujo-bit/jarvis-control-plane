@@ -20,7 +20,7 @@ export type SurfaceId =
   | "projects"
   | "missions"
   | "activity"
-  | "friends"
+  | "community"
   | "history"
   | "analytics"
   | "accounts"
@@ -47,7 +47,7 @@ export const RAIL_ITEMS: RailItem[] = [
   { id: "projects", icon: FolderGit2, label: "nav.projects" },
   { id: "missions", icon: Target, label: "nav.missions" },
   { id: "activity", icon: Activity, label: "nav.activity" },
-  { id: "friends", icon: Network, label: "nav.friends" },
+  { id: "community", icon: Network, label: "nav.community" },
   { id: "history", icon: History, label: "nav.history" },
   { id: "analytics", icon: ChartNoAxesColumn, label: "nav.analytics" },
   { id: "accounts", icon: UsersRound, label: "nav.accounts" },
