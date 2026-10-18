@@ -21,6 +21,7 @@ fn account(id: &str, provider: &str, position: i64, active: bool) -> Account {
         position,
         created_at: 1,
         last_used_at: None,
+        credential_origin: "own".into(),
     }
 }
 
@@ -414,7 +415,7 @@ fn codex_file_credentials_are_a_root_key_even_when_tables_exist() {
 }
 
 #[test]
-fn importing_provider_state_copies_auth_but_not_session_history() {
+fn importing_provider_state_copies_neither_auth_nor_session_history() {
     let root = std::env::temp_dir().join(format!(
         "jarvis-account-import-{}",
         crate::session::manager::new_session_id()
@@ -434,7 +435,7 @@ fn importing_provider_state_copies_auth_but_not_session_history() {
 
     copy_provider_state("codex", &source, &target).unwrap();
     enforce_codex_file_credentials(&target).unwrap();
-    assert_eq!(std::fs::read(target.join("auth.json")).unwrap(), opaque);
+    assert!(!target.join("auth.json").exists(), "credentials never travel (M26)");
     assert!(!target.join("sessions").exists());
     assert!(
         std::fs::read_to_string(target.join("config.toml"))
@@ -838,6 +839,7 @@ mod live_cli {
             position: 0,
             created_at: 1,
             last_used_at: None,
+            credential_origin: "own".into(),
         })
     }
 
@@ -863,6 +865,7 @@ mod live_cli {
             position: 1,
             created_at: 1,
             last_used_at: None,
+            credential_origin: "own".into(),
         }
     }
 
@@ -1095,12 +1098,13 @@ fn the_machine_account_is_adopted_once_even_after_it_has_been_isolated() {
 /// one-time import into a multi-second, multi-gigabyte operation duplicating
 /// files the CLI fetches again on its own.
 #[test]
-fn importing_an_account_skips_the_caches_and_keeps_the_credentials() {
+fn importing_an_account_skips_the_caches_and_the_credentials() {
     let source = tempfile::tempdir().unwrap();
     let target = tempfile::tempdir().unwrap();
 
     // What an account is.
     std::fs::write(source.path().join("auth.json"), b"{}").unwrap();
+    std::fs::write(source.path().join(".credentials.json"), b"{}").unwrap();
     std::fs::write(source.path().join("config.toml"), b"model = \"x\"").unwrap();
     std::fs::create_dir_all(source.path().join("skills")).unwrap();
     std::fs::write(source.path().join("skills").join("a.md"), b"skill").unwrap();
@@ -1113,7 +1117,10 @@ fn importing_an_account_skips_the_caches_and_keeps_the_credentials() {
 
     copy_provider_state("codex", source.path(), target.path()).unwrap();
 
-    assert!(target.path().join("auth.json").is_file(), "credentials travel");
+    // A copied login shares one OAuth lineage with the machine: a refresh or a
+    // logout on either side can kill the other. Each account signs in itself.
+    assert!(!target.path().join("auth.json").exists(), "credentials never travel");
+    assert!(!target.path().join(".credentials.json").exists(), "credentials never travel");
     assert!(target.path().join("config.toml").is_file());
     assert!(
         target.path().join("skills").join("a.md").is_file(),
@@ -1146,4 +1153,20 @@ fn provider_env_strips_ambient_overrides() {
         }
         assert_eq!(env.set, vec![(key.to_string(), value.config_dir.clone())]);
     }
+}
+
+#[test]
+fn sign_in_success_marks_own() {
+    let db = Database::open_in_memory().unwrap();
+    let mut machine = account("machine", "claude-code", 0, true);
+    machine.adopted = true;
+    insert(&db, &machine);
+    db.with(|conn| {
+        conn.execute("UPDATE provider_accounts SET credential_origin = 'copied'", [])?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(get(&db, "machine").unwrap().unwrap().credential_origin, "copied");
+    set_credential_origin(&db, "machine", "own").unwrap();
+    assert_eq!(get(&db, "machine").unwrap().unwrap().credential_origin, "own");
 }

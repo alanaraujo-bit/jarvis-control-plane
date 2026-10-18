@@ -328,11 +328,21 @@ pub fn account_begin_sign_in(
                 }
             }
 
-            let _ = child.wait();
+            let succeeded = child.wait().map(|status| status.success()).unwrap_or(false);
             if let Ok(mut pending) = PENDING_SIGN_INS.lock() {
                 pending.remove(&account_id);
             }
             super::refresh_provider_identities(&db, &provider);
+            // A login made for this directory is its own lineage, whatever the
+            // directory held before.
+            if succeeded
+                && super::get(&db, &account_id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|account| account.signed_in)
+            {
+                let _ = super::set_credential_origin(&db, &account_id, "own");
+            }
             let _ = app.emit(
                 SIGN_IN_EVENT,
                 SignInEvent {

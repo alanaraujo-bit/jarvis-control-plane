@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 20;
+pub const SCHEMA_VERSION: u32 = 21;
 
 struct Migration {
     version: u32,
@@ -989,6 +989,21 @@ const MIGRATIONS: &[Migration] = &[Migration {
         PRIMARY KEY (kind, id)
     ) WITHOUT ROWID;
 "#,
+    },
+    Migration {
+        version: 21,
+        sql: r#"
+    -- ---- Where an account's login came from (M26) ---------------------------
+    --
+    -- M24 isolated the machine account by copying its credential files into an
+    -- app-owned directory. That made two holders of one OAuth lineage: the CLI
+    -- outside the app and J.A.R.V.I.S. A token refresh with rotation, or a
+    -- logout, on either side can invalidate the other. Every adopted row
+    -- carries such a copy, so they are all marked; a sign-in made through the
+    -- app for that directory sets the row back to `own`.
+    ALTER TABLE provider_accounts ADD COLUMN credential_origin TEXT NOT NULL DEFAULT 'own';
+    UPDATE provider_accounts SET credential_origin = 'copied' WHERE adopted = 1;
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -1114,6 +1129,7 @@ mod tests {
             (18, 0x3ff2_979b_f471_0e66),
             (19, 0x1085_a050_9b08_3287),
             (20, 0xe28b_da2d_45a4_8c06),
+            (21, 0x1583_2a3b_e4f3_f630),
         ];
 
         for migration in MIGRATIONS {
@@ -1142,6 +1158,43 @@ mod tests {
     /// This catches a migration that is not additive — one that assumes a state
     /// only a fresh database has. It does **not** catch a migration whose text
     /// was edited; `a_shipped_migration_is_never_edited` is what does that.
+    #[test]
+    fn migration_21_marks_adopted_rows_as_sharing_the_machine_login() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)",
+            [],
+        )
+        .unwrap();
+        for migration in MIGRATIONS.iter().filter(|m| m.version <= 20) {
+            conn.execute_batch(&format!("BEGIN; {} COMMIT;", migration.sql)).unwrap();
+            conn.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 0)",
+                [migration.version],
+            )
+            .unwrap();
+        }
+        for (id, adopted) in [("machine", 1), ("added", 0)] {
+            conn.execute(
+                "INSERT INTO provider_accounts (id, provider, label, config_dir, adopted, position, created_at)
+                 VALUES (?1, 'claude-code', '', ?1, ?2, 0, 0)",
+                rusqlite::params![id, adopted],
+            )
+            .unwrap();
+        }
+        run(&conn).unwrap();
+        let origin = |id: &str| -> String {
+            conn.query_row(
+                "SELECT credential_origin FROM provider_accounts WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(origin("machine"), "copied");
+        assert_eq!(origin("added"), "own");
+    }
+
     #[test]
     fn upgrading_an_older_database_produces_the_same_schema_as_a_new_one() {
         let columns = |conn: &Connection, table: &str| -> Vec<String> {

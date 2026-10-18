@@ -120,6 +120,11 @@ pub struct Account {
     pub position: i64,
     pub created_at: i64,
     pub last_used_at: Option<i64>,
+    /// `own` when this directory's login was made for it, `copied` when its
+    /// credentials were imported from the machine (M24) and so share one OAuth
+    /// lineage with the CLI outside the app. A copied login can be killed by a
+    /// refresh or logout on the machine side, so it never enters the rotation.
+    pub credential_origin: String,
 }
 
 fn home() -> Option<PathBuf> {
@@ -612,13 +617,14 @@ fn row_to_account(row: &rusqlite::Row<'_>) -> rusqlite::Result<Account> {
         position: row.get("position")?,
         created_at: row.get("created_at")?,
         last_used_at: row.get("last_used_at")?,
+        credential_origin: row.get("credential_origin")?,
     })
 }
 
 const SELECT: &str = "SELECT id, provider, label, config_dir, adopted, email, account_uuid,
                              org_id, org_name, plan, signed_in, checked_at,
                              identity_attempted_at, subscription_since, active, paused, position,
-                             created_at, last_used_at
+                             created_at, last_used_at, credential_origin
                       FROM provider_accounts";
 
 pub fn list(db: &Database) -> Result<Vec<Account>> {
@@ -833,9 +839,13 @@ pub fn isolate_adopted_accounts(db: &Database, data_dir: &Path) -> Result<()> {
             std::fs::rename(&staging, &target).map_err(|e| e.to_string())?;
         }
 
+        // The copy carries no login (see `copy_tree`), so the row stops
+        // claiming one; the person signs this directory in through the app.
         db.with(|conn| {
             conn.execute(
-                "UPDATE provider_accounts SET config_dir = ?2 WHERE id = ?1",
+                "UPDATE provider_accounts SET config_dir = ?2, signed_in = 0,
+                        credential_origin = 'own'
+                 WHERE id = ?1",
                 params![account.id, target.to_string_lossy()],
             )?;
             Ok(())
@@ -907,7 +917,16 @@ fn copy_tree(source: &Path, target: &Path, excluded: &[&str], top_level: bool) -
         let name_text = name.to_string_lossy();
         if top_level
             && (excluded.iter().any(|value| name_text.eq_ignore_ascii_case(value))
-                || matches!(name_text.as_ref(), "history.jsonl" | "models_cache.json"))
+                || matches!(
+                    name_text.as_ref(),
+                    "history.jsonl"
+                        | "models_cache.json"
+                        // Credentials are never copied: a copy shares one OAuth
+                        // lineage with the source, and a refresh or logout on
+                        // either side can kill the other (M26).
+                        | ".credentials.json"
+                        | "auth.json"
+                ))
         {
             continue;
         }
@@ -974,6 +993,18 @@ fn enforce_codex_file_credentials(root: &Path) -> Result<()> {
         std::fs::write(path, rendered).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Record where an account's login came from (`own` or `copied`).
+pub fn set_credential_origin(db: &Database, id: &str, origin: &str) -> Result<()> {
+    db.with(|conn| {
+        conn.execute(
+            "UPDATE provider_accounts SET credential_origin = ?2 WHERE id = ?1",
+            params![id, origin],
+        )?;
+        Ok(())
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Create a new account, with its own configuration directory.
