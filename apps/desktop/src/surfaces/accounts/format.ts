@@ -32,6 +32,17 @@ export function duration(ms: number): { days: number; hours: number; minutes: nu
 export type Translate = (key: MessageKey, values?: Record<string, string | number>) => string;
 
 /**
+ * A bare span, "1h 12m" — for anything that is not a reset, where
+ * `countdown`'s "Resets in" would mislabel it (a run-out estimate, a wait).
+ */
+export function span(ms: number, t: Translate): string {
+  const { days, hours, minutes } = duration(ms);
+  if (days > 0) return t("session.quota.dh", { days, hours });
+  if (hours > 0) return t("session.quota.hm", { hours, minutes });
+  return t("session.quota.m", { minutes });
+}
+
+/**
  * "Resets in 3h 54m" — or the "any moment now" wording when the moment has
  * arrived and the provider has not yet said otherwise.
  */

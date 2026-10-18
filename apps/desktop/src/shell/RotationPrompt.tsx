@@ -4,7 +4,7 @@ import type { MessageKey } from "@jarvis/i18n";
 import { useI18n, useT } from "../app/i18n";
 import { invoke, isTauri } from "../app/platform";
 import { useAccounts } from "../surfaces/accounts/useAccounts";
-import { countdown, resetMoment } from "../surfaces/accounts/format";
+import { resetMoment, span } from "../surfaces/accounts/format";
 import "./RotationPrompt.css";
 
 /** `accounts::rotation::engine::RotationEvent`. */
@@ -163,7 +163,7 @@ export function RotationPrompt() {
               <div key={item.decisionId} className="rotation-card rotation-card--pill" data-kind="waiting">
                 <span>
                   {t("rotation.waiting", { time: at(item.untilMs) })}
-                  <span className="rotation-card__muted"> · {countdown(item.untilMs, now, t)}</span>
+                  <span className="rotation-card__muted"> · {t("rotation.waiting.in", { countdown: span(item.untilMs - now, t) })}</span>
                 </span>
                 <button
                   type="button"

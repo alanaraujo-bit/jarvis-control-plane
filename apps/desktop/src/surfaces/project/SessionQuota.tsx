@@ -9,7 +9,7 @@ import {
   type AccountQuota,
   type Confidence,
 } from "../accounts/useAccounts";
-import { countdown, duration, formatTokens, remaining, resetMoment } from "../accounts/format";
+import { formatTokens, remaining, resetMoment, span as spanOf } from "../accounts/format";
 import "./SessionQuota.css";
 
 /** `accounts::rotation::commands::SessionQuotaSummary`. */
@@ -110,11 +110,8 @@ export function SessionQuota({ sessionId }: { sessionId: string }) {
   const at = (ms: number) => resetMoment(ms, now, locale);
   const nameById = (id: string) =>
     nameOf(report?.accounts.find((card) => card.account.id === id)?.account, unnamed);
-  const ran = duration(now - summary.startedAtMs);
-  const ranFor =
-    ran.days * 24 + ran.hours > 0
-      ? t("session.quota.hm", { hours: ran.days * 24 + ran.hours, minutes: ran.minutes })
-      : t("session.quota.m", { minutes: ran.minutes });
+  const span = (ms: number) => spanOf(ms, t);
+  const ranFor = span(now - summary.startedAtMs);
 
   const switchTo = async (accountId: string) => {
     setSwitching(accountId);
@@ -136,14 +133,16 @@ export function SessionQuota({ sessionId }: { sessionId: string }) {
         ref={setAnchor}
         type="button"
         className="session-quota"
-        data-band={band(session?.percent ?? null)}
         aria-expanded={open}
         aria-label={t("session.quota.label")}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (!open) refresh(); // the minute timer may be up to 60 s behind
+          setOpen(!open);
+        }}
       >
         <span className="session-quota__account">{nameOf(summary.account, unnamed)}</span>
         {session?.percent != null && (
-          <span className="session-quota__figure" data-confidence={session.confidence}>
+          <span className="session-quota__figure" data-band={band(session.percent)} data-confidence={session.confidence}>
             {t("session.quota.session")} {Math.round(session.percent)}%
             {session.resetsAtMs !== null && session.resetsAtMs > now && (
               <span className="session-quota__muted"> · {at(session.resetsAtMs)}</span>
@@ -151,7 +150,7 @@ export function SessionQuota({ sessionId }: { sessionId: string }) {
           </span>
         )}
         {weekly?.percent != null && (
-          <span className="session-quota__figure" data-confidence={weekly.confidence}>
+          <span className="session-quota__figure" data-band={band(weekly.percent)} data-confidence={weekly.confidence}>
             {t("session.quota.weekly")} {Math.round(weekly.percent)}%
           </span>
         )}
@@ -187,14 +186,14 @@ export function SessionQuota({ sessionId }: { sessionId: string }) {
                 <div className="session-quota__row session-quota__muted">
                   <span>
                     {shown.resetsAtMs !== null
-                      ? `${t("session.quota.resets", { time: at(shown.resetsAtMs) })} · ${countdown(shown.resetsAtMs, now, t)}`
+                      ? t("session.quota.resetsIn", { time: at(shown.resetsAtMs), countdown: span(shown.resetsAtMs - now) })
                       : ""}
                   </span>
                   <span>
                     {windowEta
                       ? t("session.quota.etaIn", {
                           time: at(windowEta.eta.atMs),
-                          countdown: countdown(windowEta.eta.atMs, now, t) ?? "",
+                          countdown: span(windowEta.eta.atMs - now),
                         })
                       : t("session.quota.etaUnknown")}
                   </span>
