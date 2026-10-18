@@ -41,6 +41,9 @@ pub struct Candidate {
     pub weekly: Option<WindowState>,
     /// `Some(false)` when this account has not trusted the project folder.
     pub folder_trusted: Option<bool>,
+    /// `Some(false)` when the CLI in this directory never finished its
+    /// first-run screens (Claude Code's `hasCompletedOnboarding`).
+    pub onboarded: Option<bool>,
 }
 
 /// Why a destination is where it is in the queue, for the modal to say.
@@ -76,6 +79,7 @@ pub fn eligible(c: &Candidate, current: &Account, trigger: &Trigger) -> bool {
         || a.paused
         || a.credential_origin != "own"
         || c.folder_trusted == Some(false)
+        || c.onboarded == Some(false)
         || windows(c).any(|w| w.exhausted)
     {
         return false;
@@ -153,6 +157,14 @@ pub fn candidate_for(
         ),
         _ => None,
     };
+    // Read, never written: finishing first-run is the person's step in the
+    // provider's own interface, like trust (M13 §5.4).
+    let onboarded = (account.provider == "claude-code").then(|| {
+        std::fs::read_to_string(Path::new(&account.config_dir).join(".claude.json"))
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .map(|value| value.get("hasCompletedOnboarding").and_then(|v| v.as_bool()).unwrap_or(false))
+    }).flatten();
     let live = crate::accounts::live::stored(db, &account.id);
     // A refusal seen in the transcript is official even when the stored live
     // reading predates it: an exhausted CLI may stop answering probes.
@@ -206,6 +218,7 @@ pub fn candidate_for(
         session: settle(session, refused("five_hour")),
         weekly: settle(weekly, refused("weekly")),
         folder_trusted,
+        onboarded,
     }
 }
 
@@ -252,7 +265,7 @@ mod tests {
     }
 
     fn cand(id: &str, position: i64, session: Option<WindowState>, weekly: Option<WindowState>) -> Candidate {
-        Candidate { account: acct(id, position), session, weekly, folder_trusted: Some(true) }
+        Candidate { account: acct(id, position), session, weekly, folder_trusted: Some(true), onboarded: Some(true) }
     }
 
     const NEAR: Trigger = Trigger::NearLimit { percent: 90 };
@@ -363,6 +376,16 @@ mod tests {
             ],
         );
         assert_eq!(ids(&ranked), ["high"]);
+    }
+
+    #[test]
+    fn unonboarded_destination_excluded() {
+        // A directory whose CLI never finished its first-run screens would park
+        // the resumed conversation on them, with nobody to press Enter.
+        let current = acct("cur", 0);
+        let mut c = cand("a", 1, win(0.0, None), None);
+        c.onboarded = Some(false);
+        assert!(rank(NOW, &current, &NEAR, vec![c]).is_empty());
     }
 
     #[test]

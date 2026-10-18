@@ -475,6 +475,169 @@ mod tests {
         let _ = session.kill();
     }
 
+
+    /// Terminal output with escape sequences and whitespace removed, lowercased.
+    fn squash(text: &str) -> String {
+        let mut out = String::new();
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '' {
+                // CSI: ESC [ ... final byte in @..~; OSC: ESC ] ... BEL.
+                match chars.next() {
+                    Some('[') => {
+                        for n in chars.by_ref() {
+                            if ('@'..='~').contains(&n) {
+                                break;
+                            }
+                        }
+                    }
+                    Some(']') => {
+                        for n in chars.by_ref() {
+                            if n == '' {
+                                break;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            } else if !c.is_whitespace() {
+                out.extend(c.to_lowercase());
+            }
+        }
+        out
+    }
+
+    /// The whole point of M26, against the real CLI: an interactive Claude Code
+    /// session on account A hears a word, the session moves to account B in
+    /// place, and the agent on B still knows the word.
+    ///
+    /// Needs two signed-in account directories, given as
+    /// `JARVIS_TEST_CLAUDE_A` and `JARVIS_TEST_CLAUDE_B`. Runs in a scratch git
+    /// repository under the temp dir. Answers the CLI's own trust prompt for
+    /// that scratch folder — never written by the product.
+    ///
+    /// `cargo test real_claude_relay -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_claude_relay_continues_conversation() {
+        let (Ok(a_dir), Ok(b_dir)) =
+            (std::env::var("JARVIS_TEST_CLAUDE_A"), std::env::var("JARVIS_TEST_CLAUDE_B"))
+        else {
+            panic!("set JARVIS_TEST_CLAUDE_A and JARVIS_TEST_CLAUDE_B");
+        };
+        let (a, b) = (account("a", "claude-code", Path::new(&a_dir)), account("b", "claude-code", Path::new(&b_dir)));
+        let repo = tempfile::tempdir().unwrap();
+        let status = std::process::Command::new("git").arg("init").arg("-q").current_dir(repo.path()).status().unwrap();
+        assert!(status.success());
+        let logs = tempfile::tempdir().unwrap();
+        let id = new_session_id();
+        let db = db_with_session(&id, "a");
+
+        let options = |acct: &Account, args: Vec<String>| {
+            let env = crate::accounts::provider_env(acct);
+            PtyOptions {
+                program: "claude".into(),
+                args,
+                cwd: repo.path().to_path_buf(),
+                cols: 120,
+                rows: 30,
+                env: env.set,
+                env_remove: env.remove,
+            }
+        };
+        let manager = SessionManager::default();
+        let session = manager
+            .start(id.clone(), logs.path().to_path_buf(), options(&a, vec!["--session-id".into(), id.clone()]))
+            .unwrap();
+
+        let transcript = |dir: &str| crate::providers::claude::find_transcript_in(&Path::new(dir).join("projects"), &id);
+        let screen = || {
+            let reader = crate::session::log::SessionLogReader::open(logs.path()).unwrap();
+            String::from_utf8_lossy(&reader.replay_pty(usize::MAX).unwrap()).to_string()
+        };
+        // Wait for the prompt, answering the trust question for the scratch folder.
+        let ready = |label: &str, start: usize| {
+            let deadline = Instant::now() + Duration::from_secs(90);
+            let mut answered = 0;
+            let mut answered_at = start;
+            let mut previous = 0;
+            let mut stable = 0;
+            while Instant::now() < deadline {
+                let text = screen();
+                // Only what was drawn since the last answer: earlier screens
+                // stay in the log after they are gone from the terminal. The
+                // TUI moves the cursor instead of printing spaces, so compare
+                // with escapes and whitespace removed.
+                let fresh = squash(&text[answered_at.min(text.len())..]);
+                let asking = fresh.contains("pressenter")
+                    || fresh.contains("entertoconfirm")
+                    || fresh.contains("textstyle")
+                    || (fresh.contains("trust") && fresh.contains("yes"));
+                stable = if text.len() == previous { stable + 1 } else { 0 };
+                previous = text.len();
+                if asking && answered < 8 && stable >= 2 {
+                    // The CLI's own first-run and trust screens, answered with
+                    // their default as a person pressing Enter would.
+                    // Claude Code focuses "No, exit" on its trust dialog; the
+                    // confirm option sits below it.
+                    if fresh.contains("itrustthisfolder") {
+                        session.write(b"\x1b[B").unwrap();
+                        std::thread::sleep(Duration::from_millis(500));
+                    }
+                    session.write(b"\r").unwrap();
+                    answered += 1;
+                    answered_at = text.len();
+                    stable = 0;
+                } else if !asking
+                    && stable >= 6
+                    && session.state() == crate::session::event::SessionState::Idle
+                {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            panic!("{label}: the CLI never became ready:\n{}", screen().chars().rev().take(3000).collect::<String>().chars().rev().collect::<String>());
+        };
+        let ask = |text: &str| {
+            crate::session::typing::type_text(&session, text).unwrap();
+            crate::session::typing::submit(&session).unwrap();
+        };
+        let wait_reply = |dir: &str, needle: &str| {
+            let deadline = Instant::now() + Duration::from_secs(180);
+            while Instant::now() < deadline {
+                if let Some(path) = transcript(dir) {
+                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    if text.lines().any(|l| l.contains("\"type\":\"assistant\"") && l.contains(needle)) {
+                        return;
+                    }
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            panic!("no assistant reply containing {needle} in {dir}:\n{}", screen().chars().rev().take(3000).collect::<String>().chars().rev().collect::<String>());
+        };
+
+        ready("account A", 0);
+        ask("Remember the secret word OSPREY-42. Reply with exactly: NOTED");
+        wait_reply(&a_dir, "NOTED");
+        std::thread::sleep(Duration::from_secs(3));
+
+        let resume = |acct: &Account| Ok(options(acct, vec!["--resume".into(), id.clone()]));
+        let before_relay = screen().len();
+        relay_with(&db, &session, &a, &b, &id, Reason::Manual, &resume).expect("relay to B");
+        assert_eq!(session_account(&db, &id).as_deref(), Some("b"));
+
+        ready("account B", before_relay);
+        ask("What was the secret word? Reply with only the word.");
+        wait_reply(&b_dir, "OSPREY-42");
+        let b_text = std::fs::read_to_string(transcript(&b_dir).unwrap()).unwrap();
+        println!(
+            "B transcript: {} lines; contains NOTED from A: {}",
+            b_text.lines().count(),
+            b_text.contains("NOTED")
+        );
+        let _ = session.kill();
+    }
+
     #[test]
     fn codex_relay_refused_until_verified() {
         let logs = tempfile::tempdir().unwrap();

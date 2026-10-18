@@ -1029,3 +1029,30 @@ fn sign_in_success_marks_own() {
     set_credential_origin(&db, "machine", "own").unwrap();
     assert_eq!(get(&db, "machine").unwrap().unwrap().credential_origin, "own");
 }
+
+/// Against the real CLI: an ambient override in the app's own environment —
+/// another account's config dir, an API key — never changes who an account's
+/// directory answers as. `JARVIS_TEST_CLAUDE_B` names a signed-in account dir.
+///
+/// `cargo test real_isolation -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn real_isolation_ignores_ambient_overrides() {
+    let dir = std::env::var("JARVIS_TEST_CLAUDE_B").expect("set JARVIS_TEST_CLAUDE_B");
+    let clean = read_identity("claude-code", Path::new(&dir), false).expect("identity");
+    assert!(clean.signed_in);
+    let decoy = tempfile::tempdir().unwrap();
+    // SAFETY: ignored test, run on its own.
+    unsafe {
+        std::env::set_var("CLAUDE_CONFIG_DIR", decoy.path());
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-decoy-not-a-key");
+    }
+    let polluted = read_identity("claude-code", Path::new(&dir), false).expect("identity");
+    unsafe {
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
+        std::env::remove_var("ANTHROPIC_API_KEY");
+    }
+    println!("clean={:?} polluted={:?}", clean.email, polluted.email);
+    assert_eq!(polluted.email, clean.email);
+    assert!(polluted.signed_in);
+}
