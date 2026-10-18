@@ -211,7 +211,9 @@ pub fn voice_stop_recording(
 
     let text = transcribe::transcribe(&resource_dir, &model_path, &wav_path, &vocabulary, language)?;
 
-    if !text.is_empty() {
+    // A chat takes the text in its own text box, from the returned transcript
+    // (M29); typing would be refused by its protocol pipe anyway.
+    if !text.is_empty() && !session.is_chat() {
         crate::session::typing::type_text(&session, &text)
             .map_err(|_| VoiceError::Transcribe("could not type the transcript in".into()))?;
     }

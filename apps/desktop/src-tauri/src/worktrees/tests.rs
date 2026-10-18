@@ -16,6 +16,7 @@ fn state(data_dir: &std::path::Path) -> AppState {
     AppState {
         db: Arc::new(Database::open_in_memory().unwrap()),
         sessions: SessionManager::default(),
+        chats: crate::chat::Chats::default(),
         autopilots: crate::autopilot::driver::Autopilots::default(),
         voice: crate::voice::VoiceState::default(),
         attention: Arc::new(crate::notify::Attention::default()),

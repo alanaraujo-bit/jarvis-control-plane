@@ -80,7 +80,14 @@ fn home() -> Option<PathBuf> {
 }
 
 pub fn sessions_root() -> Option<PathBuf> {
-    Some(home()?.join(".codex").join("sessions"))
+    Some(default_home()?.join("sessions"))
+}
+
+/// The configuration root a Codex launched with no account reads. `CODEX_HOME`
+/// is scrubbed from every child (`pty::scrubbed_env_keys`), so it is always
+/// this one.
+pub fn default_home() -> Option<PathBuf> {
+    Some(home()?.join(".codex"))
 }
 
 /// Collect rollout files modified at or after `since_ms`.

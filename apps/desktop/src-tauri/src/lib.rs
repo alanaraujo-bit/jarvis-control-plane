@@ -63,6 +63,8 @@ pub struct AppState {
     pub db: Arc<Database>,
     /// Every live session in the application.
     pub sessions: SessionManager,
+    /// The live half of every chat session (M29).
+    pub chats: chat::Chats,
     /// Missions being driven by an agent right now (§32).
     pub autopilots: autopilot::driver::Autopilots,
     /// The one voice recording that can be in progress at a time (§54).
@@ -273,6 +275,7 @@ pub fn run() {
                 db,
                 data_dir,
                 sessions: SessionManager::default(),
+                chats: chat::Chats::default(),
                 autopilots: autopilot::driver::Autopilots::default(),
                 voice: voice::VoiceState::default(),
                 attention,
@@ -325,6 +328,13 @@ pub fn run() {
             session::commands::session_list,
             session::commands::session_conversation,
             session::commands::mission_sessions,
+            chat::commands::chat_attach,
+            chat::commands::chat_detach,
+            chat::commands::chat_send,
+            chat::commands::chat_answer,
+            chat::commands::chat_set_model,
+            chat::commands::chat_set_effort,
+            chat::commands::chat_interrupt,
             files::list_files,
             files::read_file,
             files::write_file,

@@ -769,6 +769,18 @@ mod tests {
             other => panic!("raw bytes must never reach a protocol pipe: {other:?}"),
         }
         assert!(session.resize(80, 24).is_ok(), "a chat has no geometry to refuse");
+        // The rotation relay's way in (M26): a chat would come back as a TUI.
+        let relaunched = session.replace_process(PtyOptions {
+            program: "node".into(),
+            args: vec![],
+            cwd: std::env::temp_dir(),
+            cols: 80,
+            rows: 24,
+            env: vec![],
+            env_remove: Vec::new(),
+        });
+        assert!(matches!(relaunched, Err(SessionError::Refused(code)) if code == "session.chatMode"));
+        assert!(session.is_chat(), "the chat is untouched");
         let _ = session.kill();
     }
 

@@ -380,7 +380,13 @@ impl Driver for ClaudeDriver {
             }
             Some("result") => {
                 let mut effects = self.close_draft();
-                self.turns = self.turns.saturating_sub(1);
+                // A message sent mid-turn is usually folded into that turn —
+                // measured on 2.1.302: two messages, one `result` — so the count
+                // of what is still to run comes from the CLI, not from ours.
+                self.turns = match value.get("queued_turn_count").and_then(Value::as_u64) {
+                    Some(queued) => queued as u32,
+                    None => self.turns.saturating_sub(1),
+                };
                 if self.turns == 0 {
                     effects.push(Effect::Emit(ChatEvent::Busy { busy: false }));
                     effects.push(Effect::State(self.idle_state()));
@@ -477,7 +483,8 @@ mod tests {
     const WRITE_REQUEST: &str = r#"{"type":"control_request","request_id":"1a27aad6","request":{"subtype":"can_use_tool","tool_name":"Write","display_name":"Write","input":{"file_path":"C:\\scratch\\chat-scratch\\hello.txt","content":"hi"},"description":"hello.txt","permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}],"tool_use_id":"toolu_013A"}}"#;
     const BASH_REQUEST: &str = r#"{"type":"control_request","request_id":"ccc97ffa","request":{"subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash","input":{"command":"node -e \"setTimeout(()=>{},60000)\"","timeout":90000,"description":"Run a 60-second node timer"},"description":"Run a 60-second node timer","permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"node -e \"setTimeout(()=>{},60000)\""}],"behavior":"allow","destination":"localSettings"}],"decision_reason":"This command requires approval","tool_use_id":"toolu_01GP"}}"#;
     const QUESTION_REQUEST: &str = r#"{"type":"control_request","request_id":"70f3c343","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","display_name":"AskUserQuestion","input":{"questions":[{"question":"Do you prefer red or blue?","header":"Color","options":[{"label":"Red","description":"Choose red"},{"label":"Blue","description":"Choose blue"}],"multiSelect":false}]},"tool_use_id":"toolu_019k","requires_user_interaction":true}}"#;
-    const RESULT: &str = r#"{"type":"result","subtype":"success","is_error":false,"result":"Blue.","session_id":"0f9f1a06"}"#;
+    const RESULT: &str = r#"{"type":"result","subtype":"success","is_error":false,"result":"Blue.","session_id":"0f9f1a06","queued_turn_count":0}"#;
+    const RESULT_MORE_QUEUED: &str = r#"{"type":"result","subtype":"success","is_error":false,"result":"one","session_id":"0f9f1a06","queued_turn_count":1}"#;
 
     fn settings(id: &str, model: &str, effort: &str) -> String {
         format!(
@@ -578,10 +585,22 @@ mod tests {
         assert!(!emitted(&second).contains(&ChatEvent::Busy { busy: true }), "already busy");
         assert_eq!(writes(&second)[0]["message"]["content"], "two");
 
-        assert!(!emitted(&driver.on_line(RESULT)).contains(&ChatEvent::Busy { busy: false }));
+        assert!(!emitted(&driver.on_line(RESULT_MORE_QUEUED)).contains(&ChatEvent::Busy { busy: false }));
         let last = driver.on_line(RESULT);
         assert!(emitted(&last).contains(&ChatEvent::Busy { busy: false }));
         assert!(last.contains(&Effect::State(SessionState::Idle)));
+    }
+
+    /// Measured on 2.1.302: a message sent during a turn joined that turn, and
+    /// one `result` ended both. Counting our own sends would have left the
+    /// chat "working" forever.
+    #[test]
+    fn a_message_folded_into_the_running_turn_does_not_keep_it_busy() {
+        let mut driver = ready();
+        driver.send("create the file");
+        driver.send("then say done");
+        let end = driver.on_line(RESULT);
+        assert!(emitted(&end).contains(&ChatEvent::Busy { busy: false }));
     }
 
     #[test]

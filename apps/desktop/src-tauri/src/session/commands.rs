@@ -425,6 +425,8 @@ pub fn start_agent_session(
         mission_id,
         driven,
         resume_from,
+        // An autopilot types into a terminal (D16); it never drives a chat.
+        SessionMode::Terminal,
     )
 }
 
@@ -444,6 +446,8 @@ pub fn session_start(
     // process with its own log and its own row; this is what makes it a
     // continuation rather than an unrelated start.
     resume_from: Option<String>,
+    // Terminal or chat (M29). Absent is a terminal, as every session was.
+    mode: Option<SessionMode>,
 ) -> Result<SessionInfo> {
     // Started by a person, so the seat in front of it is theirs.
     launch(
@@ -456,6 +460,7 @@ pub fn session_start(
         mission_id,
         false,
         resume_from,
+        mode.unwrap_or_default(),
     )
     .map(|l| l.info)
 }
@@ -544,7 +549,16 @@ fn launch(
     mission_id: Option<String>,
     driven: bool,
     resume_from: Option<String>,
+    mode: SessionMode,
 ) -> Result<AgentLaunch> {
+    use super::manager::SessionError::Refused;
+
+    // A chat needs a provider that speaks a measured protocol (§26, M29).
+    let chat = mode == SessionMode::Chat;
+    if chat && crate::chat::driver_for(kind.provider_id(), "").is_none() {
+        return Err(Refused("session.chatUnsupported".into()));
+    }
+
     // Resolved first, before anything exists: a resume that cannot happen must
     // fail before a session row, a log directory and a process are created for
     // it. Refusing afterwards would leave a started session that is not the
@@ -612,6 +626,29 @@ fn launch(
         transcript_root = Some(local.home.join("sessions"));
     }
 
+    // `-p` and the app-server skip the provider's own "do you trust this
+    // folder?" step, so a chat only starts where that was already answered
+    // (M29 §6.4.1). Read, never written: trust is the person's call, in the
+    // provider's own screen (D51).
+    if chat {
+        let folder = std::path::Path::new(&cwd);
+        let trusted = match (kind, account.as_ref()) {
+            (SessionKind::ClaudeCode, Some(account)) => crate::providers::claude::folder_is_trusted_in(
+                std::path::Path::new(&account.config_dir),
+                account.adopted,
+                folder,
+            ),
+            (SessionKind::ClaudeCode, None) => crate::providers::claude::folder_is_trusted(folder),
+            (SessionKind::Codex, Some(account)) => {
+                crate::providers::codex::folder_is_trusted_in(std::path::Path::new(&account.config_dir), folder)
+            }
+            (SessionKind::Codex, None) => crate::providers::codex::default_home()
+                .and_then(|home| crate::providers::codex::folder_is_trusted_in(&home, folder)),
+            _ => None,
+        };
+        crate::chat::trust_gate(trusted).map_err(Refused)?;
+    }
+
     // Guardrails (§35), installed before the process starts because the hook
     // has to be in place for the very first tool call.
     //
@@ -677,7 +714,17 @@ fn launch(
     // up in the very Review surface it also ships.
     let brief = write_brief(state, &project_id, &log_dir, kind);
 
-    let (program, args, mut env) =
+    let (program, args, mut env) = if chat {
+        let (program, args) = crate::chat::command_for(
+            kind.provider_id(),
+            &id,
+            guardrail_settings.as_deref(),
+            brief.as_deref(),
+            resume.as_ref().map(|r| r.provider_session_id.as_str()),
+        )
+        .ok_or_else(|| Refused("session.chatUnsupported".into()))?;
+        (program, args, Vec::new())
+    } else {
         command_for(
             kind,
             &id,
@@ -685,7 +732,8 @@ fn launch(
             brief.as_deref(),
             resume.as_ref().map(|r| r.provider_session_id.as_str()),
             local.as_ref(),
-        );
+        )
+    };
     // Without an account nothing is removed: someone on an API key or a proxy
     // with no accounts registered keeps exactly the environment they had.
     let mut env_remove = Vec::new();
@@ -706,8 +754,8 @@ fn launch(
             "INSERT INTO sessions
                  (id, project_id, mission_id, provider, cwd, state, log_dir, created_at,
                   updated_at, provider_session_id, events_backfilled_at, account_id,
-                  resumed_from)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?8, ?10, ?11)",
+                  resumed_from, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?8, ?10, ?11, ?12)",
             params![
                 id,
                 project_id,
@@ -723,24 +771,38 @@ fn launch(
                 // The session this one picked up from (§88, D41). What makes
                 // two rows one thread.
                 resume.as_ref().map(|r| r.session_id.clone()),
+                mode.as_str(),
             ],
         )?;
         Ok(())
     })?;
 
-    let session = state.sessions.start(
-        id.clone(),
-        log_dir,
-        PtyOptions {
-            program,
-            args,
-            cwd: PathBuf::from(&cwd),
-            cols,
-            rows,
-            env,
-            env_remove,
-        },
-    )?;
+    let options = PtyOptions {
+        program,
+        args,
+        cwd: PathBuf::from(&cwd),
+        cols,
+        rows,
+        env,
+        env_remove,
+    };
+    let session = if chat {
+        let (handle, stdout) = crate::chat::process::spawn(&options).map_err(Refused)?;
+        let session = state.sessions.start_chat(id.clone(), log_dir, &options, handle)?;
+        let driver = crate::chat::driver_for(kind.provider_id(), &cwd)
+            .ok_or_else(|| Refused("session.chatUnsupported".into()))?;
+        crate::chat::start(
+            &state.chats,
+            Arc::clone(&session),
+            stdout,
+            driver,
+            project_id.clone(),
+            kind.provider_id().to_string(),
+        );
+        session
+    } else {
+        state.sessions.start(id.clone(), log_dir, options)?
+    };
     if let Some(account_id) = account_id.as_deref() {
         crate::accounts::stamp_used(&state.db, account_id);
     }
@@ -751,7 +813,10 @@ fn launch(
     // told it to; interrupting them about their own `git status` finishing is
     // not a notification, it is an intrusion — the same line §35 draws when it
     // says guardrails govern agents and not people.
-    if kind != SessionKind::Shell {
+    //
+    // Not a chat either: there is no screen to read, and the protocol states
+    // every question itself (M29).
+    if kind != SessionKind::Shell && !chat {
         let watcher = crate::notify::watch::spawn(
             crate::notify::watch::Watched {
                 session_id: id.clone(),
@@ -820,7 +885,7 @@ fn launch(
             state: session.state(),
             created_at,
             live: true,
-            mode: SessionMode::Terminal,
+            mode,
         },
         session,
     })
@@ -868,11 +933,17 @@ pub fn session_detach(
 
 #[tauri::command]
 pub fn session_write(state: State<'_, AppState>, session_id: String, data: Vec<u8>) -> Result<()> {
-    // Record that a person was engaged this minute (§53).
-    //
-    // This command is the only path by which human input reaches a session, so
-    // it is the one honest place to measure attention. INSERT OR IGNORE against
-    // a (session, minute) key collapses a burst of typing into a single row.
+    record_interaction(&state, &session_id);
+    state.sessions.get(&session_id)?.write(&data)
+}
+
+/// Record that a person was engaged this minute (§53).
+///
+/// Human input reaches a session only through `session_write` and, for a chat,
+/// `chat_send`/`chat_answer` (M29), so those are the honest places to measure
+/// attention. INSERT OR IGNORE against a (session, minute) key collapses a
+/// burst of typing into a single row.
+pub fn record_interaction(state: &AppState, session_id: &str) {
     let minute = timestamp() / 60_000;
     let _ = state.db.with(|conn| {
         conn.execute(
@@ -882,8 +953,6 @@ pub fn session_write(state: State<'_, AppState>, session_id: String, data: Vec<u
         )?;
         Ok(())
     });
-
-    state.sessions.get(&session_id)?.write(&data)
 }
 
 #[tauri::command]
@@ -901,6 +970,7 @@ pub fn session_close(state: State<'_, AppState>, session_id: String) -> Result<(
     let session = state.sessions.get(&session_id)?;
     session.kill()?;
     state.sessions.remove(&session_id);
+    state.chats.remove(&session_id);
 
     state.db.with(|conn| {
         conn.execute(

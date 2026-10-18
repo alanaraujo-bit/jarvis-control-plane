@@ -812,7 +812,10 @@ impl Host for AppHost {
             .into_iter()
             .filter_map(|id| {
                 let session = state.sessions.get(&id).ok()?;
-                if session.exited().is_some() {
+                // A chat is not moved (M29): the relay relaunches a TUI and
+                // types into it, and a chat has neither. `replace_process_with`
+                // refuses one too, so this is the first of two locks.
+                if session.exited().is_some() || session.is_chat() {
                     return None;
                 }
                 let (account_id, cwd, provider): (Option<String>, String, String) = state
