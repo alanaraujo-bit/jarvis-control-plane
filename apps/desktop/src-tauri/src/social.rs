@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use crate::{db::Database, AppState};
 
-const ORIGIN: &str = "https://social-api-production-edb6.up.railway.app";
+use crate::identity::cloud::ORIGIN;
 const TOKEN: &str = "social.token";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

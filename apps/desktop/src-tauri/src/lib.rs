@@ -122,6 +122,7 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+            identity::cloud::set_data_dir(data_dir.clone());
 
             // Opening the database is the one startup step that can fail in a
             // way the user has to be told about, so it is the one that does
@@ -247,6 +248,8 @@ pub fn run() {
             // application ever called `GET /v1/sync/state`, which made the
             // cloud a place data went and never came back from.
             identity::cloud::spawn_pull(app.handle().clone(), Arc::clone(&db));
+            // M27: and push whatever changes while the app runs.
+            identity::cloud::spawn_pusher(Arc::clone(&db));
 
             let attention = Arc::new(notify::Attention::default());
             attention.set_enabled(notify::enabled(&db));
@@ -345,6 +348,8 @@ pub fn run() {
             identity::commands::identity_sign_out,
             identity::commands::identity_skip,
             identity::commands::identity_remember,
+            identity::commands::identity_sync_status,
+            identity::commands::identity_sync_now,
             identity::commands::identity_update_profile,
             identity::commands::identity_change_password,
             identity::commands::identity_delete,

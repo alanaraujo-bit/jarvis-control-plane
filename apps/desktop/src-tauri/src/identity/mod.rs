@@ -44,6 +44,7 @@
 
 pub mod commands;
 pub mod cloud;
+pub mod documents;
 pub mod prefs;
 
 #[cfg(test)]

@@ -1053,10 +1053,40 @@ pub fn forget_copied_login(db: &Database, data_dir: &Path, id: &str) -> Result<(
 /// is to tell allowances apart. The person signs in through the provider's own
 /// flow afterwards; see `switch::sign_in_command`.
 pub fn create(db: &Database, provider: &str, data_dir: &Path, label: &str) -> Result<Account> {
+    create_as(db, provider, data_dir, label, &crate::session::manager::new_session_id())
+}
+
+/// An account the person's J.A.R.V.I.S. account carries, recreated on this
+/// machine under the same id (M27). It arrives exactly as `create` makes one:
+/// signed out, with an empty directory of its own. Its login never travels.
+#[allow(clippy::too_many_arguments)]
+pub fn restore(
+    db: &Database,
+    data_dir: &Path,
+    id: &str,
+    provider: &str,
+    label: &str,
+    email: Option<&str>,
+    position: i64,
+    paused: bool,
+) -> Result<Account> {
+    create_as(db, provider, data_dir, label, id)?;
+    db.with(|conn| {
+        conn.execute(
+            "UPDATE provider_accounts SET email = ?2, position = ?3, paused = ?4, active = 0 WHERE id = ?1",
+            params![id, email, position, paused as i64],
+        )?;
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
+    get(db, id)?.ok_or_else(|| "account vanished after restore".to_string())
+}
+
+fn create_as(db: &Database, provider: &str, data_dir: &Path, label: &str, id: &str) -> Result<Account> {
     if !PROVIDERS.contains(&provider) {
         return Err(format!("unknown provider: {provider}"));
     }
-    let id = crate::session::manager::new_session_id();
+    let id = id.to_string();
     let dir = data_dir.join("accounts").join(provider).join(&id);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if provider == "codex" {

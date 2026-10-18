@@ -35,12 +35,29 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri_plugin_opener::OpenerExt;
 
-use super::{prefs, IdentityReport, Result, SignInOutcome, SignUpOutcome};
+use super::{documents, prefs, IdentityReport, Result, SignInOutcome, SignUpOutcome};
 use crate::db::Database;
 use crate::notebook::sync::{self as nbsync, SyncPayload};
 
-const ORIGIN: &str = "https://social-api-production-edb6.up.railway.app";
+/// The account server (`apps/social-api`), on the Railway project
+/// `jarvis-account-sync` since M27. The previous deployment was deleted along
+/// with its database, which is why nothing came back after a reinstall.
+pub const ORIGIN: &str = "https://social-api-production-94d5.up.railway.app";
 const SESSION_KEY: &str = "identity.cloudSession";
+/// The outcome of the last call to the server, for Settings -> Account (M27).
+/// Sync failing was silent, and a deleted server went unnoticed for weeks.
+pub const STATUS_KEY: &str = "sync.status";
+/// Whose documents this machine's ledger holds (M27), like the notebook's owner.
+const DOCUMENTS_OWNER_KEY: &str = "sync.documentsAccount";
+/// How often a signed-in machine pushes whatever changed (M27).
+const PUSH_EVERY: Duration = Duration::from_secs(60);
+
+/// Where account directories are created when the registry restores one.
+static DATA_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+pub fn set_data_dir(dir: std::path::PathBuf) {
+    let _ = DATA_DIR.set(dir);
+}
 
 /// How long a notebook push waits for the typing to stop.
 ///
@@ -84,6 +101,8 @@ struct Answer {
     settings: HashMap<String, serde_json::Value>,
     #[serde(default)]
     notebook: SyncPayload,
+    #[serde(default)]
+    documents: Vec<documents::Document>,
     #[serde(default)]
     error: Option<String>,
     #[serde(default)]
@@ -140,6 +159,11 @@ fn session(db: &Database) -> Option<String> {
     crate::settings::get::<String>(db, SESSION_KEY)
 }
 
+/// Whether this machine holds a session the server issued.
+pub fn has_session(db: &Database) -> bool {
+    session(db).is_some()
+}
+
 // ---------------------------------------------------------------------------
 // Applying what arrived
 // ---------------------------------------------------------------------------
@@ -155,16 +179,35 @@ fn apply(
     db: &Database,
     local_id: &str,
     remote_id: &str,
+    remote_email: &str,
     settings: &HashMap<String, serde_json::Value>,
     notebook: &SyncPayload,
+    docs: &[documents::Document],
 ) -> Result<(prefs::Carried, bool)> {
+    // The same person under a new server id (M27: the server was lost and the
+    // account recreated) is not a different person. Both owner markers move to
+    // the new id first, so neither the notebook nor the ledger starts over.
+    let same_person = super::find_by_id(db, local_id).ok().flatten()
+        .is_some_and(|account| account.email.eq_ignore_ascii_case(remote_email));
+    if same_person {
+        crate::settings::set(db, nbsync::OWNER_KEY, &remote_id.to_string())?;
+        crate::settings::set(db, DOCUMENTS_OWNER_KEY, &remote_id.to_string())?;
+    }
     for (key, value) in settings {
         if prefs::is_carried(key) {
             prefs::put_raw(db, local_id, key, &value.to_string())?;
         }
     }
     prefs::apply_to_machine(db, local_id)?;
-    let changed = nbsync::merge(db, remote_id, notebook)?;
+    let mut changed = nbsync::merge(db, remote_id, notebook)?;
+    let owner: Option<String> = crate::settings::get(db, DOCUMENTS_OWNER_KEY);
+    if owner.as_deref() != Some(remote_id) {
+        documents::reset_ledger(db)?;
+        crate::settings::set(db, DOCUMENTS_OWNER_KEY, &remote_id.to_string())?;
+    }
+    if let Some(dir) = DATA_DIR.get() {
+        changed |= documents::apply(db, dir, docs)?;
+    }
     Ok((prefs::carried(db, local_id)?, changed))
 }
 
@@ -176,6 +219,10 @@ fn apply(
 fn push_state(db: &Arc<Database>) {
     push_all_settings(db);
     push_notebook_now(db);
+    let db = Arc::clone(db);
+    std::thread::spawn(move || {
+        let _ = push_documents_now(&db, true);
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -212,7 +259,7 @@ pub async fn sign_in(app: tauri::AppHandle, db: Arc<Database>) -> Result<GoogleS
     crate::settings::set(&db, SESSION_KEY, &session)?;
 
     let local_id = super::upsert_google(&db, &account.id, &account.email, &account.display_name)?;
-    let (carried, _) = apply(&db, &local_id, &account.id, &poll.settings, &poll.notebook)?;
+    let (carried, _) = apply(&db, &local_id, &account.id, &account.email, &poll.settings, &poll.notebook, &poll.documents)?;
 
     super::seat(&db, &local_id)?;
     push_state(&db);
@@ -283,7 +330,7 @@ pub async fn sign_up(
     if let (SignUpOutcome::Ok { .. }, Some(answer)) = (&outcome, &remote) {
         if let (Some(token), Some(account)) = (&answer.token, &answer.account) {
             crate::settings::set(&db, SESSION_KEY, token)?;
-            let (carried, _) = apply(&db, &account.id, &account.id, &answer.settings, &answer.notebook)?;
+            let (carried, _) = apply(&db, &account.id, &account.id, &account.email, &answer.settings, &answer.notebook, &answer.documents)?;
             push_state(&db);
             return Ok(SignUpOutcome::Ok {
                 report: super::report(&db)?,
@@ -320,7 +367,29 @@ pub async fn sign_in_password(
         .await
         .map_err(|error| error.to_string())?;
 
-    let Ok(answer) = remote else { return Ok(local) };
+    let Ok(mut answer) = remote else {
+        record_status(&db, Err("identity.serverUnreachable"));
+        return Ok(local);
+    };
+    // M27: this machine just verified the password, and the server does not
+    // know the account -- it was lost (the old deployment and its database are
+    // gone) or never had it. Recreate it there with the same credentials, so a
+    // reinstall can restore from it. A server account with a different password
+    // answers `emailTaken` and nothing changes.
+    if let (SignInOutcome::Ok { .. }, "wrongPassword") = (&local, answer.status.as_str()) {
+        if let Some(mine) = super::find_by_email(&db, &email)? {
+            let payload = serde_json::json!({
+                "displayName": mine.display_name, "email": email, "password": password,
+            });
+            if let Ok(Ok(created)) =
+                tauri::async_runtime::spawn_blocking(move || post_answer("/v1/auth/sign-up", payload)).await
+            {
+                if created.status == "ok" {
+                    answer = created;
+                }
+            }
+        }
+    }
     let (Some(token), Some(account), "ok") =
         (&answer.token, &answer.account, answer.status.as_str())
     else {
@@ -349,7 +418,7 @@ pub async fn sign_in_password(
         _ => super::adopt_remote(&db, &account.id, &account.email, &account.display_name, &password)?,
     };
 
-    let (carried, _) = apply(&db, &local_id, &account.id, &answer.settings, &answer.notebook)?;
+    let (carried, _) = apply(&db, &local_id, &account.id, &account.email, &answer.settings, &answer.notebook, &answer.documents)?;
     super::seat(&db, &local_id)?;
     push_state(&db);
     Ok(SignInOutcome::Ok {
@@ -382,44 +451,127 @@ pub fn sign_out(db: &Database) {
 /// actually changed.
 pub fn spawn_pull(app: tauri::AppHandle, db: Arc<Database>) {
     std::thread::spawn(move || {
-        let Some(session) = session(&db) else { return };
-        let Some(account) = super::current(&db) else { return };
+        let _ = pull_now(&app, &db);
+    });
+}
 
-        let answer: std::result::Result<Answer, String> =
-            match ureq::get(&format!("{ORIGIN}/v1/sync/state"))
-                .set("authorization", &format!("Bearer {session}"))
-                .call()
-            {
-                Ok(response) => read_json(response),
-                // A 401 is a session the server has revoked or expired. Clearing
-                // it is the honest response — it stops every later push retrying
-                // with a credential that will never work again — and it does not
-                // sign anybody out here, because being signed in locally never
-                // depended on the cloud in the first place.
-                Err(ureq::Error::Status(401, _)) => {
-                    let _ = crate::settings::clear(&db, SESSION_KEY);
-                    return;
-                }
-                Err(error) => Err(error.to_string()),
-            };
+/// One pull, merge and push, recording how it went. Used at launch and by
+/// "Sync now" in Settings -> Account.
+pub fn pull_now(app: &tauri::AppHandle, db: &Arc<Database>) -> Result<()> {
+    let Some(session) = session(db) else { return Err("identity.noCloudSession".into()) };
+    let Some(account) = super::current(db) else { return Err("identity.notSignedIn".into()) };
 
-        let Ok(answer) = answer else { return };
-        let Some(remote) = answer.account.as_ref() else { return };
-
-        match apply(&db, &account.id, &remote.id, &answer.settings, &answer.notebook) {
-            Ok((carried, changed)) => {
-                // Push after the merge, always: this machine may hold rows the
-                // server has never seen, and a pull that did not push them back
-                // would leave them stranded here.
-                push_state(&db);
-                if changed {
-                    use tauri::Emitter;
-                    let _ = app.emit(SYNC_EVENT, &carried);
-                }
+    let answer: std::result::Result<Answer, String> =
+        match ureq::get(&format!("{ORIGIN}/v1/sync/state"))
+            .set("authorization", &format!("Bearer {session}"))
+            .call()
+        {
+            Ok(response) => read_json(response),
+            // A 401 is a session the server has revoked or expired. Clearing
+            // it is the honest response — it stops every later push retrying
+            // with a credential that will never work again — and it does not
+            // sign anybody out here, because being signed in locally never
+            // depended on the cloud in the first place.
+            Err(ureq::Error::Status(401, _)) => {
+                let _ = crate::settings::clear(db, SESSION_KEY);
+                record_status(db, Err("identity.cloudSessionExpired"));
+                return Err("identity.cloudSessionExpired".into());
             }
-            Err(error) => tracing::warn!(%error, "could not apply synced state"),
+            Err(_) => Err("identity.serverUnreachable".into()),
+        };
+
+    let answer = answer.inspect_err(|error| record_status(db, Err(error)))?;
+    let Some(remote) = answer.account.as_ref() else { return Err("identity.serverUnreachable".into()) };
+
+    let (carried, changed) =
+        apply(db, &account.id, &remote.id, &remote.email, &answer.settings, &answer.notebook, &answer.documents)
+            .inspect_err(|error| tracing::warn!(%error, "could not apply synced state"))?;
+    // Push after the merge, always: this machine may hold rows the server has
+    // never seen, and a pull that did not push them back would leave them
+    // stranded here.
+    push_all_settings(db);
+    push_notebook_now(db);
+    push_documents_now(db, true)?;
+    if changed {
+        use tauri::Emitter;
+        let _ = app.emit(SYNC_EVENT, &carried);
+    }
+    Ok(())
+}
+
+/// Push whatever changed, every minute, while this machine has a session.
+pub fn spawn_pusher(db: Arc<Database>) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(PUSH_EVERY);
+        if session(&db).is_some() {
+            let _ = push_documents_now(&db, false);
         }
     });
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or_default()
+}
+
+/// Remember how the last call to the server went.
+pub fn record_status(db: &Database, outcome: std::result::Result<(), &str>) {
+    let status = match outcome {
+        Ok(()) => serde_json::json!({"ok": true, "at": now_ms(), "error": null}),
+        Err(error) => serde_json::json!({"ok": false, "at": now_ms(), "error": error}),
+    };
+    let _ = crate::settings::set(db, STATUS_KEY, &status);
+}
+
+#[derive(Debug, Deserialize)]
+struct DocumentsAnswer {
+    #[serde(default)]
+    documents: Vec<documents::Document>,
+}
+
+/// The last payload pushed, so the minute loop sends nothing when nothing changed.
+static LAST_PUSHED: OnceLock<parking_lot::Mutex<Option<String>>> = OnceLock::new();
+
+/// Push this machine's documents and fold back what the server holds.
+/// `force` sends even an unchanged payload (after a pull or a sign-in).
+fn push_documents_now(db: &Arc<Database>, force: bool) -> Result<()> {
+    let Some(session) = session(db) else { return Err("identity.noCloudSession".into()) };
+    let docs = documents::outgoing(db, now_ms())?;
+    let body = serde_json::json!({"documents": docs}).to_string();
+    let last = LAST_PUSHED.get_or_init(|| parking_lot::Mutex::new(None));
+    if !force && last.lock().as_deref() == Some(body.as_str()) {
+        return Ok(());
+    }
+    match ureq::put(&format!("{ORIGIN}/v1/sync/documents"))
+        .set("authorization", &format!("Bearer {session}"))
+        .set("content-type", "application/json")
+        .send_string(&body)
+    {
+        Ok(response) => {
+            let answer: DocumentsAnswer = read_json(response)?;
+            if let Some(dir) = DATA_DIR.get() {
+                documents::apply(db, dir, &answer.documents)?;
+            }
+            *last.lock() = Some(body);
+            record_status(db, Ok(()));
+            Ok(())
+        }
+        Err(ureq::Error::Status(401, _)) => {
+            let _ = crate::settings::clear(db, SESSION_KEY);
+            record_status(db, Err("identity.cloudSessionExpired"));
+            Err("identity.cloudSessionExpired".into())
+        }
+        Err(ureq::Error::Status(_, _)) => {
+            record_status(db, Err("identity.serverRefused"));
+            Err("identity.serverRefused".into())
+        }
+        Err(_) => {
+            record_status(db, Err("identity.serverUnreachable"));
+            Err("identity.serverUnreachable".into())
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -553,4 +705,40 @@ pub fn push_quota(db: &Database, report: &crate::accounts::commands::AccountsRep
             .set("content-type", "application/json")
             .send_string(&payload);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_a_note(db: &Database, email: &str) -> (String, String) {
+        super::super::sign_up(db, "Alan", email, "correct horse 27").unwrap();
+        let local = super::super::find_by_email(db, email).unwrap().expect("local account");
+        let note = crate::notebook::create_note(db, None).unwrap();
+        crate::notebook::update_note(db, &note, "t", "my prompt").unwrap();
+        crate::settings::set(db, nbsync::OWNER_KEY, &"old-server-id".to_string()).unwrap();
+        (local.id, note)
+    }
+
+    fn note_count(db: &Database) -> i64 {
+        db.with(|c| c.query_row("SELECT COUNT(*) FROM notebook_notes", [], |r| r.get(0))).unwrap()
+    }
+
+    #[test]
+    fn the_same_person_under_a_new_server_id_keeps_their_notebook() {
+        // M27: the server was lost and recreated, so the same account has a
+        // new id there. Treating that as a different person wiped the library.
+        let db = Database::open_in_memory().unwrap();
+        let (local, _) = with_a_note(&db, "alan@example.test");
+        apply(&db, &local, "new-server-id", "ALAN@example.test", &HashMap::new(), &SyncPayload::default(), &[]).unwrap();
+        assert_eq!(note_count(&db), 1);
+    }
+
+    #[test]
+    fn a_different_person_still_starts_from_their_own_library() {
+        let db = Database::open_in_memory().unwrap();
+        let (local, _) = with_a_note(&db, "alan@example.test");
+        apply(&db, &local, "someone-else", "other@example.test", &HashMap::new(), &SyncPayload::default(), &[]).unwrap();
+        assert_eq!(note_count(&db), 0);
+    }
 }

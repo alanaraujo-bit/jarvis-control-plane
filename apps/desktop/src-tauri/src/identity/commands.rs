@@ -108,6 +108,49 @@ pub fn identity_remember(
     Ok(())
 }
 
+/// Whether this machine is saving to the account, and how the last try went
+/// (M27). `connected` is false when somebody is signed in here but the server
+/// has no session for this machine: nothing is being saved until they sign in
+/// again.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatus {
+    pub signed_in: bool,
+    pub connected: bool,
+    pub ok: Option<bool>,
+    pub at: Option<i64>,
+    pub error: Option<String>,
+}
+
+fn sync_status(db: &crate::db::Database) -> SyncStatus {
+    let last: Option<serde_json::Value> = crate::settings::get(db, super::cloud::STATUS_KEY);
+    SyncStatus {
+        signed_in: super::current(db).is_some(),
+        connected: super::cloud::has_session(db),
+        ok: last.as_ref().and_then(|v| v.get("ok")).and_then(serde_json::Value::as_bool),
+        at: last.as_ref().and_then(|v| v.get("at")).and_then(serde_json::Value::as_i64),
+        error: last.as_ref().and_then(|v| v.get("error")).and_then(serde_json::Value::as_str).map(str::to_string),
+    }
+}
+
+#[tauri::command]
+pub fn identity_sync_status(state: State<'_, AppState>) -> SyncStatus {
+    sync_status(&state.db)
+}
+
+/// Pull, merge and push now. Off the async runtime: it waits on the network.
+#[tauri::command]
+pub async fn identity_sync_now(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<SyncStatus> {
+    let db = std::sync::Arc::clone(&state.db);
+    let status = tauri::async_runtime::spawn_blocking(move || {
+        let _ = super::cloud::pull_now(&app, &db);
+        sync_status(&db)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(status)
+}
+
 #[tauri::command]
 pub fn identity_update_profile(
     state: State<'_, AppState>,

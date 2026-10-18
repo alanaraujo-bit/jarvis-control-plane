@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use super::{DbError, Result};
 
 /// Highest schema version this build understands.
-pub const SCHEMA_VERSION: u32 = 21;
+pub const SCHEMA_VERSION: u32 = 22;
 
 struct Migration {
     version: u32,
@@ -1004,6 +1004,28 @@ const MIGRATIONS: &[Migration] = &[Migration {
     ALTER TABLE provider_accounts ADD COLUMN credential_origin TEXT NOT NULL DEFAULT 'own';
     UPDATE provider_accounts SET credential_origin = 'copied' WHERE adopted = 1;
 "#,
+    },
+    Migration {
+        version: 22,
+        sql: r#"
+    -- ---- The sync ledger (M27) -----------------------------------------------
+    --
+    -- One row per document an account carries (identity/documents.rs). The
+    -- tables those documents come from have no clock two machines can compare;
+    -- this is it. `held` marks a document from the account that this machine
+    -- cannot represent yet (a project whose folder is not here): kept, retried
+    -- on every pull, never tombstoned.
+    CREATE TABLE sync_documents (
+        kind       TEXT NOT NULL,
+        id         TEXT NOT NULL,
+        hash       TEXT NOT NULL,
+        body       TEXT,
+        touched_at INTEGER NOT NULL,
+        deleted_at INTEGER,
+        held       INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (kind, id)
+    ) WITHOUT ROWID;
+"#,
     }];
 
 pub fn run(conn: &Connection) -> Result<()> {
@@ -1130,6 +1152,7 @@ mod tests {
             (19, 0x1085_a050_9b08_3287),
             (20, 0xe28b_da2d_45a4_8c06),
             (21, 0x1583_2a3b_e4f3_f630),
+            (22, 0xb635_c9be_897e_eb64),
         ];
 
         for migration in MIGRATIONS {
