@@ -60,6 +60,21 @@ const BROWSER_FIXTURES: Record<string, unknown> = {
   notifications_mark_all_seen: 0,
   notifications_mark_acted: 0,
   notifications_clear: null,
+  // Social (Friends). Mirrors `SocialReport` in src-tauri/src/social.rs: one
+  // friend working with public metrics, one offline with private metrics, one
+  // pending request.
+  social_report: {
+    enabled: true,
+    identityName: "Alan",
+    profile: { id: "u0", handle: "alan", displayName: "Alan", presence: { state: "working", lastSeenAt: new Date().toISOString(), activeSessions: 2 }, metrics: null },
+    friends: [
+      { id: "u1", handle: "marina", displayName: "Marina Costa", presence: { state: "working", lastSeenAt: new Date().toISOString(), activeSessions: 3 }, metrics: { visibility: "friends", tokensToday: 184_200, tokensWeek: 912_400, focusMinutesWeek: 640, streakDays: 12, calendar: [], observedAt: new Date().toISOString() } },
+      { id: "u2", handle: "rafael", displayName: "Rafael Lima", presence: { state: "offline", lastSeenAt: new Date(Date.now() - 5 * 3_600_000).toISOString(), activeSessions: 0 }, metrics: null },
+    ],
+    requests: [
+      { id: "u3", handle: "bia", displayName: "Beatriz Alves", presence: null, metrics: null },
+    ],
+  },
   scan_environment: {
     scannedAt: new Date().toISOString(),
     ready: true,

@@ -1165,4 +1165,5 @@ export const ptBR: Record<MessageKey, string> = {
   "performance.contextWindow": "Janela de contexto",
   "performance.contextShare": "{used} de {total}",
   "performance.localModel": "Local · {model}",
+  "friends.loadFailed": "Não foi possível carregar sua rede.",
 };
