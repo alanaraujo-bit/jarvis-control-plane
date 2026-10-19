@@ -27,6 +27,13 @@ today. The private half lives in `.keys/` and is gitignored — **it must never 
 committed, and losing it means no existing installation can ever be updated
 again.** Back it up somewhere safe.
 
+**It was lost once (2026-10-18).** Formatting the development machine took the
+original key with it. A new keypair (minisign key ID `A5673DFC3AE73A62`) was
+generated for 0.11.0 and its public half replaced the old one in
+`tauri.conf.json`. Installations of 0.10.0 and earlier trust only the old key,
+so they cannot verify any later update and have to install 0.11.0 by hand;
+0.11.0 onwards update normally.
+
 ---
 
 ## B2 — A place to publish updates (§62)
