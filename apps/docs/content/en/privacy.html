@@ -1,0 +1,184 @@
+<p>J.A.R.V.I.S. is a desktop application that works on your own computer. Most of it never sends
+anything anywhere. This page lists everything that can leave your machine, when it leaves, where
+it goes, how long it stays and how to remove it.</p>
+
+<p><strong>Effective 18 October 2026.</strong> J.A.R.V.I.S. is made by Alan Araujo. Questions and
+requests about your data go to
+<a href="mailto:alanvitoraraujo2a@gmail.com">alanvitoraraujo2a@gmail.com</a>.</p>
+
+<h2>What never leaves your computer</h2>
+
+<div class="defs">
+  <div>
+    <dt>Your code and your Git repositories</dt>
+    <dd>J.A.R.V.I.S. opens folders that are already on your disk and runs the <code>git</code> you
+    already have. It does not upload, clone or mirror them.</dd>
+  </div>
+  <div>
+    <dt>Terminals, conversations and session logs</dt>
+    <dd>Everything an agent writes, every conversation and every session log stays in the app's
+    data folder on your disk. See <a href="page:data">Where your data lives</a>.</dd>
+  </div>
+  <div>
+    <dt>Provider logins</dt>
+    <dd>The logins of your Claude Code and Codex accounts stay in those tools' own configuration
+    folders. J.A.R.V.I.S. never opens, copies or sends them.</dd>
+  </div>
+  <div>
+    <dt>Your voice</dt>
+    <dd>Dictation runs on your computer. Audio is never sent anywhere.</dd>
+  </div>
+</div>
+
+<p>The AI agents you run — Claude Code, Codex — talk to Anthropic and OpenAI directly, with your
+own accounts and under those companies' own privacy policies. J.A.R.V.I.S. does not sit in the
+middle of that traffic and does not receive it.</p>
+
+<h2>The optional account</h2>
+
+<p>You never need an account to use J.A.R.V.I.S. If you create one, it lets your notebook,
+projects and preferences follow you to another computer. The account lives on a server we run
+on Railway.</p>
+
+<h3>What we receive when you create it</h3>
+
+<div class="defs">
+  <div>
+    <dt>With Google</dt>
+    <dd>We ask Google only for <code>openid</code>, <code>email</code> and <code>profile</code>, and
+    keep your Google account ID, your verified email address, your name and the address of your
+    profile picture. The picture is not shown anywhere. Google's access tokens are used once, to
+    confirm who you are, and are not kept.</dd>
+  </div>
+  <div>
+    <dt>With an email and a password</dt>
+    <dd>Your name, your email address and your password. The password is stored only as a salted
+    scrypt hash; nobody can read it back.</dd>
+  </div>
+  <div>
+    <dt>Your session</dt>
+    <dd>Signing in creates a random token on your computer. The server keeps only a hash of it.
+    It expires after 90 days, and signing out revokes it.</dd>
+  </div>
+</div>
+
+<h3>What is copied to the server while you are signed in</h3>
+
+<p>While a computer is signed in, it keeps these up to date on the server automatically. Signing
+out stops it.</p>
+
+<ul>
+  <li><strong>Preferences:</strong> theme, language, terminal font size and scrollback, the
+  autopilot turn budget, notification switches, the performance overlay, and whether new agents
+  open as a chat or a terminal.</li>
+  <li><strong>The notebook:</strong> every notebook and every note, with its full text.</li>
+  <li><strong>Projects:</strong> each project's name, its folder path on your disk, its autonomy
+  level and whether it is archived — but not its files.</li>
+  <li><strong>Project notes, project knowledge and guardrail rules</strong> you wrote.</li>
+  <li><strong>Workspace settings:</strong> account rotation, the global autonomy level, starting
+  minimised, the local model's settings (the Ollama address and model name) and which projects and
+  sessions were open, by ID.</li>
+  <li><strong>The provider accounts you added:</strong> the provider, the label you gave it, the
+  email address of that provider account, its order and whether it is paused.</li>
+  <li><strong>A usage snapshot</strong> for each provider account: its label, email, plan and
+  sign-in state; its usage windows and when they recover; tokens per day; how many sessions are
+  running; prices; and the provider's message when it refuses work.</li>
+</ul>
+
+<p>Never copied: provider logins, your code, terminal output, agent conversations and session
+logs.</p>
+
+<h2>The community</h2>
+
+<p>Only if you create a community profile. Everything you put in it is public: anyone on the web
+can read it, without signing in.</p>
+
+<div class="defs">
+  <div>
+    <dt>Your profile</dt>
+    <dd>The handle, name, bio, location, website, GitHub user, stack and what you are building —
+    the fields you fill in. Your email address is never shown.</dd>
+  </div>
+  <div>
+    <dt>What you publish</dt>
+    <dd>Posts, prompts and replies are public. Likes, saves, follows, blocks and reports are kept
+    to make the community work. Someone who saves your prompt keeps a copy in their own
+    notebook.</dd>
+  </div>
+  <div>
+    <dt>Statistics and presence</dt>
+    <dd>Private unless you choose followers or everyone. Statistics are totals and model names —
+    never project names or folder paths. Presence is how many sessions are running and when you
+    were last active.</dd>
+  </div>
+  <div>
+    <dt>Deleting</dt>
+    <dd>A deleted post stops being shown, but its text stays in the database until you delete
+    your profile. Deleting your profile removes it together with your posts, likes, saves, follows
+    and blocks.</dd>
+  </div>
+</div>
+
+<h2>The phone companion</h2>
+
+<p>Only if you pair a phone. The computer then leaves a short summary in a mailbox on Vercel,
+where the phone reads it and leaves your answers.</p>
+
+<ul>
+  <li><strong>What is sent:</strong> the computer's name; for each project with work under way,
+  blocked or failed, the project name, the mission title, its status, why it is blocked and how
+  many sessions are running; and for each approval waiting for you, the kind of operation and the
+  first 120 characters of the command it wants to run.</li>
+  <li><strong>What is not sent:</strong> terminal output, file contents and conversations.</li>
+  <li><strong>How it is stored:</strong> as plain data in private storage — not end-to-end
+  encrypted. Pairing tokens are kept only as hashes.</li>
+  <li><strong>How long:</strong> the phone treats a summary as stale after an hour and an answer
+  after five minutes, but the latest summary stays stored until you unpair. Unpairing, in
+  <strong>Settings → Phone</strong>, deletes the mailbox.</li>
+</ul>
+
+<h2>Downloads the app makes when you ask</h2>
+
+<p><strong>Check for updates</strong> downloads a small file from GitHub, and the voice model is
+downloaded from Hugging Face when you install it. Those services see your IP address, as with any
+download.</p>
+
+<h2>This website</h2>
+
+<p>No cookies and no analytics. It remembers your theme and language in your browser's own
+storage, and never sends them. Vercel hosts it and, like any host, handles your requests to serve
+the pages.</p>
+
+<h2>Who else handles the data</h2>
+
+<p>Only the services that run the parts above: Railway (the account and community server and its
+database), Vercel (this website and the phone companion), Google (signing in with Google) and
+GitHub (update downloads). We do not sell data, show advertising or use analytics, and we share
+nothing with anybody else unless the law requires it.</p>
+
+<h2>How long it is kept</h2>
+
+<p>Account data stays until you ask for it to be deleted. Sessions expire after 90 days. A note or
+document you delete stays on the server marked as deleted, so your other computers learn it was
+deleted; a deleted document keeps no content, and a deleted note may. Our server records only
+errors; Railway and Vercel keep their own request logs under their own policies.</p>
+
+<h2>Your choices and your rights</h2>
+
+<ul>
+  <li><strong>Use it without an account.</strong> Nothing above happens until you sign in, create
+  a community profile or pair a phone.</li>
+  <li><strong>Sign out</strong> to stop all copying from that computer.</li>
+  <li><strong>Delete this account</strong>, in the app, removes the account from that computer and
+  signs it out. What the server holds stays until you ask us to delete it.</li>
+  <li><strong>Ask us</strong>, at the address at the top, to see, correct, export or delete what
+  the server holds about you. We confirm by reply when it is done. These are your rights under
+  Brazil's LGPD, and we honour them wherever you live.</li>
+</ul>
+
+<p>J.A.R.V.I.S. is a tool for software developers and is not meant for children.</p>
+
+<h2>Changes</h2>
+
+<p>When this policy changes, this page changes and its date moves. A change to what leaves your
+computer is also written in the release notes of the version that makes it.</p>

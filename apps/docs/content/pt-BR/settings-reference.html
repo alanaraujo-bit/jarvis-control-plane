@@ -26,8 +26,8 @@ manhã se comporta exatamente igual com ou sem alguém logado.</p>
   <tbody>
     <tr><td>Conta em uso</td><td>Um e-mail e um nome</td><td>Nenhuma</td><td>Entrar aplica tudo o que a conta carrega; sair não devolve nada, para que a interface nunca mude de cara na sua frente.</td></tr>
     <tr><td>Senha</td><td>Pelo menos 8 caracteres, sem regras de composição</td><td>—</td><td>Argon2id, guardada como string PHC. Cinco erros seguidos descansam a conta por um minuto; a senha certa zera a contagem.</td></tr>
-    <tr><td>Continuar com o Google</td><td>—</td><td>Indisponível</td><td>Está na tela e honestamente desligado até o J.A.R.V.I.S. estar registrado no Google. Uma conta local funciona hoje.</td></tr>
-    <tr><td>Apagar esta conta</td><td>—</td><td>—</td><td>Leva a conta e as preferências dela. Projetos, sessões e histórico ficam intactos — são da máquina, não da conta.</td></tr>
+    <tr><td>Continuar com o Google</td><td>—</td><td>—</td><td>Abre a tela de consentimento do Google no navegador. O J.A.R.V.I.S. pede só o seu nome, e-mail e perfil.</td></tr>
+    <tr><td>Apagar esta conta</td><td>—</td><td>—</td><td>Tira a conta e as preferências dela desta máquina e sai dela. Projetos, sessões e histórico ficam intactos — são da máquina, não da conta. A cópia do servidor é apagada a pedido; veja a <a href="page:privacy">Política de privacidade</a>.</td></tr>
   </tbody>
 </table>
 </div>
@@ -35,9 +35,12 @@ manhã se comporta exatamente igual com ou sem alguém logado.</p>
 <div class="callout" data-kind="key">
   <span class="callout__title">O que uma conta carrega, e o que não carrega</span>
   <p><strong>Carrega:</strong> tema, idioma, tamanho da fonte e histórico do terminal, até onde um
-  agente pode ir sozinho, e as três chaves de notificação.</p>
+  agente pode ir sozinho, as três chaves de notificação, o painel de desempenho e se os agentes
+  abrem como chat ou como terminal — e também o caderno, os projetos, as notas e o conhecimento
+  deles, as regras de proteção e as contas de provedor que você adicionou. A
+  <a href="page:privacy">Política de privacidade</a> lista cada campo.</p>
   <p><strong>Não carrega:</strong> se esta máquina já viu a tela de boas-vindas, o modelo de voz no
-  disco, a varredura do ambiente, a política de proteções por projeto e o pareamento do celular.
+  disco, a varredura do ambiente e o pareamento do celular.
   Cada um desses é um fato sobre uma máquina ou uma pasta, e levá-lo para outra máquina seria
   errado, não apenas inútil.</p>
   <p>Criar uma conta <strong>herda</strong> o que a máquina já está usando, para que se cadastrar

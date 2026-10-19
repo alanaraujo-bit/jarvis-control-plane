@@ -427,6 +427,28 @@
           }
         }
       ]
+    },
+    {
+      "id": "legal",
+      "title": { "en": "Legal", "pt-BR": "Jurídico" },
+      "pages": [
+        {
+          "slug": "privacy",
+          "title": { "en": "Privacy policy", "pt-BR": "Política de privacidade" },
+          "summary": {
+            "en": "What leaves your machine, only when you choose it: the optional account, the community and the phone companion.",
+            "pt-BR": "O que sai da sua máquina, e só quando você escolhe: a conta opcional, a comunidade e o companheiro no celular."
+          }
+        },
+        {
+          "slug": "terms",
+          "title": { "en": "Terms of service", "pt-BR": "Termos de serviço" },
+          "summary": {
+            "en": "The terms for the app and for the optional online services: what you can expect, and what you agree to.",
+            "pt-BR": "Os termos do app e dos serviços online opcionais: o que você pode esperar, e com o que você concorda."
+          }
+        }
+      ]
     }
   ]
 }

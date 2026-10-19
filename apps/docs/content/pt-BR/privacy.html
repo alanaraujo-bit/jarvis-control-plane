@@ -1,0 +1,188 @@
+<p>O J.A.R.V.I.S. é um aplicativo de desktop que trabalha no seu próprio computador. Quase tudo
+nele nunca envia nada para lugar nenhum. Esta página lista tudo o que pode sair da sua máquina,
+quando sai, para onde vai, quanto tempo fica e como apagar.</p>
+
+<p><strong>Em vigor desde 18 de outubro de 2026.</strong> O J.A.R.V.I.S. é feito por Alan Araujo.
+Perguntas e pedidos sobre os seus dados vão para
+<a href="mailto:alanvitoraraujo2a@gmail.com">alanvitoraraujo2a@gmail.com</a>.</p>
+
+<h2>O que nunca sai do seu computador</h2>
+
+<div class="defs">
+  <div>
+    <dt>Seu código e seus repositórios Git</dt>
+    <dd>O J.A.R.V.I.S. abre pastas que já estão no seu disco e usa o <code>git</code> que você já
+    tem. Ele não envia, não clona e não espelha nada.</dd>
+  </div>
+  <div>
+    <dt>Terminais, conversas e logs de sessão</dt>
+    <dd>Tudo o que um agente escreve, toda conversa e todo log de sessão ficam na pasta de dados do
+    app, no seu disco. Veja <a href="page:data">Onde ficam os seus dados</a>.</dd>
+  </div>
+  <div>
+    <dt>Logins dos provedores</dt>
+    <dd>Os logins das suas contas do Claude Code e do Codex ficam nas pastas de configuração dessas
+    próprias ferramentas. O J.A.R.V.I.S. nunca abre, copia ou envia esses logins.</dd>
+  </div>
+  <div>
+    <dt>Sua voz</dt>
+    <dd>O ditado roda no seu computador. O áudio nunca é enviado.</dd>
+  </div>
+</div>
+
+<p>Os agentes de IA que você roda — Claude Code, Codex — falam direto com a Anthropic e a OpenAI,
+com as suas próprias contas e sob as políticas de privacidade dessas empresas. O J.A.R.V.I.S. não
+fica no meio desse tráfego e não recebe nada dele.</p>
+
+<h2>A conta opcional</h2>
+
+<p>Você nunca precisa de conta para usar o J.A.R.V.I.S. Se criar uma, seu caderno, seus projetos e
+suas preferências passam a acompanhar você em outro computador. A conta fica em um servidor nosso,
+hospedado na Railway.</p>
+
+<h3>O que recebemos quando você cria a conta</h3>
+
+<div class="defs">
+  <div>
+    <dt>Com o Google</dt>
+    <dd>Pedimos ao Google só <code>openid</code>, <code>email</code> e <code>profile</code>, e
+    guardamos o ID da sua conta Google, seu e-mail verificado, seu nome e o endereço da sua foto
+    de perfil. A foto não aparece em lugar nenhum. Os tokens de acesso do Google são usados uma
+    vez, para confirmar quem é você, e não são guardados.</dd>
+  </div>
+  <div>
+    <dt>Com e-mail e senha</dt>
+    <dd>Seu nome, seu e-mail e sua senha. A senha fica guardada só como hash scrypt com salt;
+    ninguém consegue lê-la de volta.</dd>
+  </div>
+  <div>
+    <dt>Sua sessão</dt>
+    <dd>Entrar cria um token aleatório no seu computador. O servidor guarda só um hash dele. Ele
+    expira em 90 dias, e sair da conta o revoga.</dd>
+  </div>
+</div>
+
+<h3>O que é copiado para o servidor enquanto você está conectado</h3>
+
+<p>Enquanto um computador está conectado à conta, ele mantém estes dados atualizados no servidor,
+sozinho. Sair da conta interrompe isso.</p>
+
+<ul>
+  <li><strong>Preferências:</strong> tema, idioma, tamanho da fonte e histórico do terminal, o
+  limite de turnos do piloto automático, as chaves de notificação, o painel de desempenho e se
+  agentes novos abrem como chat ou como terminal.</li>
+  <li><strong>O caderno:</strong> todos os cadernos e todas as notas, com o texto completo.</li>
+  <li><strong>Projetos:</strong> o nome de cada projeto, o caminho da pasta no seu disco, o nível
+  de autonomia e se está arquivado — mas não os arquivos dele.</li>
+  <li><strong>Notas de projeto, conhecimento de projeto e regras de guardrail</strong> que você
+  escreveu.</li>
+  <li><strong>Configurações do espaço de trabalho:</strong> rodízio de contas, o nível de autonomia
+  geral, abrir minimizado, as configurações do modelo local (o endereço do Ollama e o nome do
+  modelo) e quais projetos e sessões estavam abertos, pelo ID.</li>
+  <li><strong>As contas de provedor que você adicionou:</strong> o provedor, o nome que você deu, o
+  e-mail daquela conta do provedor, a ordem e se está pausada.</li>
+  <li><strong>Um retrato do uso</strong> de cada conta de provedor: nome, e-mail, plano e situação
+  do login; as janelas de uso e quando elas se renovam; tokens por dia; quantas sessões estão
+  rodando; preços; e a mensagem do provedor quando ele recusa trabalho.</li>
+</ul>
+
+<p>Nunca são copiados: logins de provedor, seu código, a saída dos terminais, as conversas dos
+agentes e os logs de sessão.</p>
+
+<h2>A comunidade</h2>
+
+<p>Só se você criar um perfil na comunidade. Tudo o que você colocar nele é público: qualquer
+pessoa na web consegue ler, sem entrar em conta nenhuma.</p>
+
+<div class="defs">
+  <div>
+    <dt>Seu perfil</dt>
+    <dd>O identificador, o nome, a bio, a localização, o site, o usuário do GitHub, a stack e o que
+    você está construindo — os campos que você preenche. Seu e-mail nunca aparece.</dd>
+  </div>
+  <div>
+    <dt>O que você publica</dt>
+    <dd>Posts, prompts e respostas são públicos. Curtidas, itens salvos, quem você segue, bloqueios
+    e denúncias ficam guardados para a comunidade funcionar. Quem salva um prompt seu fica com uma
+    cópia no próprio caderno.</dd>
+  </div>
+  <div>
+    <dt>Estatísticas e presença</dt>
+    <dd>Privadas, a não ser que você escolha seguidores ou todo mundo. Estatísticas são totais e
+    nomes de modelo — nunca nomes de projeto nem caminhos de pasta. Presença é quantas sessões
+    estão rodando e quando você esteve ativo pela última vez.</dd>
+  </div>
+  <div>
+    <dt>Apagar</dt>
+    <dd>Um post apagado deixa de aparecer, mas o texto dele continua no banco de dados até você
+    apagar o perfil. Apagar o perfil remove o perfil junto com seus posts, curtidas, itens salvos,
+    quem você segue e seus bloqueios.</dd>
+  </div>
+</div>
+
+<h2>O companheiro no celular</h2>
+
+<p>Só se você parear um celular. O computador passa a deixar um resumo curto numa caixa de
+mensagens na Vercel, onde o celular lê e deixa as suas respostas.</p>
+
+<ul>
+  <li><strong>O que é enviado:</strong> o nome do computador; para cada projeto com trabalho em
+  andamento, bloqueado ou com falha, o nome do projeto, o título da missão, a situação, o motivo do
+  bloqueio e quantas sessões estão rodando; e, para cada aprovação esperando por você, o tipo de
+  operação e os primeiros 120 caracteres do comando que ela quer rodar.</li>
+  <li><strong>O que não é enviado:</strong> a saída dos terminais, o conteúdo dos arquivos e as
+  conversas.</li>
+  <li><strong>Como fica guardado:</strong> como dados comuns, num armazenamento privado — sem
+  criptografia de ponta a ponta. Os tokens de pareamento ficam guardados só como hash.</li>
+  <li><strong>Por quanto tempo:</strong> o celular considera um resumo velho depois de uma hora e
+  uma resposta depois de cinco minutos, mas o último resumo fica guardado até você desparear.
+  Desparear, em <strong>Configurações → Celular</strong>, apaga a caixa de mensagens.</li>
+</ul>
+
+<h2>Downloads que o app faz quando você pede</h2>
+
+<p><strong>Verificar atualizações</strong> baixa um arquivo pequeno do GitHub, e o modelo de voz é
+baixado do Hugging Face quando você o instala. Esses serviços veem o seu endereço IP, como em
+qualquer download.</p>
+
+<h2>Este site</h2>
+
+<p>Sem cookies e sem analytics. Ele lembra o seu tema e o seu idioma no armazenamento do próprio
+navegador, e nunca envia essas escolhas. A Vercel hospeda o site e, como qualquer hospedagem,
+recebe as suas requisições para entregar as páginas.</p>
+
+<h2>Quem mais lida com os dados</h2>
+
+<p>Só os serviços que rodam as partes acima: Railway (o servidor da conta e da comunidade, e o
+banco de dados dele), Vercel (este site e o companheiro no celular), Google (entrar com o Google)
+e GitHub (download de atualizações). Não vendemos dados, não mostramos anúncios, não usamos
+analytics e não compartilhamos nada com mais ninguém, a não ser quando a lei exigir.</p>
+
+<h2>Por quanto tempo os dados ficam</h2>
+
+<p>Os dados da conta ficam até você pedir que sejam apagados. As sessões expiram em 90 dias. Uma
+nota ou um documento que você apaga continua no servidor marcado como apagado, para que os seus
+outros computadores fiquem sabendo; um documento apagado não guarda conteúdo, e uma nota apagada
+pode guardar. Nosso servidor registra só erros; a Railway e a Vercel mantêm os próprios registros
+de requisição, sob as políticas delas.</p>
+
+<h2>Suas escolhas e seus direitos</h2>
+
+<ul>
+  <li><strong>Use sem conta.</strong> Nada do que está acima acontece até você entrar numa conta,
+  criar um perfil na comunidade ou parear um celular.</li>
+  <li><strong>Saia da conta</strong> para parar toda cópia a partir daquele computador.</li>
+  <li><strong>Apagar esta conta</strong>, no app, remove a conta daquele computador e sai dela. O
+  que está no servidor continua lá até você pedir que seja apagado.</li>
+  <li><strong>Peça para nós</strong>, no endereço do topo, para ver, corrigir, exportar ou apagar o
+  que o servidor guarda sobre você. Confirmamos por resposta quando estiver feito. Esses são os
+  seus direitos pela LGPD, e nós os respeitamos onde quer que você more.</li>
+</ul>
+
+<p>O J.A.R.V.I.S. é uma ferramenta para pessoas que desenvolvem software e não é feito para
+crianças.</p>
+
+<h2>Mudanças</h2>
+
+<p>Quando esta política mudar, esta página muda e a data dela também. Uma mudança no que sai do
+seu computador também fica escrita nas notas da versão que a trouxer.</p>
