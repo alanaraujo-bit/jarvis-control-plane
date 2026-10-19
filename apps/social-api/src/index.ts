@@ -22,6 +22,8 @@ const carriedKeys = new Set([
   // and the call died in a swallowed `identity.notCarried` -- an allowlist is
   // only closed if both halves are closed at the same time.
   "performance.hudEnabled",
+  // Chat or terminal for new agents (M29).
+  "agents.openAs",
 ]);
 const MIN_PASSWORD = 8;
 const MAX_ATTEMPTS = 5;

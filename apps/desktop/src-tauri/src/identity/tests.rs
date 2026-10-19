@@ -345,6 +345,30 @@ fn deleting_an_account_takes_its_preferences_and_the_seat_with_it() {
     assert_eq!(rows, 0, "ON DELETE CASCADE");
 }
 
+/// Deleting the account has to end the cloud session too: every pusher checks
+/// only for a session, so a deleted account kept uploading to the server.
+#[test]
+fn deleting_the_signed_in_account_ends_its_cloud_session() {
+    let db = db();
+    let created = account(&db);
+    crate::settings::set(&db, "identity.cloudSession", &"not-a-real-session".to_string()).unwrap();
+
+    delete_account(&db, &created.id).unwrap();
+
+    assert_eq!(crate::settings::get::<String>(&db, "identity.cloudSession"), None);
+}
+
+/// The server keeps its own allowlist and rejects the whole request over one
+/// unknown key, so a key carried here and missing there stops every setting
+/// from syncing. It happened twice; this reads the server's list.
+#[test]
+fn the_server_accepts_every_carried_preference() {
+    let server = include_str!("../../../../social-api/src/index.ts");
+    for key in [prefs::THEME_KEY, prefs::LOCALE_KEY].iter().chain(prefs::MACHINE_CARRIED) {
+        assert!(server.contains(&format!("\"{key}\"")), "{key} is missing from the server's carriedKeys");
+    }
+}
+
 /// A pointer at an account that is gone is a stale pointer, not a broken
 /// screen. It reads as signed out and cleans itself up.
 #[test]

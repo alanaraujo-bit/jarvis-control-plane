@@ -706,6 +706,9 @@ pub fn delete_account(db: &Database, id: &str) -> Result<IdentityReport> {
 
     if crate::settings::get::<String>(db, SIGNED_IN_KEY).as_deref() == Some(id) {
         crate::settings::clear(db, SIGNED_IN_KEY)?;
+        // Every pusher checks only for a cloud session; left in place, a
+        // deleted account kept uploading.
+        cloud::sign_out(db);
     }
     report(db)
 }
