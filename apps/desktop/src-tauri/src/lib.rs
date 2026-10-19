@@ -55,6 +55,16 @@ pub fn run_guardrail_hook(snapshot_path: &str) -> i32 {
     guardrail::guard::run(snapshot_path)
 }
 
+/// When this process started, for the startup timeline in the log.
+static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// Milliseconds since `run` began. A slow launch is only fixable once it is
+/// known which step took the time, and a person waiting on a window cannot
+/// tell the difference between the database, the webview and a lock.
+pub(crate) fn since_start_ms() -> u128 {
+    STARTED.get_or_init(std::time::Instant::now).elapsed().as_millis()
+}
+
 /// Shared application state, resolved once during setup.
 pub struct AppState {
     /// Shared so background workers — the transcript tailer, the session pump —
@@ -92,6 +102,8 @@ pub fn run() {
         )
         .with_target(false)
         .init();
+    since_start_ms();
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "startup: begin");
 
     tauri::Builder::default()
         // Single instance, registered first so it runs before anything else.
@@ -123,6 +135,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            tracing::info!(ms = since_start_ms(), "startup: setup");
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             identity::cloud::set_data_dir(data_dir.clone());
@@ -175,7 +188,7 @@ pub fn run() {
                     std::process::exit(1);
                 }
             };
-            tracing::info!(path = ?data_dir, "local data directory ready");
+            tracing::info!(path = ?data_dir, ms = since_start_ms(), "local data directory ready");
 
             let db = Arc::new(db);
 
@@ -267,10 +280,7 @@ pub fn run() {
                 notify::watch::announce_to(app.handle().clone()),
             );
 
-            // Quota is probed and rotation decided in the core, not by a screen
-            // that happens to be open (M26).
-            accounts::rotation::engine::start(app.handle().clone(), Arc::clone(&db));
-
+            let rotation_db = Arc::clone(&db);
             app.manage(AppState {
                 db,
                 data_dir,
@@ -280,6 +290,12 @@ pub fn run() {
                 voice: voice::VoiceState::default(),
                 attention,
             });
+            // Quota is probed and rotation decided in the core, not by a screen
+            // that happens to be open (M26). Started only once `AppState` is
+            // managed: its first tick reads the live sessions from it at once,
+            // and `state()` panics when asked before `manage()`.
+            accounts::rotation::engine::start(app.handle().clone(), rotation_db);
+            tracing::info!(ms = since_start_ms(), "startup: setup done");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -446,6 +462,14 @@ pub fn run() {
             workspace::workspace_snapshot,
             workspace::workspace_save,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running J.A.R.V.I.S.");
+        .build(tauri::generate_context!())
+        .expect("error while running J.A.R.V.I.S.")
+        // The way out, logged like the way in: a closed window whose process
+        // never ended was found by measuring launches (0.11.0), and the log is
+        // what says how far the exit got.
+        .run(|_, event| match event {
+            tauri::RunEvent::ExitRequested { .. } => tracing::info!("shutdown: exit requested"),
+            tauri::RunEvent::Exit => tracing::info!("shutdown: exit"),
+            _ => {}
+        });
 }

@@ -45,6 +45,7 @@ pub fn window_ready<R: Runtime>(
     // category error: `get_webview_window` has no managed webviews on this
     // handle and quietly returns `None`, leaving every first-run window hidden.
     window.show()?;
+    tracing::info!(ms = crate::since_start_ms(), "startup: window shown");
 
     // Started by Windows at login, and asked to stay out of the way (§93).
     //

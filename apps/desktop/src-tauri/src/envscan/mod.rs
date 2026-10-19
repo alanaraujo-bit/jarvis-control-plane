@@ -453,9 +453,21 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
+/// `async`, with the scan on a blocking thread, and that is the point: a sync
+/// command runs on the main thread, and this one starts a dozen processes and
+/// took 1.4–6.5 s on this machine. The status bar asks for it on the very
+/// first render, so every call queued behind it — including the two the
+/// window waits for before it is shown — waited for the slowest probe, and
+/// the app took seconds to appear (measured on 0.11.0).
 #[tauri::command]
-pub fn scan_environment() -> EnvironmentReport {
-    scan()
+pub async fn scan_environment() -> EnvironmentReport {
+    tauri::async_runtime::spawn_blocking(scan)
+        .await
+        .unwrap_or_else(|_| EnvironmentReport {
+            tools: Vec::new(),
+            scanned_at: now_iso(),
+            ready: false,
+        })
 }
 
 #[cfg(test)]
